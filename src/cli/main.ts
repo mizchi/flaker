@@ -22,6 +22,7 @@ import {
 } from "./commands/quarantine.js";
 import { runEval, formatEvalReport } from "./commands/eval.js";
 import { runReason, formatReasoningReport } from "./commands/reason.js";
+import { runSelfEval, formatSelfEvalReport } from "./commands/self-eval.js";
 import { DuckDBStore } from "./storage/duckdb.js";
 
 const program = new Command();
@@ -468,6 +469,27 @@ program
         const evalReport = await runEval({ store });
         console.log(formatEvalReport(evalReport));
       }
+    } finally {
+      await store.close();
+    }
+  });
+
+// --- self-eval ---
+program
+  .command("self-eval")
+  .description("Run self-evaluation scenarios to validate recommendation logic")
+  .option("--json", "Output raw JSON report")
+  .action(async (opts: { json?: boolean }) => {
+    const store = new DuckDBStore(":memory:");
+    await store.initialize();
+    try {
+      const report = await runSelfEval({ store });
+      if (opts.json) {
+        console.log(JSON.stringify(report, null, 2));
+      } else {
+        console.log(formatSelfEvalReport(report));
+      }
+      process.exit(report.overallScore >= 80 ? 0 : 1);
     } finally {
       await store.close();
     }
