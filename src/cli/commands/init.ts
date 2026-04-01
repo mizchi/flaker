@@ -7,7 +7,7 @@ owner = "${owner}"
 name = "${name}"
 
 [storage]
-path = ".metrici/data"
+path = ".flaker/data"
 
 [adapter]
 type = "command"
@@ -35,7 +35,7 @@ export function runInit(
   dir: string,
   opts: { owner: string; name: string },
 ): void {
-  const tomlPath = join(dir, "metrici.toml");
+  const tomlPath = join(dir, "flaker.toml");
   writeFileSync(tomlPath, generateToml(opts.owner, opts.name), "utf-8");
-  mkdirSync(join(dir, ".metrici"), { recursive: true });
+  mkdirSync(join(dir, ".flaker"), { recursive: true });
 }

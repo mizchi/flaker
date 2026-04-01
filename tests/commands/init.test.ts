@@ -6,15 +6,15 @@ import { runInit } from "../../src/cli/commands/init.js";
 import { loadConfig } from "../../src/cli/config.js";
 
 function makeTempDir(): string {
-  return mkdtempSync(join(tmpdir(), "metrici-test-"));
+  return mkdtempSync(join(tmpdir(), "flaker-test-"));
 }
 
 describe("runInit", () => {
-  it("creates metrici.toml with correct content", () => {
+  it("creates flaker.toml with correct content", () => {
     const dir = makeTempDir();
     runInit(dir, { owner: "myorg", name: "myrepo" });
 
-    const tomlPath = join(dir, "metrici.toml");
+    const tomlPath = join(dir, "flaker.toml");
     expect(existsSync(tomlPath)).toBe(true);
 
     const content = readFileSync(tomlPath, "utf-8");
@@ -28,8 +28,8 @@ describe("runInit", () => {
     expect(content).toContain('[quarantine]');
     expect(content).toContain('[flaky]');
 
-    // .metrici directory should be created
-    expect(existsSync(join(dir, ".metrici"))).toBe(true);
+    // .flaker directory should be created
+    expect(existsSync(join(dir, ".flaker"))).toBe(true);
   });
 });
 
@@ -41,14 +41,14 @@ describe("loadConfig", () => {
     const config = loadConfig(dir);
     expect(config.repo.owner).toBe("testowner");
     expect(config.repo.name).toBe("testrepo");
-    expect(config.storage.path).toBe(".metrici/data");
+    expect(config.storage.path).toBe(".flaker/data");
     expect(config.adapter.type).toBe("command");
     expect(config.runner.type).toBe("vitest");
     expect(config.quarantine.auto).toBe(true);
     expect(config.flaky.window_days).toBe(14);
   });
 
-  it("throws if metrici.toml not found", () => {
+  it("throws if flaker.toml not found", () => {
     const dir = makeTempDir();
     expect(() => loadConfig(dir)).toThrow();
   });

@@ -26,19 +26,19 @@ import { DuckDBStore } from "./storage/duckdb.js";
 const program = new Command();
 
 program
-  .name("metrici")
+  .name("flaker")
   .description("CI metrics collection and analysis tool")
   .version("0.1.0");
 
 // --- init ---
 program
   .command("init")
-  .description("Initialize metrici configuration")
+  .description("Initialize flaker configuration")
   .requiredOption("--owner <owner>", "Repository owner")
   .requiredOption("--name <name>", "Repository name")
   .action((opts: { owner: string; name: string }) => {
     runInit(process.cwd(), opts);
-    console.log("Initialized metrici.toml");
+    console.log("Initialized flaker.toml");
   });
 
 // --- collect ---
@@ -353,7 +353,7 @@ program
 // --- eval ---
 program
   .command("eval")
-  .description("Evaluate test suite health and metrici effectiveness")
+  .description("Evaluate test suite health and flaker effectiveness")
   .option("--json", "Output raw JSON report")
   .action(async (opts: { json?: boolean }) => {
     const config = loadConfig(process.cwd());
@@ -428,7 +428,7 @@ program
 // --- collect-local ---
 program
   .command("collect-local")
-  .description("Import actrun local run history into metrici")
+  .description("Import actrun local run history into flaker")
   .option("--last <n>", "Import only last N runs")
   .action(async (opts: { last?: string }) => {
     const config = loadConfig(process.cwd());

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "smol-toml";
 
-export interface MetriciConfig {
+export interface FlakerConfig {
   repo: { owner: string; name: string };
   storage: { path: string };
   adapter: { type: string; command?: string };
@@ -18,9 +18,9 @@ export interface MetriciConfig {
   flaky: { window_days: number; detection_threshold: number };
 }
 
-const DEFAULT_CONFIG: MetriciConfig = {
+const DEFAULT_CONFIG: FlakerConfig = {
   repo: { owner: "", name: "" },
-  storage: { path: ".metrici/data" },
+  storage: { path: ".flaker/data" },
   adapter: { type: "command" },
   runner: { type: "vitest", command: "pnpm test" },
   affected: { resolver: "git", config: "" },
@@ -55,8 +55,8 @@ function deepMerge<T extends Record<string, unknown>>(
   return result as T;
 }
 
-export function loadConfig(dir: string): MetriciConfig {
-  const filePath = join(dir, "metrici.toml");
+export function loadConfig(dir: string): FlakerConfig {
+  const filePath = join(dir, "flaker.toml");
   let content: string;
   try {
     content = readFileSync(filePath, "utf-8");

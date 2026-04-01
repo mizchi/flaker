@@ -156,7 +156,7 @@ export async function runEval(opts: { store: MetricStore; windowDays?: number })
 export function formatEvalReport(report: EvalReport): string {
   const lines: string[] = [];
 
-  lines.push("# metrici Evaluation Report");
+  lines.push("# flaker Evaluation Report");
   lines.push("");
 
   // Health Score
@@ -202,19 +202,19 @@ export function formatEvalReport(report: EvalReport): string {
   // Recommendations
   lines.push("## Recommendations");
   if (d.avgRunsPerTest < 5) {
-    lines.push("  - Collect more data: run `metrici collect` regularly to build history");
+    lines.push("  - Collect more data: run `flaker collect` regularly to build history");
   }
   if (det.flakyTests > 0 && det.quarantinedTests === 0) {
-    lines.push("  - Quarantine flaky tests: run `metrici quarantine --auto`");
+    lines.push("  - Quarantine flaky tests: run `flaker quarantine --auto`");
   }
   if (res.newFlaky > 0) {
-    lines.push(`  - Investigate ${res.newFlaky} newly flaky test(s): run \`metrici flaky\``);
+    lines.push(`  - Investigate ${res.newFlaky} newly flaky test(s): run \`flaker flaky\``);
   }
   if (det.flakyTests === 0 && d.totalResults > 0) {
     lines.push("  - No flaky tests detected. Suite is healthy!");
   }
   if (d.totalResults === 0) {
-    lines.push("  - No data yet. Run `metrici collect` or `metrici import` to get started");
+    lines.push("  - No data yet. Run `flaker collect` or `flaker import` to get started");
   }
 
   return lines.join("\n");

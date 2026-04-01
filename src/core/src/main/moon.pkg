@@ -1,8 +1,8 @@
 import {
-  "mizchi/metrici_core/src/types",
-  "mizchi/metrici_core/src/flaky_detector",
-  "mizchi/metrici_core/src/sampler",
-  "mizchi/metrici_core/src/affected" @affected,
+  "mizchi/flaker/src/types",
+  "mizchi/flaker/src/flaky_detector",
+  "mizchi/flaker/src/sampler",
+  "mizchi/flaker/src/affected" @affected,
   "moonbitlang/core/json",
 }
 

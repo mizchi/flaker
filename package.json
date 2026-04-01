@@ -1,10 +1,10 @@
 {
-  "name": "metrici",
+  "name": "@mizchi/flaker",
   "version": "0.1.0",
-  "description": "CI metrics collection and analysis tool",
+  "description": "Flaky test detection, sampling, and test runner orchestration",
   "type": "module",
   "bin": {
-    "metrici": "./dist/cli.js"
+    "flaker": "./dist/cli.js"
   },
   "scripts": {
     "build": "tsc",
