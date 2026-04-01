@@ -1,0 +1,6 @@
+{
+  "import": [],
+  "test-import": [
+    "moonbitlang/async"
+  ]
+}

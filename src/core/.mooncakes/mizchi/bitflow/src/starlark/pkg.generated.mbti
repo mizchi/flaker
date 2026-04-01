@@ -1,0 +1,51 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/bitflow/starlark"
+
+// Values
+pub fn parse(String) -> StarlarkParseResult
+
+pub fn parse_from_fs(String, (String) -> Bool, (String) -> String?) -> StarlarkParseResult
+
+pub fn parse_from_fs_with_inputs(String, (String) -> Bool, (String) -> String?, Map[String, String]) -> StarlarkParseResult
+
+pub fn parse_with_inputs(String, Map[String, String]) -> StarlarkParseResult
+
+// Errors
+
+// Types and methods
+pub struct StarlarkNodeDecl {
+  id : String
+  depends_on : Array[String]
+  required : Bool
+}
+
+pub struct StarlarkParseResult {
+  workflow : StarlarkWorkflowDecl
+  errors : Array[String]
+}
+
+pub struct StarlarkTaskDecl {
+  id : String
+  node : String
+  cmd : String
+  needs : Array[String]
+  required : Bool
+  srcs : Array[String]
+  outs : Array[String]
+  env : Map[String, String]
+  cwd : String
+  trigger_mode : String
+}
+
+pub struct StarlarkWorkflowDecl {
+  name : String
+  max_parallel : Int
+  nodes : Array[StarlarkNodeDecl]
+  tasks : Array[StarlarkTaskDecl]
+  entry_targets : Array[String]
+}
+
+// Type aliases
+
+// Traits
+

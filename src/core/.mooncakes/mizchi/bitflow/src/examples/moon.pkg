@@ -1,0 +1,9 @@
+import {
+  "mizchi/bitflow/workflow" @wf,
+  "moonbitlang/x/fs" @xfs,
+  "moonbitlang/x/sys" @xsys,
+}
+
+options(
+  "is-main": true,
+)

@@ -1,0 +1,170 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/bitflow/workflow"
+
+// Values
+pub fn command_failure(code? : Int, stdout? : String, stderr? : String) -> CommandResult
+
+pub fn command_success(stdout? : String, stderr? : String) -> CommandResult
+
+pub fn entry_targets_for_changed_paths(FlowIr, Array[String]) -> Array[String]
+
+pub fn execute(String, (FlowTask) -> (Bool, String)) -> FlowExecutionResult
+
+pub fn execute_from_fs(String, WorkflowAdapter) -> FlowExecutionResult
+
+pub fn execute_from_fs_with_cli_env(String, WorkflowAdapter, Array[String], Map[String, String], cli_flag? : String, env_prefix? : String) -> FlowExecutionResult
+
+pub fn execute_from_fs_with_inputs(String, WorkflowAdapter, Map[String, String]) -> FlowExecutionResult
+
+pub fn execute_ir(FlowIr, (FlowTask) -> (Bool, String)) -> FlowExecutionResult
+
+pub fn execute_ir_for_changed_paths(FlowIr, Array[String], (FlowTask) -> (Bool, String)) -> FlowExecutionResult
+
+pub fn execute_ir_with_adapter(FlowIr, WorkflowAdapter) -> FlowExecutionResult
+
+pub fn execute_with_cli_env(String, Array[String], Map[String, String], (FlowTask) -> (Bool, String), cli_flag? : String, env_prefix? : String) -> FlowExecutionResult
+
+pub fn execute_with_inputs(String, Map[String, String], (FlowTask) -> (Bool, String)) -> FlowExecutionResult
+
+pub fn expand_affected_nodes(Array[FlowNode], Map[String, Bool]) -> Map[String, Bool]
+
+pub fn flow_cache_key(String, String) -> String
+
+pub fn flow_fingerprint(String, String, FlowNode, Map[String, String]) -> String
+
+pub fn flow_task_fingerprint(FlowTask, FlowNode, Map[String, String]) -> String
+
+pub fn graph_issues(Array[FlowNode]) -> Array[String]
+
+pub fn has_dependency_cycle(Array[FlowNode]) -> Bool
+
+pub fn ir_issues(FlowIr) -> Array[String]
+
+pub fn new_ir(String, Array[FlowNode], Array[FlowTask], entry_targets? : Array[String], max_parallel? : Int) -> FlowIr
+
+pub fn new_node(String, Array[String], required? : Bool) -> FlowNode
+
+pub fn new_task(String, String, String, Array[String], required? : Bool, srcs? : Array[String], outs? : Array[String], env? : Map[String, String], cwd? : String, trigger_mode? : String) -> FlowTask
+
+pub fn parse(String) -> StarlarkParseResult
+
+pub fn parse_external_inputs(Array[String], Map[String, String], cli_flag? : String, env_prefix? : String) -> ExternalInputParseResult
+
+pub fn parse_from_fs(String, WorkflowAdapter) -> StarlarkParseResult
+
+pub fn parse_from_fs_with_cli_env(String, WorkflowAdapter, Array[String], Map[String, String], cli_flag? : String, env_prefix? : String) -> StarlarkParseResult
+
+pub fn parse_from_fs_with_inputs(String, WorkflowAdapter, Map[String, String]) -> StarlarkParseResult
+
+pub fn parse_with_cli_env(String, Array[String], Map[String, String], cli_flag? : String, env_prefix? : String) -> StarlarkParseResult
+
+pub fn parse_with_inputs(String, Map[String, String]) -> StarlarkParseResult
+
+pub fn plan_task_cache(FlowIr, Map[String, String], Map[String, String]) -> FlowTaskCachePlanResult
+
+pub fn topological_nodes(Array[FlowNode]) -> Array[FlowNode]
+
+pub fn write_execution_report(String, FlowExecutionResult, WorkflowAdapter) -> Bool
+
+// Errors
+
+// Types and methods
+pub struct CommandAdapter {
+  run : (String, String?, Map[String, String]) -> CommandResult
+}
+pub fn CommandAdapter::new((String, String?, Map[String, String]) -> CommandResult) -> Self
+pub fn CommandAdapter::none() -> Self
+
+pub struct CommandResult {
+  code : Int
+  stdout : String
+  stderr : String
+}
+pub fn CommandResult::ok(Self) -> Bool
+
+pub struct ExternalInputParseResult {
+  values : Map[String, String]
+  errors : Array[String]
+}
+
+pub struct FlowExecutionResult {
+  ok : Bool
+  state : String
+  order : Array[String]
+  steps : Array[FlowStep]
+  issues : Array[String]
+}
+
+pub struct FlowIr {
+  name : String
+  max_parallel : Int
+  nodes : Array[FlowNode]
+  tasks : Array[FlowTask]
+  entry_targets : Array[String]
+}
+
+pub struct FlowNode {
+  id : String
+  required : Bool
+  depends_on : Array[String]
+}
+
+pub struct FlowStep {
+  id : String
+  status : String
+  required : Bool
+  message : String
+}
+
+pub struct FlowTask {
+  id : String
+  node : String
+  cmd : String
+  needs : Array[String]
+  required : Bool
+  srcs : Array[String]
+  outs : Array[String]
+  env : Map[String, String]
+  cwd : String
+  trigger_mode : String
+}
+
+pub struct FlowTaskCacheDecision {
+  id : String
+  cache_key : String
+  fingerprint : String
+  hit : Bool
+}
+
+pub struct FlowTaskCachePlanResult {
+  decisions : Array[FlowTaskCacheDecision]
+  issues : Array[String]
+}
+
+pub struct FsAdapter {
+  read_text : (String) -> String?
+  write_text : (String, String) -> Bool
+  exists : (String) -> Bool
+  list_paths : () -> Array[String]
+}
+pub fn FsAdapter::memory() -> Self
+pub fn FsAdapter::memory_with(Map[String, String]) -> Self
+pub fn FsAdapter::new((String) -> String?, (String, String) -> Bool, (String) -> Bool, () -> Array[String]) -> Self
+pub fn FsAdapter::none() -> Self
+
+pub struct StarlarkParseResult {
+  ir : FlowIr
+  errors : Array[String]
+}
+
+pub struct WorkflowAdapter {
+  fs : FsAdapter
+  cmd : CommandAdapter
+}
+pub fn WorkflowAdapter::new(FsAdapter, CommandAdapter) -> Self
+pub fn WorkflowAdapter::none() -> Self
+
+// Type aliases
+
+// Traits
+

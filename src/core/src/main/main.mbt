@@ -45,3 +45,15 @@ pub fn sample_hybrid_json(meta_json : String, affected_json : String, count : In
   let result = @sampler.sample_hybrid(meta, affected_suites=affected, count~, seed=seed.to_uint64())
   result.to_json().stringify()
 }
+
+///|
+pub fn resolve_affected_json(
+  workflow_text : String,
+  changed_paths_json : String,
+) -> String {
+  let changed : Array[String] = try! @json.from_json(
+    try! @json.parse(changed_paths_json),
+  )
+  let result = @affected.resolve_affected(workflow_text, changed)
+  result.to_json().stringify()
+}

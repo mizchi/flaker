@@ -1,0 +1,20 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/bitflow/examples"
+
+// Values
+pub fn parse_analyze_cli_args(Array[String]) -> AnalyzeCliSpec
+
+// Errors
+
+// Types and methods
+pub struct AnalyzeCliSpec {
+  show_help : Bool
+  workflow_path : String
+  changed_paths : Array[String]
+  errors : Array[String]
+}
+
+// Type aliases
+
+// Traits
+

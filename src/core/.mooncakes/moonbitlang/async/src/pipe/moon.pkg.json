@@ -1,0 +1,16 @@
+{
+  "import": [
+    "moonbitlang/async/internal/event_loop",
+    "moonbitlang/async/internal/fd_util",
+    "moonbitlang/async/io"
+  ],
+  "test-import": [
+    "moonbitlang/async"
+  ],
+  "targets": {
+    "ffi.mbt": [ "native" ],
+    "pipe.mbt": [ "native" ],
+    "read_exactly_test.mbt": [ "native" ],
+    "reader_closed_test.mbt": [ "native" ]
+  }
+}

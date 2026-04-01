@@ -1,0 +1,78 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/async/socket"
+
+import(
+  "moonbitlang/async/io"
+)
+
+// Values
+
+// Errors
+pub suberror InvalidAddr
+pub impl Show for InvalidAddr
+pub impl ToJson for InvalidAddr
+
+pub suberror ResolveHostnameError {
+  ResolveHostnameError(String)
+}
+pub impl Show for ResolveHostnameError
+pub impl ToJson for ResolveHostnameError
+
+// Types and methods
+type Addr
+pub fn Addr::ip(Self) -> UInt
+pub fn Addr::is_ipv6(Self) -> Bool
+pub fn Addr::new(UInt, Int) -> Self
+pub fn Addr::parse(String) -> Self raise InvalidAddr
+pub fn Addr::port(Self) -> Int
+pub async fn Addr::resolve(String, port~ : Int, protocol? : IpProtocolPreference) -> Self
+pub impl Compare for Addr
+pub impl Eq for Addr
+pub impl Hash for Addr
+pub impl Show for Addr
+
+pub(all) enum IpProtocolPreference {
+  OnlyV4
+  OnlyV6
+  FavorV4
+  FavorV6
+  NoPreference
+}
+pub impl Show for IpProtocolPreference
+
+#alias(TCP, deprecated)
+type Tcp
+pub fn Tcp::addr(Self) -> Addr
+pub fn Tcp::close(Self) -> Unit
+pub async fn Tcp::connect(Addr) -> Self
+pub async fn Tcp::connect_to_host(String, port~ : Int, protocol? : IpProtocolPreference) -> Self
+pub fn Tcp::enable_keepalive(Self, idle_before_keep_alive? : Int, keep_alive_count? : Int, keep_alive_interval? : Int) -> Unit raise
+pub impl @io.Reader for Tcp
+pub impl @io.Writer for Tcp
+
+#alias(TCPServer, deprecated)
+type TcpServer
+pub async fn TcpServer::accept(Self) -> (Tcp, Addr)
+pub fn TcpServer::addr(Self) -> Addr
+pub fn TcpServer::close(Self) -> Unit
+pub fn TcpServer::new(Addr, dual_stack? : Bool, reuse_addr? : Bool) -> Self raise
+pub async fn TcpServer::run_forever(Self, async (Tcp, Addr) -> Unit, allow_failure? : Bool, max_connections? : Int) -> Unit
+
+type UdpClient
+pub fn UdpClient::addr(Self) -> Addr
+pub fn UdpClient::close(Self) -> Unit
+pub fn UdpClient::new(Addr) -> Self raise
+pub async fn UdpClient::recv(Self, FixedArray[Byte], offset? : Int, max_len? : Int) -> Int
+pub async fn UdpClient::send(Self, Bytes, offset? : Int, len? : Int) -> Unit
+
+type UdpServer
+pub fn UdpServer::addr(Self) -> Addr
+pub fn UdpServer::close(Self) -> Unit
+pub fn UdpServer::new(Addr, dual_stack? : Bool) -> Self raise
+pub async fn UdpServer::recvfrom(Self, FixedArray[Byte], offset? : Int, max_len? : Int) -> (Int, Addr)
+pub async fn UdpServer::sendto(Self, Bytes, Addr, offset? : Int, len? : Int) -> Unit
+
+// Type aliases
+
+// Traits
+

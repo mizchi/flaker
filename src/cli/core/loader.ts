@@ -40,6 +40,7 @@ export interface MetriciCore {
   sampleRandom(meta: TestMeta[], count: number, seed: number): TestMeta[];
   sampleWeighted(meta: TestMeta[], count: number, seed: number): TestMeta[];
   sampleHybrid(meta: TestMeta[], affectedSuites: string[], count: number, seed: number): TestMeta[];
+  resolveAffected(workflowText: string, changedPaths: string[]): string[];
 }
 
 /** LCG PRNG: returns next state and a float in [0, 1) */
@@ -165,6 +166,7 @@ interface MbtJsExports {
   sample_random_json: (meta: string, count: number, seed: number) => string;
   sample_weighted_json: (meta: string, count: number, seed: number) => string;
   sample_hybrid_json: (meta: string, affected: string, count: number, seed: number) => string;
+  resolve_affected_json: (workflow: string, changed: string) => string;
 }
 
 function wrapMbtCore(mbt: MbtJsExports): MetriciCore {
@@ -180,6 +182,9 @@ function wrapMbtCore(mbt: MbtJsExports): MetriciCore {
     },
     sampleHybrid(meta: TestMeta[], affectedSuites: string[], count: number, seed: number): TestMeta[] {
       return JSON.parse(mbt.sample_hybrid_json(JSON.stringify(meta), JSON.stringify(affectedSuites), count, seed));
+    },
+    resolveAffected(workflowText: string, changedPaths: string[]): string[] {
+      return JSON.parse(mbt.resolve_affected_json(workflowText, JSON.stringify(changedPaths)));
     },
   };
 }
@@ -198,7 +203,8 @@ export async function loadCore(): Promise<MetriciCore> {
       typeof mbt.detect_flaky_json === "function" &&
       typeof mbt.sample_random_json === "function" &&
       typeof mbt.sample_weighted_json === "function" &&
-      typeof mbt.sample_hybrid_json === "function"
+      typeof mbt.sample_hybrid_json === "function" &&
+      typeof mbt.resolve_affected_json === "function"
     ) {
       cachedCore = wrapMbtCore(mbt);
       return cachedCore;
@@ -211,6 +217,7 @@ export async function loadCore(): Promise<MetriciCore> {
     sampleRandom,
     sampleWeighted,
     sampleHybrid,
+    resolveAffected: resolveAffectedFallback,
   };
   return cachedCore;
 }
@@ -222,5 +229,11 @@ export function loadCoreSync(): MetriciCore {
     sampleRandom,
     sampleWeighted,
     sampleHybrid,
+    resolveAffected: resolveAffectedFallback,
   };
+}
+
+/** TS fallback: returns empty (no workflow parsing without MoonBit) */
+function resolveAffectedFallback(_workflowText: string, _changedPaths: string[]): string[] {
+  return [];
 }

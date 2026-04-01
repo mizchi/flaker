@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/bitflow/main"
+
+// Values
+pub fn parse_main_cli_args(Array[String]) -> CliRunSpec
+
+// Errors
+
+// Types and methods
+pub struct CliRunSpec {
+  show_help : Bool
+  workflow_path : String
+  errors : Array[String]
+}
+
+// Type aliases
+
+// Traits
+

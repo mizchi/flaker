@@ -1,0 +1,9 @@
+{
+  "import": [
+    "moonbitlang/async/websocket",
+    "moonbitlang/async",
+    "moonbitlang/async/stdio",
+    "moonbitlang/x/sys"
+  ],
+  "is-main": true
+}

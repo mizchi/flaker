@@ -2,6 +2,7 @@ import {
   "mizchi/metrici_core/src/types",
   "mizchi/metrici_core/src/flaky_detector",
   "mizchi/metrici_core/src/sampler",
+  "mizchi/metrici_core/src/affected" @affected,
   "moonbitlang/core/json",
 }
 
@@ -14,6 +15,7 @@ options(
         "sample_random_json",
         "sample_weighted_json",
         "sample_hybrid_json",
+        "resolve_affected_json",
       ],
       "format": "esm",
     },
