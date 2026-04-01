@@ -1,11 +1,16 @@
 import { execSync } from "node:child_process";
-import { actrunAdapter } from "../adapters/actrun.js";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { actrunAdapter, extractTestReportsFromArtifacts } from "../adapters/actrun.js";
+import { playwrightAdapter } from "../adapters/playwright.js";
+import { junitAdapter } from "../adapters/junit.js";
 import type { MetricStore, WorkflowRun, TestResult } from "../storage/types.js";
 
 export interface CollectLocalOpts {
   store: MetricStore;
   last?: number;
   exec?: (cmd: string) => string;
+  workspace?: string;
 }
 
 export interface CollectLocalResult {
@@ -48,10 +53,22 @@ export async function runCollectLocal(opts: CollectLocalOpts): Promise<CollectLo
 
     // Get full run details
     const viewJson = execFn(`actrun run view ${entry.run_id} --json`);
-    const testCases = actrunAdapter.parse(viewJson);
-
-    // Parse run metadata
     const output = JSON.parse(viewJson);
+
+    // Try to extract richer test reports from actrun artifacts
+    const workspace = opts.workspace ?? process.cwd();
+    const artifactsDir = join(workspace, ".actrun", "runs", entry.run_id, "artifacts");
+    let testCases = existsSync(artifactsDir)
+      ? extractTestReportsFromArtifacts([artifactsDir], {
+          playwright: playwrightAdapter,
+          junit: junitAdapter,
+        })
+      : [];
+
+    // Fall back to task-level results if no artifact reports found
+    if (testCases.length === 0) {
+      testCases = actrunAdapter.parse(viewJson);
+    }
     const startedAt = new Date(output.startedAt);
     const completedAt = new Date(output.completedAt);
     const durationMs = completedAt.getTime() - startedAt.getTime();

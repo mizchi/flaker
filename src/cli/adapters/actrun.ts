@@ -1,3 +1,5 @@
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 import type { TestCaseResult, TestResultAdapter } from "./types.js";
 
 export interface ActrunTask {
@@ -63,3 +65,58 @@ export const actrunAdapter: TestResultAdapter = {
     });
   },
 };
+
+function walkFiles(dir: string): string[] {
+  const results: string[] = [];
+  if (!existsSync(dir)) return results;
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    const stat = statSync(full);
+    if (stat.isDirectory()) {
+      results.push(...walkFiles(full));
+    } else {
+      results.push(full);
+    }
+  }
+  return results;
+}
+
+export function extractTestReportsFromArtifacts(
+  artifactPaths: string[],
+  adapters: { playwright: TestResultAdapter; junit: TestResultAdapter },
+): TestCaseResult[] {
+  const results: TestCaseResult[] = [];
+  for (const artifactPath of artifactPaths) {
+    if (!existsSync(artifactPath)) continue;
+    for (const file of walkFiles(artifactPath)) {
+      if (file.endsWith(".json")) {
+        try {
+          const content = readFileSync(file, "utf-8");
+          const parsed = JSON.parse(content);
+          // Detect Playwright format (has "suites" key)
+          if (parsed.suites) {
+            results.push(...adapters.playwright.parse(content));
+            continue;
+          }
+          // Detect Vitest format (has "testResults" key)
+          if (parsed.testResults) {
+            // Could add vitest parsing here too
+          }
+        } catch {
+          /* not a valid report, skip */
+        }
+      }
+      if (file.endsWith(".xml")) {
+        try {
+          const content = readFileSync(file, "utf-8");
+          if (content.includes("<testsuite")) {
+            results.push(...adapters.junit.parse(content));
+          }
+        } catch {
+          /* skip */
+        }
+      }
+    }
+  }
+  return results;
+}
