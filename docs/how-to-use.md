@@ -1,76 +1,78 @@
 # flaker — Flaky Test Detection & Test Sampling CLI
 
-テストが多すぎて全部流せない。CI が flaky で信頼できない。どのテストが本当に壊れているのかわからない。flaker はこれらの問題を解決します。
+Too many tests to run them all. CI keeps failing on flaky tests. Can't tell what's really broken. flaker solves these problems.
 
-## インストール
+[日本語版](how-to-use.ja.md)
+
+## Installation
 
 ```bash
-# npm/pnpm プロジェクトに追加
+# Add to your npm/pnpm project
 pnpm add -D @mizchi/flaker
 
-# または直接実行
+# Or run directly
 pnpm dlx @mizchi/flaker --help
 ```
 
-## クイックスタート
+## Quick Start
 
-### 1. 初期設定
+### 1. Initialize
 
 ```bash
 flaker init --owner your-org --name your-repo
 ```
 
-`flaker.toml` が生成されます。
+Generates `flaker.toml`.
 
-### 2. データを集める
+### 2. Collect Data
 
-GitHub Actions のテスト結果を収集:
+Fetch test results from GitHub Actions:
 
 ```bash
 export GITHUB_TOKEN=$(gh auth token)
 flaker collect --last 30
 ```
 
-またはローカルのテストレポートを直接取り込み:
+Or import local test reports directly:
 
 ```bash
-# Playwright JSON レポート
+# Playwright JSON report
 pnpm exec playwright test --reporter json > report.json
 flaker import report.json --adapter playwright --commit $(git rev-parse HEAD)
 
-# JUnit XML レポート
+# JUnit XML report
 flaker import results.xml --adapter junit --commit $(git rev-parse HEAD)
 ```
 
-### 3. 分析する
+### 3. Analyze
 
 ```bash
-# flaky テスト一覧
+# List flaky tests
 flaker flaky
 
-# AI が分析して推奨アクションを提示
+# AI-powered analysis with recommended actions
 flaker reason
 
-# テストスイートの健全性スコア
+# Test suite health score
 flaker eval
 ```
 
-### 4. テストを選んで実行する
+### 4. Select & Run Tests
 
 ```bash
-# flaky 度で重み付けしてランダムに 20 件実行
+# Weighted random sampling (flaky tests prioritized), 20 tests
 flaker run --strategy weighted --count 20
 
-# 変更に影響されるテストだけ実行
+# Only tests affected by your changes
 flaker run --strategy affected
 
-# 変更影響 + 前回失敗 + 新規 + ランダム（推奨）
+# Affected + previously failed + new + random (recommended)
 flaker run --strategy hybrid --count 50
 ```
 
 ---
 
-## 設定ファイル (`flaker.toml`)
+## Configuration (`flaker.toml`)
 
 ```toml
 [repo]
@@ -80,46 +82,46 @@ name = "your-repo"
 [storage]
 path = ".flaker/data.duckdb"
 
-# テスト結果のパース形式
+# Test result parsing format
 [adapter]
 type = "playwright"     # "playwright" | "junit" | "custom"
 
-# テストランナー
+# Test runner
 [runner]
 type = "vitest"         # "vitest" | "playwright" | "moontest" | "custom"
 command = "pnpm vitest"
 
-# 変更影響分析
+# Dependency analysis for affected strategy
 [affected]
 resolver = "workspace"  # "simple" | "workspace" | "moon" | "bitflow"
 
-# flaky テストの自動隔離
+# Auto-quarantine flaky tests
 [quarantine]
 auto = true
-flaky_rate_threshold = 30.0   # この % を超えたら quarantine 候補
-min_runs = 10                  # 最低実行回数（データ不足の誤判定を防ぐ）
+flaky_rate_threshold = 30.0   # Quarantine candidate above this %
+min_runs = 10                  # Minimum runs before making judgments
 
-# flaky 検出パラメータ
+# Flaky detection parameters
 [flaky]
-window_days = 14              # 直近何日間のデータを分析するか
-detection_threshold = 2.0     # この % 以上で flaky と判定
+window_days = 14              # Analysis window
+detection_threshold = 2.0     # Mark as flaky above this %
 ```
 
 ---
 
-## コマンドリファレンス
+## Command Reference
 
-### `flaker collect` — CI からデータ収集
+### `flaker collect` — Collect from CI
 
 ```bash
-flaker collect                    # 直近 30 日分
-flaker collect --last 90          # 直近 90 日分
-flaker collect --branch main      # main ブランチのみ
+flaker collect                    # Last 30 days
+flaker collect --last 90          # Last 90 days
+flaker collect --branch main      # main branch only
 ```
 
-GitHub Actions の artifact から Playwright JSON / JUnit XML を自動抽出します。`GITHUB_TOKEN` 環境変数が必要です。
+Auto-extracts Playwright JSON / JUnit XML from GitHub Actions artifacts. Requires `GITHUB_TOKEN` environment variable.
 
-### `flaker import` — ローカルレポートの取り込み
+### `flaker import` — Import Local Reports
 
 ```bash
 flaker import report.json --adapter playwright
@@ -127,127 +129,126 @@ flaker import results.xml --adapter junit
 flaker import report.json --commit abc123 --branch feature-x
 ```
 
-CI を使わずローカルで生成したテストレポートを直接 DB に格納します。
+Import locally-generated test reports directly into the database.
 
-### `flaker collect-local` — actrun 実行履歴の取り込み
-
-```bash
-flaker collect-local              # actrun の全実行履歴を取り込み
-flaker collect-local --last 10    # 直近 10 run のみ
-```
-
-actrun (GitHub Actions 互換ローカルランナー) の実行結果を自動取り込みします。artifact ディレクトリに Playwright/JUnit レポートがあれば、それも解析します。
-
-### `flaker flaky` — flaky テスト検出
+### `flaker collect-local` — Import actrun History
 
 ```bash
-flaker flaky                      # 上位 flaky テスト一覧
-flaker flaky --top 50             # 上位 50 件
-flaker flaky --test "login"       # 名前でフィルタ
-flaker flaky --true-flaky         # DeFlaker 式: 同一コミットで結果不一致
-flaker flaky --trend --test "should redirect"  # 週次トレンド
-flaker flaky --by-variant         # OS/ブラウザ別の flaky rate
+flaker collect-local              # Import all actrun run history
+flaker collect-local --last 10    # Last 10 runs only
 ```
 
-#### 検出モード
+Imports results from [actrun](https://github.com/mizchi/actrun) (GitHub Actions-compatible local runner). Automatically detects and parses Playwright/JUnit reports in artifact directories.
 
-| モード | フラグ | 判定方法 |
-|--------|-------|---------|
-| 閾値ベース | (デフォルト) | 直近 N 日間の fail 率が閾値超え |
-| True flaky | `--true-flaky` | 同一 commit_sha で pass/fail が混在 (DeFlaker 方式) |
-| variant 別 | `--by-variant` | OS/ブラウザ等の実行条件ごとに flaky rate を計算 |
-
-### `flaker reason` — AI 分析
+### `flaker flaky` — Detect Flaky Tests
 
 ```bash
-flaker reason                     # 推奨アクション付きレポート
-flaker reason --json              # 機械可読 JSON
-flaker reason --window 7          # 直近 7 日間で分析
+flaker flaky                      # Top flaky tests
+flaker flaky --top 50             # Top 50
+flaker flaky --test "login"       # Filter by name
+flaker flaky --true-flaky         # DeFlaker mode: same commit, inconsistent results
+flaker flaky --trend --test "should redirect"  # Weekly trend
+flaker flaky --by-variant         # Per OS/browser breakdown
 ```
 
-各 flaky テストを分類し、推奨アクションを提示します:
+#### Detection Modes
 
-| 分類 | 意味 | 推奨アクション |
-|------|------|--------------|
-| `true-flaky` | 同一コードで結果が変わる (非決定的) | quarantine または investigate |
-| `regression` | 最近の変更で壊れた | **fix-urgent** |
-| `intermittent` | retry で通る | quarantine または monitor |
-| `environment-dependent` | 環境依存の可能性 | investigate |
+| Mode | Flag | Method |
+|------|------|--------|
+| Threshold | (default) | Failure rate exceeds threshold in rolling window |
+| True flaky | `--true-flaky` | Same commit_sha has both pass and fail (DeFlaker method) |
+| By variant | `--by-variant` | Flaky rate per execution environment (OS, browser, etc.) |
 
-パターン検出:
-- **suite-instability** — 同じスイートに 3+ 件の flaky テスト → 共有 fixture の問題の可能性
-- **new-test-risk** — 追加されたばかりのテストが既に失敗
-
-リスク予測:
-- 現在安定だが、直近で失敗が出始めたテスト
-- 実行時間の分散が大きいテスト
-
-### `flaker sample` — テストサンプリング
+### `flaker reason` — AI-Powered Analysis
 
 ```bash
-flaker sample --strategy random --count 20        # ランダム 20 件
-flaker sample --strategy weighted --count 20      # flaky 優先
-flaker sample --strategy affected                 # 変更影響のみ
-flaker sample --strategy hybrid --count 50        # ハイブリッド（推奨）
-flaker sample --percentage 30                     # 全テストの 30%
-flaker sample --skip-quarantined                  # quarantine 除外
+flaker reason                     # Report with recommended actions
+flaker reason --json              # Machine-readable JSON
+flaker reason --window 7          # Analyze last 7 days
 ```
 
-#### サンプリング戦略
+Classifies each flaky test and recommends actions:
 
-| 戦略 | 説明 |
-|------|------|
-| `random` | 均等ランダム |
-| `weighted` | flaky rate で重み付け (flaky なテストほど選ばれやすい) |
-| `affected` | `git diff` から変更影響テストを特定 |
-| `hybrid` | affected + 前回失敗 + 新規テスト + weighted random (Microsoft TIA 方式) |
+| Classification | Meaning | Recommended Action |
+|---------------|---------|-------------------|
+| `true-flaky` | Non-deterministic (same code, different results) | quarantine or investigate |
+| `regression` | Broke recently due to code change | **fix-urgent** |
+| `intermittent` | Passes on retry | quarantine or monitor |
+| `environment-dependent` | May depend on execution environment | investigate |
 
-### `flaker run` — サンプリング + 実行
+Pattern detection:
+- **suite-instability** — 3+ flaky tests in the same suite → likely shared fixture issue
+- **new-test-risk** — Recently added tests already failing
+
+Risk prediction:
+- Currently stable tests showing early warning signs (recent failures, high duration variance)
+
+### `flaker sample` — Test Sampling
+
+```bash
+flaker sample --strategy random --count 20        # Uniform random
+flaker sample --strategy weighted --count 20      # Flaky-weighted
+flaker sample --strategy affected                 # Change-affected only
+flaker sample --strategy hybrid --count 50        # Hybrid (recommended)
+flaker sample --percentage 30                     # 30% of all tests
+flaker sample --skip-quarantined                  # Exclude quarantined
+```
+
+#### Sampling Strategies
+
+| Strategy | Description |
+|----------|------------|
+| `random` | Uniform random selection |
+| `weighted` | Weighted by flaky rate (flakier tests more likely selected) |
+| `affected` | Tests affected by `git diff` changes |
+| `hybrid` | affected + previously failed + new tests + weighted random (Microsoft TIA method) |
+
+### `flaker run` — Sample & Execute
 
 ```bash
 flaker run --strategy hybrid --count 50
 flaker run --strategy affected
 flaker run --skip-quarantined
-flaker run --runner actrun                        # actrun 経由で実行
-flaker run --runner actrun --retry                # 失敗箇所のみリトライ
+flaker run --runner actrun                        # Execute via actrun
+flaker run --runner actrun --retry                # Retry failed tests only
 ```
 
-実行結果は自動的に DB に格納されます。
+Results are automatically stored in the database.
 
-### `flaker quarantine` — flaky テストの隔離
+### `flaker quarantine` — Isolate Flaky Tests
 
 ```bash
-flaker quarantine                                 # 隔離済み一覧
-flaker quarantine --auto                          # 閾値超えを自動隔離
-flaker quarantine --add "suite>testName"          # 手動追加
-flaker quarantine --remove "suite>testName"       # 解除
+flaker quarantine                                 # List quarantined
+flaker quarantine --auto                          # Auto-quarantine above threshold
+flaker quarantine --add "suite>testName"          # Manual add
+flaker quarantine --remove "suite>testName"       # Remove
 ```
 
-隔離されたテストは `--skip-quarantined` で実行から除外できます。
+Quarantined tests can be excluded from runs with `--skip-quarantined`.
 
-### `flaker bisect` — 原因コミット特定
+### `flaker bisect` — Find Culprit Commit
 
 ```bash
 flaker bisect --test "should redirect"
 flaker bisect --test "should redirect" --suite "tests/login.spec.ts"
 ```
 
-テスト結果の履歴から、flaky が始まったコミット範囲を特定します。
+Identifies the commit range where a test became flaky.
 
-### `flaker eval` — 健全性評価
+### `flaker eval` — Health Assessment
 
 ```bash
 flaker eval
 flaker eval --json
 ```
 
-テストスイート全体の健全性を 0-100 のスコアで評価します:
-- **Data Sufficiency** — データ量は十分か
-- **Detection** — flaky テストの検出状況
-- **Resolution** — flaky テストの解決状況 (MTTD/MTTR)
-- **Health Score** — 総合スコア
+Rates overall test suite health on a 0-100 scale:
+- **Data Sufficiency** — Is there enough data?
+- **Detection** — Flaky test detection status
+- **Resolution** — Resolution tracking (MTTD/MTTR)
+- **Health Score** — Composite score
 
-### `flaker query` — SQL で直接分析
+### `flaker query` — Direct SQL Analysis
 
 ```bash
 flaker query "SELECT suite, test_name, status, COUNT(*) as cnt
@@ -257,17 +258,17 @@ flaker query "SELECT suite, test_name, status, COUNT(*) as cnt
               LIMIT 20"
 ```
 
-DuckDB に直接 SQL を投げられます。ウィンドウ関数、FILTER 句など DuckDB の分析機能をフル活用できます。
+Run SQL directly against DuckDB. Full access to window functions, FILTER clauses, and other DuckDB analytics features.
 
 ---
 
-## テストランナー別の設定
+## Runner-Specific Setup
 
 ### Vitest
 
 ```toml
 [adapter]
-type = "playwright"    # vitest --reporter json は Playwright 互換
+type = "playwright"    # vitest --reporter json is Playwright-compatible
 
 [runner]
 type = "vitest"
@@ -297,9 +298,9 @@ type = "moontest"
 command = "moon test"
 ```
 
-### カスタムランナー
+### Custom Runner
 
-任意のテストランナーを JSON プロトコルで接続:
+Connect any test runner via JSON protocol:
 
 ```toml
 [runner]
@@ -308,33 +309,33 @@ execute = "node ./my-runner.js execute"   # stdin: TestId[], stdout: ExecuteResu
 list = "node ./my-runner.js list"         # stdout: TestId[]
 ```
 
-詳細は [Runner Adapters](runner-adapters.md) を参照。
+See [Runner Adapters](runner-adapters.md) for details.
 
 ---
 
-## 依存分析の設定
+## Dependency Analysis Setup
 
-`--strategy affected` や `--strategy hybrid` で使う依存解析方式:
+Used by `--strategy affected` and `--strategy hybrid`:
 
-### workspace (Node.js monorepo, ゼロ設定)
+### workspace (Node.js monorepo, zero config)
 
 ```toml
 [affected]
 resolver = "workspace"
 ```
 
-`package.json` の `dependencies` + `workspace:` プロトコルから自動で依存グラフを構築。pnpm / npm / yarn workspace に対応。
+Automatically builds dependency graph from `package.json` `dependencies` + `workspace:` protocol. Supports pnpm / npm / yarn workspaces.
 
-### moon (MoonBit, ゼロ設定)
+### moon (MoonBit, zero config)
 
 ```toml
 [affected]
 resolver = "moon"
 ```
 
-`moon.pkg` の `import` フィールドから自動で依存グラフを構築。
+Automatically builds dependency graph from `moon.pkg` `import` fields.
 
-### bitflow (Starlark 手動定義)
+### bitflow (Starlark manual definition)
 
 ```toml
 [affected]
@@ -348,68 +349,68 @@ task("tests/auth", srcs=["src/auth/**", "src/utils/**"])
 task("tests/checkout", srcs=["src/checkout/**"], needs=["tests/auth"])
 ```
 
-ファイルレベルの細かい依存を定義可能。
+Supports file-level granularity.
 
-### simple (フォールバック)
+### simple (fallback)
 
 ```toml
 [affected]
 resolver = "simple"
 ```
 
-ディレクトリ名マッチングによる簡易推定。設定不要。
+Simple directory-name matching. No configuration needed.
 
 ---
 
-## actrun との連携
+## actrun Integration
 
-[actrun](https://github.com/mizchi/actrun) (GitHub Actions 互換ローカルランナー) と連携して、CI パイプラインを通さずにローカルでテストを実行・蓄積できます。
+[actrun](https://github.com/mizchi/actrun) is a GitHub Actions-compatible local runner. flaker integrates with it for local CI execution and result accumulation.
 
 ```bash
-# actrun でテスト実行 → 結果を自動 DB 取り込み
+# Run tests via actrun → auto-import results
 flaker run --runner actrun
 
-# 失敗テストだけリトライ
+# Retry only failed tests
 flaker run --runner actrun --retry
 
-# actrun の過去の実行履歴を一括取り込み
+# Bulk import past actrun history
 flaker collect-local
 ```
 
 ---
 
-## 典型的なワークフロー
+## Typical Workflows
 
-### 日常の開発
+### Daily Development
 
 ```bash
-# 朝: CI データを最新化
+# Morning: sync CI data
 flaker collect
 
-# コード変更後: 影響テストだけ素早く実行
+# After code changes: run only affected tests
 flaker run --strategy affected
 
-# 全体の状態確認
+# Check overall status
 flaker eval
 ```
 
-### flaky テスト対応
+### Flaky Test Triage
 
 ```bash
-# 問題のあるテストを特定
+# Identify problematic tests
 flaker reason
 
-# 重症なものを隔離
+# Quarantine severe cases
 flaker quarantine --auto
 
-# 原因コミットを特定
-flaker bisect --test "問題のテスト名"
+# Find culprit commit
+flaker bisect --test "problematic test name"
 
-# 修正後、隔離解除
+# After fixing, remove quarantine
 flaker quarantine --remove "suite>testName"
 ```
 
-### CI での活用
+### CI Integration
 
 ```yaml
 # .github/workflows/flaker.yml
@@ -426,7 +427,7 @@ flaker quarantine --remove "suite>testName"
     path: flaker-*.json
 ```
 
-### PR でのテスト選択
+### PR Test Selection
 
 ```yaml
 - name: Run affected tests
