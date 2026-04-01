@@ -37,3 +37,4 @@ export type {
 } from "./types.js";
 export { orchestrate } from "./orchestrator.js";
 export type { OrchestrateOpts } from "./orchestrator.js";
+export { executeWithRetry, type RetryResult } from "./retry.js";
