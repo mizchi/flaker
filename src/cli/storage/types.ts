@@ -58,6 +58,15 @@ export interface TrueFlakyScore {
   trueFlakyRate: number;
 }
 
+export interface VariantFlakyScore {
+  suite: string;
+  testName: string;
+  variant: Record<string, string>;
+  totalRuns: number;
+  failCount: number;
+  flakyRate: number;
+}
+
 export interface FlakyQueryOpts {
   top?: number;
   suite?: string;
@@ -74,6 +83,7 @@ export interface MetricStore {
   queryTestHistory(suite: string, testName: string): Promise<TestResult[]>;
   queryFlakyTrend(suite: string, testName: string): Promise<TrendEntry[]>;
   queryTrueFlakyTests(opts?: { top?: number }): Promise<TrueFlakyScore[]>;
+  queryFlakyByVariant(opts?: { suite?: string; testName?: string; top?: number }): Promise<VariantFlakyScore[]>;
   raw<T = unknown>(sql: string, params?: unknown[]): Promise<T[]>;
   addQuarantine(suite: string, testName: string, reason: string): Promise<void>;
   removeQuarantine(suite: string, testName: string): Promise<void>;

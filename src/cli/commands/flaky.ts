@@ -1,4 +1,4 @@
-import type { MetricStore, FlakyScore, FlakyQueryOpts, TrendEntry, TrueFlakyScore } from "../storage/types.js";
+import type { MetricStore, FlakyScore, FlakyQueryOpts, TrendEntry, TrueFlakyScore, VariantFlakyScore } from "../storage/types.js";
 
 export interface FlakyOpts {
   store: MetricStore;
@@ -67,6 +67,30 @@ export function formatTrueFlakyTable(results: TrueFlakyScore[]): string {
   const lines = results.map((r) =>
     `${r.suite} > ${r.testName}  ${r.trueFlakyRate.toFixed(1)}%  (${r.flakyCommits}/${r.commitsTested} commits)`
   );
+  return lines.join("\n");
+}
+
+export interface FlakyByVariantOpts {
+  store: MetricStore;
+  suite?: string;
+  testName?: string;
+  top?: number;
+}
+
+export async function runFlakyByVariant(opts: FlakyByVariantOpts): Promise<VariantFlakyScore[]> {
+  return opts.store.queryFlakyByVariant({
+    suite: opts.suite,
+    testName: opts.testName,
+    top: opts.top,
+  });
+}
+
+export function formatFlakyByVariantTable(results: VariantFlakyScore[]): string {
+  if (results.length === 0) return "No variant flaky data found.";
+  const lines = results.map((r) => {
+    const variantStr = Object.entries(r.variant).map(([k, v]) => `${k}=${v}`).join(", ");
+    return `${r.suite} > ${r.testName} [${variantStr}]  ${r.flakyRate}%  (${r.failCount}/${r.totalRuns})`;
+  });
   return lines.join("\n");
 }
 

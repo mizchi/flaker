@@ -9,6 +9,7 @@ import type {
   QuarantinedTest,
   TrendEntry,
   TrueFlakyScore,
+  VariantFlakyScore,
 } from "./types.js";
 
 export class DuckDBStore implements MetricStore {
@@ -162,6 +163,42 @@ export class DuckDBStore implements MetricStore {
     );
     return rows.map((r: any) => ({
       suite: r.suite, testName: r.test_name, week: r.week, runs: r.runs, flakyRate: r.flaky_rate,
+    }));
+  }
+
+  async queryFlakyByVariant(opts?: { suite?: string; testName?: string; top?: number }): Promise<VariantFlakyScore[]> {
+    const conditions = ["variant IS NOT NULL"];
+    const params: unknown[] = [];
+    if (opts?.suite) {
+      conditions.push("suite = ?");
+      params.push(opts.suite);
+    }
+    if (opts?.testName) {
+      conditions.push("test_name = ?");
+      params.push(opts.testName);
+    }
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    let sql = `
+      SELECT
+        suite,
+        test_name,
+        variant,
+        COUNT(*)::INTEGER AS total_runs,
+        COUNT(*) FILTER (WHERE status = 'failed')::INTEGER AS fail_count,
+        ROUND(COUNT(*) FILTER (WHERE status = 'failed') * 100.0 / COUNT(*), 2)::DOUBLE AS flaky_rate
+      FROM test_results
+      ${where}
+      GROUP BY suite, test_name, variant
+      ORDER BY flaky_rate DESC`;
+    if (opts?.top) sql += ` LIMIT ${opts.top}`;
+    const rows = await this.all(sql, params);
+    return rows.map((r: any) => ({
+      suite: r.suite,
+      testName: r.test_name,
+      variant: JSON.parse(r.variant),
+      totalRuns: r.total_runs,
+      failCount: r.fail_count,
+      flakyRate: r.flaky_rate,
     }));
   }
 
