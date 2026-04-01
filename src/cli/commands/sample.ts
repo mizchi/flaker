@@ -11,11 +11,17 @@ export interface SampleOpts {
   seed?: number;
   resolver?: DependencyResolver;
   changedFiles?: string[];
+  skipQuarantined?: boolean;
 }
 
 export async function runSample(opts: SampleOpts): Promise<TestMeta[]> {
   const core = await loadCore();
-  const allTests = await buildTestMeta(opts.store);
+  let allTests = await buildTestMeta(opts.store);
+  if (opts.skipQuarantined) {
+    const quarantined = await opts.store.queryQuarantined();
+    const qSet = new Set(quarantined.map((q) => `${q.suite}\0${q.testName}`));
+    allTests = allTests.filter((t) => !qSet.has(`${t.suite}\0${t.test_name}`));
+  }
 
   let count: number;
   if (opts.percentage != null) {

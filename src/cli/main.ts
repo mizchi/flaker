@@ -143,8 +143,9 @@ program
   .option("--strategy <s>", "Sampling strategy: random or weighted", "random")
   .option("--count <n>", "Number of tests to sample")
   .option("--percentage <n>", "Percentage of tests to sample")
+  .option("--skip-quarantined", "Exclude quarantined tests")
   .action(
-    async (opts: { strategy: string; count?: string; percentage?: string }) => {
+    async (opts: { strategy: string; count?: string; percentage?: string; skipQuarantined?: boolean }) => {
       const config = loadConfig(process.cwd());
       const store = new DuckDBStore(resolve(config.storage.path));
       await store.initialize();
@@ -155,6 +156,7 @@ program
           mode: opts.strategy as "random" | "weighted",
           count: opts.count ? Number(opts.count) : undefined,
           percentage: opts.percentage ? Number(opts.percentage) : undefined,
+          skipQuarantined: opts.skipQuarantined,
         });
         for (const t of sampled) {
           console.log(`${t.suite} > ${t.test_name}`);
@@ -174,8 +176,9 @@ program
   .option("--percentage <n>", "Percentage of tests to run")
   .option("--runner <runner>", "Runner type: direct or actrun", "direct")
   .option("--retry", "Retry failed tests (actrun only)")
+  .option("--skip-quarantined", "Exclude quarantined tests")
   .action(
-    async (opts: { strategy: string; count?: string; percentage?: string; runner: string; retry?: boolean }) => {
+    async (opts: { strategy: string; count?: string; percentage?: string; runner: string; retry?: boolean; skipQuarantined?: boolean }) => {
       const config = loadConfig(process.cwd());
       const store = new DuckDBStore(resolve(config.storage.path));
       await store.initialize();
@@ -198,6 +201,7 @@ program
           mode: opts.strategy as "random" | "weighted",
           count: opts.count ? Number(opts.count) : undefined,
           percentage: opts.percentage ? Number(opts.percentage) : undefined,
+          skipQuarantined: opts.skipQuarantined,
         });
       } finally {
         await store.close();

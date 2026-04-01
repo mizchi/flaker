@@ -10,6 +10,7 @@ export interface RunOpts {
   percentage?: number;
   mode: "random" | "weighted";
   seed?: number;
+  skipQuarantined?: boolean;
 }
 
 export async function runTests(opts: RunOpts): Promise<void> {
@@ -19,6 +20,7 @@ export async function runTests(opts: RunOpts): Promise<void> {
     percentage: opts.percentage,
     mode: opts.mode,
     seed: opts.seed,
+    skipQuarantined: opts.skipQuarantined,
   });
 
   const runner = new DirectRunner(opts.command);
