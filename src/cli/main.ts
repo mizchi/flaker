@@ -21,6 +21,7 @@ import {
   formatQuarantineTable,
 } from "./commands/quarantine.js";
 import { runEval, formatEvalReport } from "./commands/eval.js";
+import { runReason, formatReasoningReport } from "./commands/reason.js";
 import { DuckDBStore } from "./storage/duckdb.js";
 
 const program = new Command();
@@ -365,6 +366,28 @@ program
         console.log(JSON.stringify(report, null, 2));
       } else {
         console.log(formatEvalReport(report));
+      }
+    } finally {
+      await store.close();
+    }
+  });
+
+// --- reason ---
+program
+  .command("reason")
+  .description("Analyze flaky tests and produce actionable recommendations")
+  .option("--window <days>", "Analysis window in days", "30")
+  .option("--json", "Output raw JSON report")
+  .action(async (opts: { window: string; json?: boolean }) => {
+    const config = loadConfig(process.cwd());
+    const store = new DuckDBStore(resolve(config.storage.path));
+    await store.initialize();
+    try {
+      const report = await runReason({ store, windowDays: Number(opts.window) });
+      if (opts.json) {
+        console.log(JSON.stringify(report, null, 2));
+      } else {
+        console.log(formatReasoningReport(report));
       }
     } finally {
       await store.close();
