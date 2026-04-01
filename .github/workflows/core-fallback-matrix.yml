@@ -23,8 +23,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -36,12 +34,13 @@ jobs:
       - name: Install dependencies (skip native build scripts)
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Install MoonBit (with build mode only)
+      - name: Setup MoonBit (with build mode only)
         if: matrix.moonbit_mode == 'with_moonbit_build'
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
-          moon version
+        uses: hustcer/setup-moonbit@v1
+
+      - name: Verify MoonBit toolchain
+        if: matrix.moonbit_mode == 'with_moonbit_build'
+        run: moon version
 
       - name: Prepare no-MoonBit-build mode
         if: matrix.moonbit_mode == 'without_moonbit_build'

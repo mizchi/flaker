@@ -39,3 +39,14 @@ test "resolve_affected expands transitive dependencies" {
   // "app" depends on "lib", so it should also be affected
   assert_true(affected.contains("app"))
 }
+
+///|
+test "resolve_affected normalizes windows path separators" {
+  let workflow =
+    #|workflow(name="ci")
+    #|node(id="auth", depends_on=[])
+    #|task(id="test-auth", node="auth", cmd="test", needs=[], srcs=["src/auth/**"])
+  let changed = ["src\\auth\\login.ts"]
+  let affected = resolve_affected(workflow, changed)
+  assert_true(affected.contains("test-auth"))
+}
