@@ -3,6 +3,7 @@ import { playwrightAdapter } from "../adapters/playwright.js";
 import { junitAdapter } from "../adapters/junit.js";
 import type { TestResultAdapter } from "../adapters/types.js";
 import type { MetricStore, WorkflowRun, TestResult } from "../storage/types.js";
+import { toStoredTestResult } from "../storage/test-result-mapper.js";
 
 interface ImportOpts {
   store: MetricStore;
@@ -54,18 +55,13 @@ export async function runImport(opts: ImportOpts): Promise<ImportResult> {
   };
   await store.insertWorkflowRun(workflowRun);
 
-  const testResults: TestResult[] = testCases.map((tc) => ({
-    workflowRunId: runId,
-    suite: tc.suite,
-    testName: tc.testName,
-    status: tc.status,
-    durationMs: tc.durationMs,
-    retryCount: tc.retryCount,
-    errorMessage: tc.errorMessage ?? null,
-    commitSha,
-    variant: tc.variant ?? null,
-    createdAt: now,
-  }));
+  const testResults: TestResult[] = testCases.map((tc) =>
+    toStoredTestResult(tc, {
+      workflowRunId: runId,
+      commitSha,
+      createdAt: now,
+    }),
+  );
 
   await store.insertTestResults(testResults);
   return { testsImported: testResults.length };

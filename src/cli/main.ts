@@ -25,8 +25,75 @@ import { runReason, formatReasoningReport } from "./commands/reason.js";
 import { runSelfEval, formatSelfEvalReport } from "./commands/self-eval.js";
 import { runDoctor, formatDoctorReport } from "./commands/doctor.js";
 import { DuckDBStore } from "./storage/duckdb.js";
+import { createRunner } from "./runners/index.js";
+import { resolveTestIdentity } from "./identity.js";
+import { toStoredTestResult } from "./storage/test-result-mapper.js";
+import {
+  formatQuarantineManifestReport,
+  loadQuarantineManifest,
+  loadQuarantineManifestIfExists,
+  resolveQuarantineManifestPath,
+  validateQuarantineManifest,
+} from "./quarantine-manifest.js";
 
 const program = new Command();
+
+async function collectKnownQuarantineTaskIds(
+  cwd: string,
+  store: DuckDBStore,
+  runnerConfig: {
+    type: string;
+    command: string;
+    execute?: string;
+    list?: string;
+  },
+): Promise<string[]> {
+  const taskIds = new Set<string>();
+  const persisted = await store.raw<{ task_id: string }>(`
+    SELECT DISTINCT task_id
+    FROM test_results
+    WHERE task_id IS NOT NULL AND task_id <> ''
+  `);
+  for (const row of persisted) {
+    taskIds.add(row.task_id);
+  }
+
+  try {
+    const runner = createRunner(runnerConfig);
+    const listedTests = await runner.listTests({ cwd });
+    for (const test of listedTests) {
+      const resolved = resolveTestIdentity({
+        suite: test.suite,
+        testName: test.testName,
+        taskId: test.taskId,
+        filter: test.filter,
+        variant: test.variant,
+      });
+      taskIds.add(resolved.taskId);
+    }
+  } catch {
+    // Best-effort: fall back to persisted task ids only.
+  }
+
+  return [...taskIds].sort();
+}
+
+async function listRunnerTests(
+  cwd: string,
+  runnerConfig: {
+    type: string;
+    command: string;
+    execute?: string;
+    list?: string;
+  },
+) {
+  try {
+    const runner = createRunner(runnerConfig);
+    return await runner.listTests({ cwd });
+  } catch {
+    return [];
+  }
+}
 
 program
   .name("flaker")
@@ -180,6 +247,13 @@ program
       try {
         const changedFiles = opts.changed?.split(",").map(f => f.trim()).filter(Boolean);
         const mode = opts.strategy as "random" | "weighted" | "affected" | "hybrid";
+        const manifest = opts.skipQuarantined
+          ? loadQuarantineManifestIfExists({ cwd: process.cwd() })
+          : null;
+        const listedTests =
+          opts.skipQuarantined && manifest
+            ? await listRunnerTests(process.cwd(), config.runner)
+            : [];
 
         // Create resolver from config for affected/hybrid
         let resolver;
@@ -208,6 +282,8 @@ program
           skipQuarantined: opts.skipQuarantined,
           resolver,
           changedFiles,
+          quarantineManifestEntries: manifest?.entries,
+          listedTests,
         });
         for (const t of sampled) {
           console.log(`${t.suite} > ${t.test_name}`);
@@ -235,6 +311,9 @@ program
       await store.initialize();
 
       try {
+        const manifest = opts.skipQuarantined
+          ? loadQuarantineManifestIfExists({ cwd: process.cwd() })
+          : null;
         if (opts.runner === "actrun") {
           const actRunner = new ActrunRunner({
             workflow: config.runner.command,
@@ -271,18 +350,15 @@ program
                 createdAt: new Date(result.startedAt),
                 durationMs: result.durationMs,
               });
-              await store.insertTestResults(testCases.map((tc) => ({
-                workflowRunId: runId,
-                suite: tc.suite,
-                testName: tc.testName,
-                status: tc.status,
-                durationMs: tc.durationMs,
-                retryCount: tc.retryCount,
-                errorMessage: tc.errorMessage ?? null,
-                commitSha: result.headSha,
-                variant: tc.variant ?? null,
-                createdAt: new Date(result.startedAt),
-              })));
+              await store.insertTestResults(
+                testCases.map((tc) =>
+                  toStoredTestResult(tc, {
+                    workflowRunId: runId,
+                    commitSha: result.headSha,
+                    createdAt: new Date(result.startedAt),
+                  }),
+                ),
+              );
               console.log(`Imported ${testCases.length} test results from actrun run ${result.runId}`);
             }
             // Run eval mini-report
@@ -292,14 +368,19 @@ program
           }
           return;
         }
-        await runTests({
+        const runResult = await runTests({
           store,
-          command: config.runner.command,
+          runner: createRunner(config.runner),
           mode: opts.strategy as "random" | "weighted",
           count: opts.count ? Number(opts.count) : undefined,
           percentage: opts.percentage ? Number(opts.percentage) : undefined,
           skipQuarantined: opts.skipQuarantined,
+          quarantineManifestEntries: manifest?.entries,
+          cwd: process.cwd(),
         });
+        if (runResult.exitCode !== 0) {
+          process.exit(1);
+        }
       } finally {
         await store.close();
       }
@@ -324,7 +405,7 @@ program
   });
 
 // --- quarantine ---
-program
+const quarantineCommand = program
   .command("quarantine")
   .description("Manage quarantined tests")
   .option("--add <suite:testName>", "Add a test to quarantine (suite:testName)")
@@ -389,6 +470,105 @@ program
       }
     },
   );
+
+quarantineCommand
+  .command("check")
+  .description("Validate the repo-tracked quarantine manifest")
+  .option("--manifest <path>", "Override manifest path")
+  .action(async (opts: { manifest?: string }) => {
+    const cwd = process.cwd();
+    const config = loadConfig(cwd);
+    const store = new DuckDBStore(resolve(config.storage.path));
+    await store.initialize();
+
+    try {
+      const manifestPath = resolveQuarantineManifestPath({
+        cwd,
+        manifestPath: opts.manifest,
+      });
+      if (!manifestPath) {
+        console.error("Error: quarantine manifest not found");
+        process.exit(1);
+      }
+
+      const manifest = loadQuarantineManifest({
+        cwd,
+        manifestPath,
+      });
+      const knownTaskIds = await collectKnownQuarantineTaskIds(
+        cwd,
+        store,
+        config.runner,
+      );
+      const report = validateQuarantineManifest({
+        cwd,
+        manifest,
+        manifestPath,
+        knownTaskIds,
+      });
+
+      if (report.errors.length > 0) {
+        console.error(formatQuarantineManifestReport(report, "markdown"));
+        process.exit(1);
+      }
+      console.log(formatQuarantineManifestReport(report, "markdown"));
+    } finally {
+      await store.close();
+    }
+  });
+
+quarantineCommand
+  .command("report")
+  .description("Render a quarantine manifest report")
+  .option("--manifest <path>", "Override manifest path")
+  .option("--json", "Output JSON report")
+  .option("--markdown", "Output Markdown report")
+  .action(async (opts: { manifest?: string; json?: boolean; markdown?: boolean }) => {
+    if (opts.json && opts.markdown) {
+      console.error("Error: choose either --json or --markdown");
+      process.exit(1);
+    }
+
+    const cwd = process.cwd();
+    const config = loadConfig(cwd);
+    const store = new DuckDBStore(resolve(config.storage.path));
+    await store.initialize();
+
+    try {
+      const manifestPath = resolveQuarantineManifestPath({
+        cwd,
+        manifestPath: opts.manifest,
+      });
+      if (!manifestPath) {
+        console.error("Error: quarantine manifest not found");
+        process.exit(1);
+      }
+
+      const manifest = loadQuarantineManifest({
+        cwd,
+        manifestPath,
+      });
+      const knownTaskIds = await collectKnownQuarantineTaskIds(
+        cwd,
+        store,
+        config.runner,
+      );
+      const report = validateQuarantineManifest({
+        cwd,
+        manifest,
+        manifestPath,
+        knownTaskIds,
+      });
+      console.log(
+        formatQuarantineManifestReport(
+          report,
+          opts.json ? "json" : "markdown",
+        ),
+      );
+    } finally {
+      await store.close();
+    }
+  });
 
 // --- eval ---
 program

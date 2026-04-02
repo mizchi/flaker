@@ -29,19 +29,24 @@ export type QuarantineOpts =
 export async function runQuarantine(
   opts: QuarantineOpts,
 ): Promise<QuarantinedTest[] | undefined> {
-  const { store } = opts;
+      const { store } = opts;
 
   switch (opts.action) {
     case "add": {
       await store.addQuarantine(
-        opts.suite,
-        opts.testName,
+        {
+          suite: opts.suite,
+          testName: opts.testName,
+        },
         opts.reason ?? "manual",
       );
       return undefined;
     }
     case "remove": {
-      await store.removeQuarantine(opts.suite, opts.testName);
+      await store.removeQuarantine({
+        suite: opts.suite,
+        testName: opts.testName,
+      });
       return undefined;
     }
     case "list": {
@@ -55,7 +60,17 @@ export async function runQuarantine(
       const reason = `auto:flaky_rate>=${threshold}%`;
       for (const f of flaky) {
         if (f.flakyRate >= threshold && f.totalRuns >= minRuns) {
-          await store.addQuarantine(f.suite, f.testName, reason);
+          await store.addQuarantine(
+            {
+              suite: f.suite,
+              testName: f.testName,
+              taskId: f.taskId,
+              filter: f.filter,
+              variant: f.variant,
+              testId: f.testId,
+            },
+            reason,
+          );
         }
       }
       return undefined;

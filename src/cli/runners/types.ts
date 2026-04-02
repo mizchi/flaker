@@ -3,6 +3,10 @@ import type { TestCaseResult } from "../adapters/types.js";
 export interface TestId {
   suite: string;
   testName: string;
+  taskId?: string | null;
+  filter?: string | null;
+  variant?: Record<string, string> | null;
+  testId?: string;
 }
 
 export interface RunnerCapabilities {

@@ -38,3 +38,4 @@ export type {
 export { orchestrate } from "./orchestrator.js";
 export type { OrchestrateOpts } from "./orchestrator.js";
 export { executeWithRetry, type RetryResult } from "./retry.js";
+export { withQuarantineRuntime, isBlockingFailure } from "./quarantine-runtime.js";

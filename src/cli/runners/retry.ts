@@ -1,5 +1,7 @@
 import type { RunnerAdapter, TestId, ExecuteOpts, ExecuteResult } from "./types.js";
 import type { TestCaseResult } from "../adapters/types.js";
+import { resolveTestIdentity } from "../identity.js";
+import { isBlockingFailure } from "./quarantine-runtime.js";
 
 interface RetryOpts extends ExecuteOpts {
   maxRetries: number;
@@ -34,8 +36,8 @@ export async function executeWithRetry(
   const allResults = new Map<string, TestCaseResult[]>();
   // Track results per test
   for (const r of firstResult.results) {
-    const key = `${r.suite}\0${r.testName}`;
-    allResults.set(key, [r]);
+    const resolved = resolveTestIdentity(r);
+    allResults.set(resolved.testId, [resolved]);
   }
 
   let retriedTests = 0;
@@ -46,8 +48,16 @@ export async function executeWithRetry(
     // Find tests to retry based on the latest results
     const testsToRetry: TestId[] = [];
     for (const r of lastResult.results) {
-      if (r.status === "failed") {
-        testsToRetry.push({ suite: r.suite, testName: r.testName });
+      const resolved = resolveTestIdentity(r);
+      if (isBlockingFailure(resolved)) {
+        testsToRetry.push({
+          suite: resolved.suite,
+          testName: resolved.testName,
+          taskId: resolved.taskId,
+          filter: resolved.filter,
+          variant: resolved.variant,
+          testId: resolved.testId,
+        });
       }
     }
 
@@ -63,9 +73,10 @@ export async function executeWithRetry(
 
     // Merge results
     for (const r of retryResult.results) {
-      const key = `${r.suite}\0${r.testName}`;
+      const resolved = resolveTestIdentity(r);
+      const key = resolved.testId;
       const history = allResults.get(key) ?? [];
-      history.push(r);
+      history.push(resolved);
       allResults.set(key, history);
     }
 
@@ -84,7 +95,14 @@ export async function executeWithRetry(
 
     if (hasFailure && lastPassed) {
       // Failed at first, passed on retry = flaky
-      flakyDetected.push({ suite: lastResultEntry.suite, testName: lastResultEntry.testName });
+      flakyDetected.push({
+        suite: lastResultEntry.suite,
+        testName: lastResultEntry.testName,
+        taskId: lastResultEntry.taskId,
+        filter: lastResultEntry.filter,
+        variant: lastResultEntry.variant,
+        testId: lastResultEntry.testId,
+      });
       finalResults.push({
         ...lastResultEntry,
         status: "flaky",
@@ -99,7 +117,7 @@ export async function executeWithRetry(
     }
   }
 
-  const exitCode = finalResults.some(r => r.status === "failed") ? 1 : 0;
+  const exitCode = finalResults.some(isBlockingFailure) ? 1 : 0;
 
   return {
     exitCode,

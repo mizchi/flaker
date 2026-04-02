@@ -4,6 +4,7 @@ import { junitAdapter } from "../adapters/junit.js";
 import { playwrightAdapter } from "../adapters/playwright.js";
 import type { TestResultAdapter } from "../adapters/types.js";
 import type { MetricStore, WorkflowRun, TestResult } from "../storage/types.js";
+import { toStoredTestResult } from "../storage/test-result-mapper.js";
 
 export interface GitHubClient {
   listWorkflowRuns(): Promise<{
@@ -141,18 +142,13 @@ export async function collectWorkflowRuns(
 
     const testCases = adapter.parse(reportContent);
 
-    const testResults: TestResult[] = testCases.map((tc) => ({
-      workflowRunId: run.id,
-      suite: tc.suite,
-      testName: tc.testName,
-      status: tc.status,
-      durationMs: tc.durationMs,
-      retryCount: tc.retryCount,
-      errorMessage: tc.errorMessage ?? null,
-      commitSha: run.head_sha,
-      variant: tc.variant ?? null,
-      createdAt: new Date(run.created_at),
-    }));
+    const testResults: TestResult[] = testCases.map((tc) =>
+      toStoredTestResult(tc, {
+        workflowRunId: run.id,
+        commitSha: run.head_sha,
+        createdAt: new Date(run.created_at),
+      }),
+    );
 
     if (testResults.length > 0) {
       await store.insertTestResults(testResults);

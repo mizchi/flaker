@@ -49,7 +49,10 @@ describe("Phase 2 integration", () => {
   });
 
   it("hybrid sample with skip-quarantined", async () => {
-    await store.addQuarantine("tests/module_0/test.spec.ts", "test_0", "auto");
+    await store.addQuarantine(
+      { suite: "tests/module_0/test.spec.ts", testName: "test_0" },
+      "auto",
+    );
     const resolver = new SimpleResolver();
     const result = await runSample({
       store, mode: "hybrid", count: 5,

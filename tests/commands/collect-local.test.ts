@@ -63,6 +63,16 @@ describe("collect-local command", () => {
 
     const tests = await store.raw<{ cnt: number }>("SELECT COUNT(*)::INTEGER AS cnt FROM test_results");
     expect(tests[0].cnt).toBe(4);
+
+    const taskIds = await store.raw<{ task_id: string }>(
+      "SELECT task_id FROM test_results ORDER BY task_id",
+    );
+    expect(taskIds.map((row) => row.task_id)).toEqual([
+      "build/compile",
+      "build/compile",
+      "test/unit",
+      "test/unit",
+    ]);
   });
 
   it("skips already imported runs", async () => {

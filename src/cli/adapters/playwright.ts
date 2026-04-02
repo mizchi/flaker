@@ -1,4 +1,5 @@
 import type { TestCaseResult, TestResultAdapter } from "./types.js";
+import { resolveTestIdentity } from "../identity.js";
 
 interface PlaywrightResult {
   status: string;
@@ -31,10 +32,12 @@ interface PlaywrightReport {
 
 function walkSuites(
   suite: PlaywrightSuite,
-  parentTitle: string | null,
+  currentFile: string | null,
+  currentTaskId: string | null,
   out: TestCaseResult[],
 ): void {
-  const currentTitle = parentTitle ?? suite.title;
+  const nextFile = suite.file ?? currentFile ?? suite.title;
+  const nextTaskId = currentTaskId ?? suite.title;
 
   if (suite.specs) {
     for (const spec of suite.specs) {
@@ -61,14 +64,15 @@ function walkSuites(
           (r) => r.status === "failed" && r.error,
         );
 
-        const result: TestCaseResult = {
-          suite: currentTitle,
+        const result: TestCaseResult = resolveTestIdentity({
+          suite: nextFile,
           testName: spec.title,
+          taskId: nextTaskId,
           status,
           durationMs: lastResult.duration,
           retryCount: maxRetry,
           variant: { project: test.projectName },
-        };
+        });
 
         if (firstFailure?.error) {
           result.errorMessage = firstFailure.error.message;
@@ -81,7 +85,7 @@ function walkSuites(
 
   if (suite.suites) {
     for (const child of suite.suites) {
-      walkSuites(child, child.title, out);
+      walkSuites(child, nextFile, child.title, out);
     }
   }
 }
@@ -92,7 +96,7 @@ export const playwrightAdapter: TestResultAdapter = {
     const report: PlaywrightReport = JSON.parse(input);
     const results: TestCaseResult[] = [];
     for (const suite of report.suites) {
-      walkSuites(suite, null, results);
+      walkSuites(suite, suite.file ?? null, suite.title, results);
     }
     return results;
   },

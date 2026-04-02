@@ -1,4 +1,5 @@
 import type { TestCaseResult, TestResultAdapter } from "./types.js";
+import { resolveTestIdentity } from "../identity.js";
 
 function getAttr(tag: string, attr: string): string | undefined {
   const re = new RegExp(`${attr}="([^"]*)"`, "i");
@@ -45,13 +46,13 @@ export const junitAdapter: TestResultAdapter = {
           status = "skipped";
         }
 
-        const result: TestCaseResult = {
+        const result: TestCaseResult = resolveTestIdentity({
           suite: suiteName,
           testName,
           status,
           durationMs,
           retryCount: 0,
-        };
+        });
 
         if (errorMessage !== undefined) {
           result.errorMessage = errorMessage;

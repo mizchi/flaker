@@ -1,7 +1,13 @@
 import type { MetricStore } from "../storage/types.js";
 import type { TestMeta, MetriciCore } from "../core/loader.js";
 import type { DependencyResolver } from "../resolvers/types.js";
+import type { TestId } from "../runners/types.js";
 import { loadCore } from "../core/loader.js";
+import { createStableTestId } from "../identity.js";
+import {
+  isManifestQuarantined,
+  type QuarantineManifestEntry,
+} from "../quarantine-manifest.js";
 
 export interface SampleOpts {
   store: MetricStore;
@@ -12,6 +18,22 @@ export interface SampleOpts {
   resolver?: DependencyResolver;
   changedFiles?: string[];
   skipQuarantined?: boolean;
+  quarantineManifestEntries?: QuarantineManifestEntry[];
+  listedTests?: TestId[];
+}
+
+function buildListedTestIndex(listedTests: TestId[]): Map<string, TestId[]> {
+  const index = new Map<string, TestId[]>();
+  for (const test of listedTests) {
+    const key = `${test.suite}\0${test.testName}`;
+    const existing = index.get(key);
+    if (existing) {
+      existing.push(test);
+    } else {
+      index.set(key, [test]);
+    }
+  }
+  return index;
 }
 
 export async function runSample(opts: SampleOpts): Promise<TestMeta[]> {
@@ -19,8 +41,38 @@ export async function runSample(opts: SampleOpts): Promise<TestMeta[]> {
   let allTests = await buildTestMeta(opts.store);
   if (opts.skipQuarantined) {
     const quarantined = await opts.store.queryQuarantined();
-    const qSet = new Set(quarantined.map((q) => `${q.suite}\0${q.testName}`));
-    allTests = allTests.filter((t) => !qSet.has(`${t.suite}\0${t.test_name}`));
+    const qSet = new Set(quarantined.map((q) => q.testId));
+    const manifestEntries = opts.quarantineManifestEntries ?? [];
+    const listedTestIndex = buildListedTestIndex(opts.listedTests ?? []);
+    allTests = allTests.filter(
+      (t) => {
+        const key = `${t.suite}\0${t.test_name}`;
+        const enriched = listedTestIndex.get(key)?.[0];
+        const plainId = createStableTestId({
+          suite: t.suite,
+          testName: t.test_name,
+        });
+        const enrichedId = enriched
+          ? createStableTestId({
+              suite: enriched.suite,
+              testName: enriched.testName,
+              taskId: enriched.taskId,
+              filter: enriched.filter,
+              variant: enriched.variant,
+            })
+          : null;
+
+        if (qSet.has(plainId) || (enrichedId != null && qSet.has(enrichedId))) {
+          return false;
+        }
+
+        return !isManifestQuarantined(manifestEntries, {
+          suite: enriched?.suite ?? t.suite,
+          testName: enriched?.testName ?? t.test_name,
+          taskId: enriched?.taskId,
+        });
+      },
+    );
   }
 
   let count: number;

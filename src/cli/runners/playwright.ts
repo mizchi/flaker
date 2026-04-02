@@ -33,18 +33,24 @@ interface PlaywrightListOutput {
 
 function collectSpecs(
   suite: PlaywrightListSuite,
-  parentTitle: string | null,
+  currentFile: string | null,
+  currentTaskId: string | null,
   out: TestId[],
 ): void {
-  const currentTitle = parentTitle ?? suite.title;
+  const nextFile = suite.file ?? currentFile ?? suite.title;
+  const nextTaskId = currentTaskId ?? suite.title;
   if (suite.specs) {
     for (const spec of suite.specs) {
-      out.push({ suite: currentTitle, testName: spec.title });
+      out.push({
+        suite: spec.file ?? nextFile,
+        testName: spec.title,
+        taskId: nextTaskId,
+      });
     }
   }
   if (suite.suites) {
     for (const child of suite.suites) {
-      collectSpecs(child, child.title, out);
+      collectSpecs(child, nextFile, child.title, out);
     }
   }
 }
@@ -53,7 +59,7 @@ export function parsePlaywrightList(stdout: string): TestId[] {
   const data: PlaywrightListOutput = JSON.parse(stdout);
   const ids: TestId[] = [];
   for (const suite of data.suites) {
-    collectSpecs(suite, null, ids);
+    collectSpecs(suite, suite.file ?? null, suite.title, ids);
   }
   return ids;
 }

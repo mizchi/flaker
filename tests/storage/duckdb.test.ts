@@ -4,6 +4,7 @@ import type {
   WorkflowRun,
   TestResult,
 } from "../../src/cli/storage/types.js";
+import { createStableTestId } from "../../src/cli/identity.js";
 
 describe("DuckDBStore", () => {
   let store: DuckDBStore;
@@ -154,6 +155,65 @@ describe("DuckDBStore", () => {
     expect(flaky[0].flakyRate).toBe(50.0);
   });
 
+  it("keeps same suite/testName separate when filter differs", async () => {
+    const run: WorkflowRun = {
+      id: 301,
+      repo: "owner/repo",
+      branch: "main",
+      commitSha: "split123",
+      event: "push",
+      status: "completed",
+      createdAt: new Date(),
+      durationMs: 1000,
+    };
+    await store.insertWorkflowRun(run);
+
+    const now = new Date();
+    const results: TestResult[] = [];
+    for (let i = 0; i < 5; i++) {
+      results.push({
+        workflowRunId: 301,
+        suite: "integration",
+        testName: "shared-test",
+        filter: "@smoke",
+        status: "failed",
+        durationMs: 100,
+        retryCount: 0,
+        errorMessage: "flaky failure",
+        commitSha: "split123",
+        variant: null,
+        createdAt: now,
+      });
+      results.push({
+        workflowRunId: 301,
+        suite: "integration",
+        testName: "shared-test",
+        filter: "@regression",
+        status: "passed",
+        durationMs: 100,
+        retryCount: 0,
+        errorMessage: null,
+        commitSha: "split123",
+        variant: null,
+        createdAt: now,
+      });
+    }
+    await store.insertTestResults(results);
+
+    const flaky = await store.queryFlakyTests({ windowDays: 30 });
+    expect(flaky).toHaveLength(1);
+    expect(flaky[0].suite).toBe("integration");
+    expect(flaky[0].testName).toBe("shared-test");
+    expect(flaky[0].filter).toBe("@smoke");
+    expect(flaky[0].testId).toBe(
+      createStableTestId({
+        suite: "integration",
+        testName: "shared-test",
+        filter: "@smoke",
+      }),
+    );
+  });
+
   it("queries test history", async () => {
     const run: WorkflowRun = {
       id: 400,
@@ -199,6 +259,55 @@ describe("DuckDBStore", () => {
     expect(history).toHaveLength(2);
     expect(history[0].suite).toBe("e2e");
     expect(history[0].testName).toBe("login-test");
+  });
+
+  it("persists quarantine metadata with stored test results", async () => {
+    const run: WorkflowRun = {
+      id: 401,
+      repo: "owner/repo",
+      branch: "main",
+      commitSha: "quarantine123",
+      event: "push",
+      status: "completed",
+      createdAt: new Date(),
+      durationMs: 1000,
+    };
+    await store.insertWorkflowRun(run);
+
+    await store.insertTestResults([
+      {
+        workflowRunId: 401,
+        suite: "e2e",
+        testName: "known broken flow",
+        status: "failed",
+        durationMs: 200,
+        retryCount: 0,
+        errorMessage: "AssertionError",
+        commitSha: "quarantine123",
+        variant: null,
+        quarantine: {
+          id: "known-bug",
+          taskId: "browser-e2e",
+          spec: "tests/known-bugs.spec.ts",
+          titlePattern: "^known broken flow$",
+          mode: "allow_failure",
+          scope: "expected_failure",
+          owner: "@mizchi",
+          reason: "known browser issue",
+          condition: "waiting for upstream fix",
+          introducedAt: "2026-04-01",
+          expiresAt: "2026-04-30",
+        },
+        createdAt: new Date("2025-01-03T00:00:00Z"),
+      },
+    ]);
+
+    const history = await store.queryTestHistory("e2e", "known broken flow");
+    expect(history[0].quarantine).toMatchObject({
+      id: "known-bug",
+      mode: "allow_failure",
+      owner: "@mizchi",
+    });
   });
 
   it("executes raw SQL", async () => {

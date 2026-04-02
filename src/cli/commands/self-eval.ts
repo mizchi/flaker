@@ -220,7 +220,10 @@ async function evaluateScenario(store: MetricStore, scenario: Scenario): Promise
 
   // For quarantine scenario, quarantine the high-failure test
   if (scenario.name === "quarantine-skip") {
-    await store.addQuarantine("tests/quarantined.spec.ts", "quarantined_test", "auto");
+    await store.addQuarantine(
+      { suite: "tests/quarantined.spec.ts", testName: "quarantined_test" },
+      "auto",
+    );
   }
 
   // Run sampling

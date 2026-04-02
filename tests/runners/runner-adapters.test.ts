@@ -171,6 +171,7 @@ describe("PlaywrightRunner", () => {
     suites: [
       {
         title: "login.spec.ts",
+        file: "tests/login.spec.ts",
         specs: [
           {
             title: "logs in",
@@ -214,6 +215,8 @@ describe("PlaywrightRunner", () => {
 
     expect(result.results).toHaveLength(1);
     expect(result.results[0]).toMatchObject({
+      suite: "tests/login.spec.ts",
+      taskId: "login.spec.ts",
       testName: "logs in",
       status: "passed",
     });
@@ -240,7 +243,9 @@ describe("PlaywrightRunner", () => {
     expect(capturedCmd).toBe(
       "pnpm exec playwright test --list --reporter json",
     );
-    expect(ids).toEqual([{ suite: "app.spec.ts", testName: "renders" }]);
+    expect(ids).toEqual([
+      { suite: "app.spec.ts", testName: "renders", taskId: "app.spec.ts" },
+    ]);
   });
 });
 
@@ -262,7 +267,13 @@ describe("parsePlaywrightList", () => {
       ],
     });
     const ids = parsePlaywrightList(json);
-    expect(ids).toEqual([{ suite: "group", testName: "works" }]);
+    expect(ids).toEqual([
+      {
+        suite: "file.spec.ts",
+        testName: "works",
+        taskId: "group",
+      },
+    ]);
   });
 });
 

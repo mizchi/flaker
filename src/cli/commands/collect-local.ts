@@ -5,6 +5,7 @@ import { actrunAdapter, extractTestReportsFromArtifacts } from "../adapters/actr
 import { playwrightAdapter } from "../adapters/playwright.js";
 import { junitAdapter } from "../adapters/junit.js";
 import type { MetricStore, WorkflowRun, TestResult } from "../storage/types.js";
+import { toStoredTestResult } from "../storage/test-result-mapper.js";
 
 export interface CollectLocalOpts {
   store: MetricStore;
@@ -89,18 +90,13 @@ export async function runCollectLocal(opts: CollectLocalOpts): Promise<CollectLo
 
     // Insert test results
     if (testCases.length > 0) {
-      const testResults: TestResult[] = testCases.map((tc) => ({
-        workflowRunId: runId,
-        suite: tc.suite,
-        testName: tc.testName,
-        status: tc.status,
-        durationMs: tc.durationMs,
-        retryCount: tc.retryCount,
-        errorMessage: tc.errorMessage ?? null,
-        commitSha,
-        variant: tc.variant ?? null,
-        createdAt: startedAt,
-      }));
+      const testResults: TestResult[] = testCases.map((tc) =>
+        toStoredTestResult(tc, {
+          workflowRunId: runId,
+          commitSha,
+          createdAt: startedAt,
+        }),
+      );
       await store.insertTestResults(testResults);
       testsImported += testResults.length;
     }

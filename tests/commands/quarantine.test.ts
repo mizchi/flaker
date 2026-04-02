@@ -33,7 +33,7 @@ describe("quarantine command", () => {
   });
 
   it("removes a test from quarantine", async () => {
-    await store.addQuarantine("suite-a", "test-1", "manual");
+    await store.addQuarantine({ suite: "suite-a", testName: "test-1" }, "manual");
     await runQuarantine({
       store,
       action: "remove",
@@ -45,8 +45,8 @@ describe("quarantine command", () => {
   });
 
   it("lists quarantined tests", async () => {
-    await store.addQuarantine("suite-a", "test-1", "flaky");
-    await store.addQuarantine("suite-b", "test-2", "manual");
+    await store.addQuarantine({ suite: "suite-a", testName: "test-1" }, "flaky");
+    await store.addQuarantine({ suite: "suite-b", testName: "test-2" }, "manual");
     const result = await runQuarantine({ store, action: "list" });
     expect(result).toHaveLength(2);
     const table = formatQuarantineTable(result!);
