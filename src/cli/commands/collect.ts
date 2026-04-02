@@ -1,3 +1,5 @@
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import AdmZip from "adm-zip";
 import { createTestResultAdapter } from "../adapters/index.js";
 import type { TestResultAdapter } from "../adapters/types.js";
@@ -47,7 +49,13 @@ export interface CollectResult {
   failures: CollectFailure[];
 }
 
-export function formatCollectSummary(result: CollectResult): string {
+export function formatCollectSummary(
+  result: CollectResult,
+  format: "text" | "json" = "text",
+): string {
+  if (format === "json") {
+    return JSON.stringify(result, null, 2);
+  }
   const base = `Collected ${result.runsCollected} runs, ${result.testsCollected} test results`;
   if (result.failedRuns === 0) {
     return base;
@@ -56,6 +64,21 @@ export function formatCollectSummary(result: CollectResult): string {
     ? ` (${result.failedRunIds.join(", ")})`
     : "";
   return `${base}, ${result.failedRuns} failed runs${suffix}`;
+}
+
+export function resolveCollectExitCode(
+  result: CollectResult,
+  opts: { failOnErrors?: boolean } = {},
+): number {
+  if (!opts.failOnErrors) {
+    return 0;
+  }
+  return result.failedRuns > 0 ? 1 : 0;
+}
+
+export function writeCollectSummary(path: string, content: string): void {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, content, "utf-8");
 }
 
 export function defaultArtifactNameForAdapter(adapterType: string): string {

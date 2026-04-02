@@ -8,6 +8,8 @@ import { runInit } from "./commands/init.js";
 import {
   collectWorkflowRuns,
   formatCollectSummary,
+  resolveCollectExitCode,
+  writeCollectSummary,
   type GitHubClient,
 } from "./commands/collect.js";
 import { runFlaky, formatFlakyTable, runFlakyTrend, formatFlakyTrend, runTrueFlaky, formatTrueFlakyTable } from "./commands/flaky.js";
@@ -184,7 +186,10 @@ program
   .description("Collect workflow runs from GitHub")
   .option("--last <days>", "Number of days to look back", "30")
   .option("--branch <branch>", "Filter by branch")
-  .action(async (opts: { last: string; branch?: string }) => {
+  .option("--json", "Output JSON summary")
+  .option("--output <file>", "Write collect summary to a file")
+  .option("--fail-on-errors", "Exit with status 1 when any workflow run fails to collect")
+  .action(async (opts: { last: string; branch?: string; json?: boolean; output?: string; failOnErrors?: boolean }) => {
     const config = loadConfig(process.cwd());
     const store = new DuckDBStore(resolve(config.storage.path));
     await store.initialize();
@@ -252,7 +257,15 @@ program
         artifactName: config.adapter.artifact_name,
         customCommand: config.adapter.command,
       });
-      console.log(formatCollectSummary(result));
+      const formatted = formatCollectSummary(result, opts.json ? "json" : "text");
+      console.log(formatted);
+      if (opts.output) {
+        writeCollectSummary(resolve(process.cwd(), opts.output), formatted);
+      }
+      const exitCode = resolveCollectExitCode(result, { failOnErrors: opts.failOnErrors });
+      if (exitCode !== 0) {
+        process.exitCode = exitCode;
+      }
     } finally {
       await store.close();
     }

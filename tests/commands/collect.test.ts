@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readFileSync as readTextFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import AdmZip from "adm-zip";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
@@ -8,6 +9,8 @@ import {
   collectWorkflowRuns,
   defaultArtifactNameForAdapter,
   formatCollectSummary,
+  resolveCollectExitCode,
+  writeCollectSummary,
   type GitHubClient,
 } from "../../src/cli/commands/collect.js";
 
@@ -127,6 +130,28 @@ describe("formatCollectSummary", () => {
     }
   });
 
+  it("formats collect summaries as json", () => {
+    expect(JSON.parse(formatCollectSummary({
+      runsCollected: 1,
+      testsCollected: 3,
+      failedRuns: 2,
+      failedRunIds: [1007, 1009],
+      failures: [
+        { runId: 1007, message: "temporary artifact download error" },
+        { runId: 1009, message: "invalid zip" },
+      ],
+    }, "json"))).toEqual({
+      runsCollected: 1,
+      testsCollected: 3,
+      failedRuns: 2,
+      failedRunIds: [1007, 1009],
+      failures: [
+        { runId: 1007, message: "temporary artifact download error" },
+        { runId: 1009, message: "invalid zip" },
+      ],
+    });
+  });
+
   it("keeps the summary short when there are no failures", () => {
     expect(formatCollectSummary({
       runsCollected: 1,
@@ -135,6 +160,60 @@ describe("formatCollectSummary", () => {
       failedRunIds: [],
       failures: [],
     })).toBe("Collected 1 runs, 3 test results");
+  });
+});
+
+describe("resolveCollectExitCode", () => {
+  it("returns 0 by default even when there are partial failures", () => {
+    expect(resolveCollectExitCode({
+      runsCollected: 1,
+      testsCollected: 3,
+      failedRuns: 1,
+      failedRunIds: [1007],
+      failures: [{ runId: 1007, message: "temporary artifact download error" }],
+    })).toBe(0);
+  });
+
+  it("returns 1 when failOnErrors is enabled and failures exist", () => {
+    expect(resolveCollectExitCode({
+      runsCollected: 1,
+      testsCollected: 3,
+      failedRuns: 1,
+      failedRunIds: [1007],
+      failures: [{ runId: 1007, message: "temporary artifact download error" }],
+    }, { failOnErrors: true })).toBe(1);
+  });
+
+  it("returns 0 when failOnErrors is enabled but there are no failures", () => {
+    expect(resolveCollectExitCode({
+      runsCollected: 1,
+      testsCollected: 3,
+      failedRuns: 0,
+      failedRunIds: [],
+      failures: [],
+    }, { failOnErrors: true })).toBe(0);
+  });
+});
+
+describe("writeCollectSummary", () => {
+  it("writes collect summaries to a file", () => {
+    const dir = mkdtempSync(join(tmpdir(), "flaker-collect-"));
+    const outputPath = join(dir, "collect-summary.json");
+    writeCollectSummary(outputPath, formatCollectSummary({
+      runsCollected: 1,
+      testsCollected: 3,
+      failedRuns: 1,
+      failedRunIds: [1007],
+      failures: [{ runId: 1007, message: "temporary artifact download error" }],
+    }, "json"));
+    expect(existsSync(outputPath)).toBe(true);
+    expect(JSON.parse(readTextFileSync(outputPath, "utf-8"))).toEqual({
+      runsCollected: 1,
+      testsCollected: 3,
+      failedRuns: 1,
+      failedRunIds: [1007],
+      failures: [{ runId: 1007, message: "temporary artifact download error" }],
+    });
   });
 });
 
