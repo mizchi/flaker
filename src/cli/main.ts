@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Command } from "commander";
 import { Octokit } from "@octokit/rest";
@@ -34,6 +35,13 @@ import {
   loadTaskDefinitionsForCheck,
   runConfigCheck,
 } from "./commands/check.js";
+import {
+  formatReportDiff,
+  formatReportSummary,
+  parseReportSummary,
+  runReportDiff,
+  runReportSummarize,
+} from "./commands/report.js";
 import { DuckDBStore } from "./storage/duckdb.js";
 import { createRunner } from "./runners/index.js";
 import { resolveTestIdentity } from "./identity.js";
@@ -479,6 +487,75 @@ program
     );
     process.exit(report.errors.length > 0 ? 1 : 0);
   });
+
+// --- report ---
+const reportCommand = program
+  .command("report")
+  .description("Summarize and diff normalized test reports");
+
+reportCommand
+  .command("summarize")
+  .description("Summarize a raw adapter report")
+  .requiredOption("--adapter <type>", "Adapter type (playwright, junit)")
+  .requiredOption("--input <file>", "Raw adapter report file")
+  .option("--json", "Output JSON report")
+  .option("--markdown", "Output Markdown report")
+  .action(
+    (opts: {
+      adapter: string;
+      input: string;
+      json?: boolean;
+      markdown?: boolean;
+    }) => {
+      if (opts.json && opts.markdown) {
+        console.error("Error: choose either --json or --markdown");
+        process.exit(1);
+      }
+
+      const summary = runReportSummarize({
+        adapter: opts.adapter,
+        input: readFileSync(resolve(opts.input), "utf-8"),
+      });
+      console.log(
+        formatReportSummary(summary, opts.json ? "json" : "markdown"),
+      );
+    },
+  );
+
+reportCommand
+  .command("diff")
+  .description("Diff two normalized summaries or raw adapter reports")
+  .requiredOption("--base <file>", "Base summary or raw report file")
+  .requiredOption("--head <file>", "Head summary or raw report file")
+  .option("--adapter <type>", "Adapter type when diffing raw reports")
+  .option("--json", "Output JSON report")
+  .option("--markdown", "Output Markdown report")
+  .action(
+    (opts: {
+      base: string;
+      head: string;
+      adapter?: string;
+      json?: boolean;
+      markdown?: boolean;
+    }) => {
+      if (opts.json && opts.markdown) {
+        console.error("Error: choose either --json or --markdown");
+        process.exit(1);
+      }
+
+      const baseInput = readFileSync(resolve(opts.base), "utf-8");
+      const headInput = readFileSync(resolve(opts.head), "utf-8");
+      const base = opts.adapter
+        ? runReportSummarize({ adapter: opts.adapter, input: baseInput })
+        : parseReportSummary(baseInput);
+      const head = opts.adapter
+        ? runReportSummarize({ adapter: opts.adapter, input: headInput })
+        : parseReportSummary(headInput);
+      const diff = runReportDiff({ base, head });
+
+      console.log(formatReportDiff(diff, opts.json ? "json" : "markdown"));
+    },
+  );
 
 // --- query ---
 program
