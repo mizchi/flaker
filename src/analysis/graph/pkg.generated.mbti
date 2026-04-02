@@ -1,0 +1,26 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/flaker/analysis/graph"
+
+import {
+  "mizchi/flaker/contracts",
+}
+
+// Values
+pub fn build_reverse_deps(@contracts.DependencyGraphInput) -> Array[@contracts.ReverseDepEntry]
+
+pub fn expand_transitive(@contracts.DependencyGraphInput, Array[String]) -> Array[String]
+
+pub fn find_affected_nodes(@contracts.DependencyGraphInput, Array[String]) -> Array[String]
+
+pub fn get_affected_test_patterns(@contracts.DependencyGraphInput, Array[String]) -> Array[String]
+
+pub fn topological_sort(@contracts.DependencyGraphInput) -> Array[String]
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

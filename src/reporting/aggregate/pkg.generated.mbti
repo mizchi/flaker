@@ -1,0 +1,18 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/flaker/reporting/aggregate"
+
+import {
+  "mizchi/flaker/contracts",
+}
+
+// Values
+pub fn aggregate_report(Array[@contracts.ReportAggregateShardInput]) -> @contracts.ReportAggregateOutput
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

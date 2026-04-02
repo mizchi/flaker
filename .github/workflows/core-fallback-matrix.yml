@@ -44,24 +44,21 @@ jobs:
 
       - name: Update MoonBit registry
         if: matrix.moonbit_mode == 'with_moonbit_build'
-        run: |
-          cd src/core
-          moon update
+        run: moon update
 
       - name: Prepare no-MoonBit-build mode
         if: matrix.moonbit_mode == 'without_moonbit_build'
-        run: rm -rf src/core/_build
+        run: rm -rf _build
 
       - name: Build MoonBit JS core
         if: matrix.moonbit_mode == 'with_moonbit_build'
         run: |
-          cd src/core
           moon build --target js
-          test -f _build/js/debug/build/bridge/bridge.js
+          test -f _build/js/debug/build/cli/bridge/bridge.js
 
       - name: Assert MoonBit build is absent in fallback mode
         if: matrix.moonbit_mode == 'without_moonbit_build'
-        run: test ! -f src/core/_build/js/debug/build/bridge/bridge.js
+        run: test ! -f _build/js/debug/build/cli/bridge/bridge.js
 
       - name: Run core/fallback parity tests
         run: pnpm vitest run tests/core/loader.test.ts tests/core/resolve-affected-glob-parity.test.ts tests/resolvers/bitflow-native.test.ts tests/commands/doctor.test.ts tests/storage/duckdb-load.test.ts

@@ -1,0 +1,20 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/flaker/analysis/identity"
+
+import {
+  "mizchi/flaker/contracts",
+}
+
+// Values
+pub fn create_stable_test_id(@contracts.StableTestIdentityInput) -> String
+
+pub fn resolve_test_identity(@contracts.StableTestIdentityInput) -> @contracts.ResolvedStableTestIdentityOutput
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

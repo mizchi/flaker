@@ -17,13 +17,13 @@ metrici のコア計算（flaky 検出、サンプリング、依存分析）を
 **MoonBit → JS ターゲット** を採用。TS fallback を用意し、MoonBit ビルドが無くても動作する。
 
 ```
-src/core/ (MoonBit)
+src/ (MoonBit source root)
 ├── contracts/           共有 JSON 契約
 ├── analysis/            flaky / sampling / affected / graph
 ├── reporting/           summary / diff / aggregate
 ├── policy/              quarantine / config ownership
 ├── metrics/             eval / KPI reducer
-└── bridge/              JS FFI export (ESM)
+└── cli/bridge/          JS FFI export (ESM)
 
 src/cli/core/loader.ts (TypeScript)
 ├── loadCore()          MoonBit JS を dynamic import、失敗時は TS fallback
@@ -49,8 +49,9 @@ MoonBit 側の export:
 bitflow (mizchi/bitflow) は MoonBit 製。`moon.mod.json` の deps に追加するだけで、Starlark パーサ・DAG 展開をライブラリとして直接利用可能。CLI 呼び出しのプロセス起動オーバーヘッドがない。
 
 ```json
-// src/core/moon.mod.json
+// moon.mod.json
 {
+  "source": "src",
   "deps": {
     "mizchi/bitflow": "0.3.1"
   }
@@ -80,7 +81,7 @@ bitflow (mizchi/bitflow) は MoonBit 製。`moon.mod.json` の deps に追加す
 
 ## 結果
 
-- `moon build --target js` で `src/core/_build/js/debug/build/bridge/bridge.js` を生成
+- `moon build --target js` で `_build/js/debug/build/cli/bridge/bridge.js` を生成
 - `loadCore()` が MoonBit JS を優先 import、失敗時は TS fallback
 - MoonBit 10 テスト + TypeScript 155 テスト = 165 テストで品質担保
 - bitflow のネイティブ統合により、Starlark ワークフロー解析がインプロセスで完結

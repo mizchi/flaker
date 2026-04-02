@@ -1,0 +1,18 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/flaker/reporting/summary"
+
+import {
+  "mizchi/flaker/contracts",
+}
+
+// Values
+pub fn summarize_report(Array[@contracts.ReportSummaryTestInput]) -> @contracts.ReportSummaryOutput
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

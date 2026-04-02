@@ -4,6 +4,7 @@
   "deps": {
     "mizchi/bitflow": "0.3.1"
   },
+  "source": "src",
   "readme": "README.md",
   "repository": "",
   "license": "MIT",

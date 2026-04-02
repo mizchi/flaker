@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "mizchi/flaker/bridge"
+package "mizchi/flaker/cli/bridge"
 
 // Values
 pub fn aggregate_report_json(String) -> String
