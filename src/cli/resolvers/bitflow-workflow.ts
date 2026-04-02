@@ -1,5 +1,6 @@
 export interface BitflowTaskDefinition {
   id: string;
+  node: string | null;
   needs: string[];
   srcs: string[];
 }
@@ -16,6 +17,7 @@ export function parseBitflowWorkflowTasks(
 
     tasks.push({
       id,
+      node: getQuotedValue(block, "node"),
       needs: getQuotedArrayValue(block, "needs"),
       srcs: getQuotedArrayValue(block, "srcs"),
     });

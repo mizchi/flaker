@@ -28,6 +28,12 @@ import {
   runAffected,
   formatAffectedReport,
 } from "./commands/affected.js";
+import {
+  discoverTestSpecsForCheck,
+  formatConfigCheckReport,
+  loadTaskDefinitionsForCheck,
+  runConfigCheck,
+} from "./commands/check.js";
 import { DuckDBStore } from "./storage/duckdb.js";
 import { createRunner } from "./runners/index.js";
 import { resolveTestIdentity } from "./identity.js";
@@ -440,6 +446,39 @@ program
       );
     },
   );
+
+// --- query ---
+program
+  .command("check")
+  .description("Validate test spec ownership and config drift")
+  .option("--json", "Output JSON report")
+  .option("--markdown", "Output Markdown report")
+  .action(async (opts: { json?: boolean; markdown?: boolean }) => {
+    if (opts.json && opts.markdown) {
+      console.error("Error: choose either --json or --markdown");
+      process.exit(1);
+    }
+
+    const cwd = process.cwd();
+    const config = loadConfig(cwd);
+    const listedTests = await listRunnerTests(cwd, config.runner);
+    const discoveredSpecs = discoverTestSpecsForCheck(cwd, config.runner.type);
+    const taskDefinitions = loadTaskDefinitionsForCheck({
+      cwd,
+      resolverName: config.affected.resolver,
+      resolverConfig: config.affected.config,
+    });
+
+    const report = runConfigCheck({
+      listedTests,
+      discoveredSpecs,
+      taskDefinitions,
+    });
+    console.log(
+      formatConfigCheckReport(report, opts.json ? "json" : "markdown"),
+    );
+    process.exit(report.errors.length > 0 ? 1 : 0);
+  });
 
 // --- query ---
 program
