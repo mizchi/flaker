@@ -2,6 +2,8 @@
 
 [English](why-flaker.md)
 
+運用面の具体化は [Design Partner Rollout](design-partner-rollout.ja.md) を参照。
+
 ## いつ使うべきか
 
 ### flaker が必要な場面:
