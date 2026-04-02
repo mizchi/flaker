@@ -1,7 +1,5 @@
 import AdmZip from "adm-zip";
-import { CustomAdapter } from "../adapters/custom.js";
-import { junitAdapter } from "../adapters/junit.js";
-import { playwrightAdapter } from "../adapters/playwright.js";
+import { createTestResultAdapter } from "../adapters/index.js";
 import type { TestResultAdapter } from "../adapters/types.js";
 import type { MetricStore, WorkflowRun, TestResult } from "../storage/types.js";
 import { toStoredTestResult } from "../storage/test-result-mapper.js";
@@ -41,20 +39,24 @@ export interface CollectResult {
   testsCollected: number;
 }
 
-function getAdapter(adapterType: string, customCommand?: string): TestResultAdapter {
+export function defaultArtifactNameForAdapter(adapterType: string): string {
   switch (adapterType) {
-    case "playwright":
-      return playwrightAdapter;
     case "junit":
-      return junitAdapter;
+      return "junit-report";
+    case "vrt-migration":
+      return "migration-report";
+    case "vrt-bench":
+      return "bench-report";
     case "custom":
-      if (!customCommand) {
-        throw new Error("Custom adapter requires a command (customCommand)");
-      }
-      return new CustomAdapter({ command: customCommand });
+      return "custom-report";
+    case "playwright":
     default:
-      throw new Error(`Unknown adapter type: ${adapterType}`);
+      return "playwright-report";
   }
+}
+
+function getAdapter(adapterType: string, customCommand?: string): TestResultAdapter {
+  return createTestResultAdapter(adapterType, customCommand);
 }
 
 export async function collectWorkflowRuns(
@@ -65,9 +67,10 @@ export async function collectWorkflowRuns(
     github,
     repo,
     adapterType,
-    artifactName = "playwright-report",
     customCommand,
   } = opts;
+  const artifactName = opts.artifactName ?? defaultArtifactNameForAdapter(adapterType);
+  const adapterConfig = customCommand ?? "";
 
   const adapter = getAdapter(adapterType, customCommand);
   const { workflow_runs } = await github.listWorkflowRuns();
@@ -76,16 +79,16 @@ export async function collectWorkflowRuns(
   let testsCollected = 0;
 
   for (const run of workflow_runs) {
-    // Check if already in DB
-    const existing = await store.raw<{ id: number }>(
-      "SELECT id FROM workflow_runs WHERE id = ?",
-      [run.id],
-    );
-    if (existing.length > 0) {
+    const existing = await store.hasCollectedArtifact({
+      workflowRunId: run.id,
+      adapterType,
+      artifactName,
+      adapterConfig,
+    });
+    if (existing) {
       continue;
     }
 
-    // Compute duration
     const startedAt = new Date(run.run_started_at);
     const updatedAt = new Date(run.updated_at);
     const durationMs = updatedAt.getTime() - startedAt.getTime();
@@ -103,7 +106,14 @@ export async function collectWorkflowRuns(
 
     await store.insertWorkflowRun(workflowRun);
 
-    // Find artifact
+    const collectedRecord = {
+      workflowRunId: run.id,
+      adapterType,
+      artifactName,
+      adapterConfig,
+      collectedAt: new Date(run.created_at),
+    };
+
     const { artifacts } = await github.listArtifacts(run.id);
     const artifact = artifacts.find(
       (a) => a.name === artifactName && !a.expired,
@@ -113,16 +123,17 @@ export async function collectWorkflowRuns(
       continue;
     }
 
-    // Download and extract zip
     const zipBuffer = await github.downloadArtifact(artifact.id);
     const zip = new AdmZip(zipBuffer);
     const entries = zip.getEntries();
 
-    // Find the report file in the zip
     let reportContent: string | null = null;
     for (const entry of entries) {
       const name = entry.entryName.toLowerCase();
-      if (adapterType === "playwright" && (name.endsWith(".json") || name.includes("report"))) {
+      if (
+        (adapterType === "playwright" || adapterType === "vrt-migration" || adapterType === "vrt-bench")
+        && name.endsWith(".json")
+      ) {
         reportContent = entry.getData().toString("utf-8");
         break;
       }
@@ -130,7 +141,6 @@ export async function collectWorkflowRuns(
         reportContent = entry.getData().toString("utf-8");
         break;
       }
-      // For custom or unknown, take the first file
       if (!reportContent) {
         reportContent = entry.getData().toString("utf-8");
       }
@@ -153,6 +163,7 @@ export async function collectWorkflowRuns(
     if (testResults.length > 0) {
       await store.insertTestResults(testResults);
     }
+    await store.recordCollectedArtifact(collectedRecord);
 
     runsCollected++;
     testsCollected += testResults.length;

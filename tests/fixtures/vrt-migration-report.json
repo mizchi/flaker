@@ -1,0 +1,62 @@
+{
+  "baseline": "fixtures/migration/reset-css/before.html",
+  "variants": [
+    "after.html"
+  ],
+  "dir": "fixtures/migration/reset-css",
+  "viewports": [
+    {
+      "width": 375,
+      "height": 900,
+      "label": "mobile",
+      "reason": "standard"
+    },
+    {
+      "width": 768,
+      "height": 900,
+      "label": "tablet",
+      "reason": "boundary"
+    },
+    {
+      "width": 1024,
+      "height": 900,
+      "label": "desktop",
+      "reason": "standard"
+    }
+  ],
+  "results": [
+    {
+      "variant": "after",
+      "viewport": "mobile",
+      "diffPixels": 0,
+      "approved": false,
+      "approvalReasons": [],
+      "dominantCategory": "none",
+      "categorySummary": "no changes",
+      "paintTreeSummary": "no changes"
+    },
+    {
+      "variant": "after",
+      "viewport": "tablet",
+      "diffPixels": 1600,
+      "approved": true,
+      "approvalReasons": [
+        "known spacing diff"
+      ],
+      "dominantCategory": "spacing",
+      "categorySummary": "spacing changes",
+      "paintTreeSummary": "paint changes"
+    },
+    {
+      "variant": "after",
+      "variantFile": "after.html",
+      "viewport": "desktop",
+      "diffPixels": 3200,
+      "approved": false,
+      "approvalReasons": [],
+      "dominantCategory": "layout-shift",
+      "categorySummary": "layout shift",
+      "paintTreeSummary": "geometry changes"
+    }
+  ]
+}

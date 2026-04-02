@@ -42,6 +42,22 @@ flaker import report.json --adapter playwright --commit $(git rev-parse HEAD)
 
 # JUnit XML report
 flaker import results.xml --adapter junit --commit $(git rev-parse HEAD)
+
+# Built-in vrt-harness migration-report.json adapter
+flaker import ../vrt-harness/test-results/migration/migration-report.json \
+  --adapter vrt-migration \
+  --commit $(git rev-parse HEAD)
+
+# Built-in vrt-harness bench-report.json adapter
+flaker import ../vrt-harness/test-results/css-bench/dashboard/bench-report.json \
+  --adapter vrt-bench \
+  --commit $(git rev-parse HEAD)
+
+# Custom adapter for arbitrary formats
+flaker import ../vrt-harness/test-results/migration/migration-report.json \
+  --adapter custom \
+  --custom-command "node --experimental-strip-types ../vrt-harness/src/flaker-vrt-report-adapter.ts --scenario-id migration/tailwind-to-vanilla --backend chromium" \
+  --commit $(git rev-parse HEAD)
 ```
 
 ### 3. Analyze
@@ -84,7 +100,9 @@ path = ".flaker/data.duckdb"
 
 # Test result parsing format
 [adapter]
-type = "playwright"     # "playwright" | "junit" | "custom"
+type = "playwright"     # "playwright" | "junit" | "vrt-migration" | "vrt-bench" | "custom"
+artifact_name = "playwright-report"
+# command = "node ./adapter.js"  # required only for custom
 
 # Test runner
 [runner]
@@ -119,17 +137,22 @@ flaker collect --last 90          # Last 90 days
 flaker collect --branch main      # main branch only
 ```
 
-Auto-extracts Playwright JSON / JUnit XML from GitHub Actions artifacts. Requires `GITHUB_TOKEN` environment variable.
+Auto-extracts test reports from GitHub Actions artifacts. The default artifact name is `playwright-report` for `playwright`, `junit-report` for `junit`, `migration-report` for `vrt-migration`, and `bench-report` for `vrt-bench`. Override it with `[adapter].artifact_name` when your workflow uses a different artifact name. Requires `GITHUB_TOKEN` environment variable.
 
 ### `flaker import` — Import Local Reports
 
 ```bash
 flaker import report.json --adapter playwright
 flaker import results.xml --adapter junit
+flaker import migration-report.json --adapter vrt-migration
+flaker import bench-report.json --adapter vrt-bench
+flaker import migration-report.json --adapter custom --custom-command "node ./adapter.js"
 flaker import report.json --commit abc123 --branch feature-x
 ```
 
 Import locally-generated test reports directly into the database.
+
+With `--adapter custom`, you provide an arbitrary command that receives the file contents on stdin and returns `TestCaseResult[]` JSON on stdout. This is the bridge for importing non-Playwright / non-JUnit report formats.
 
 ### `flaker collect-local` — Import actrun History
 

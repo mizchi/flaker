@@ -97,10 +97,20 @@ export interface TestSelector extends TestIdentityFields {
   testName: string;
 }
 
+export interface CollectedArtifactRecord {
+  workflowRunId: number;
+  adapterType: string;
+  artifactName: string;
+  adapterConfig?: string | null;
+  collectedAt?: Date;
+}
+
 export interface MetricStore {
   initialize(): Promise<void>;
   close(): Promise<void>;
   insertWorkflowRun(run: WorkflowRun): Promise<void>;
+  hasCollectedArtifact(record: CollectedArtifactRecord): Promise<boolean>;
+  recordCollectedArtifact(record: CollectedArtifactRecord): Promise<void>;
   insertTestResults(results: TestResult[]): Promise<void>;
   queryFlakyTests(opts: FlakyQueryOpts): Promise<FlakyScore[]>;
   queryTestHistory(suite: string, testName: string): Promise<TestResult[]>;

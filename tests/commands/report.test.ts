@@ -25,6 +25,16 @@ const junitFixture = readFileSync(
   "utf-8",
 );
 
+const vrtMigrationFixture = readFileSync(
+  join(import.meta.dirname, "../fixtures/vrt-migration-report.json"),
+  "utf-8",
+);
+
+const vrtBenchFixture = readFileSync(
+  join(import.meta.dirname, "../fixtures/vrt-bench-report.json"),
+  "utf-8",
+);
+
 describe("report summarize", () => {
   it("normalizes playwright report into totals, file summaries, and unstable tests", () => {
     const summary = runReportSummarize({
@@ -97,6 +107,68 @@ describe("report summarize", () => {
       expect.objectContaining({
         suite: "tests/login.spec.ts",
         testName: "should redirect after login",
+        status: "failed",
+      }),
+    ]);
+  });
+
+  it("normalizes vrt migration reports into the same summary shape", () => {
+    const summary = runReportSummarize({
+      adapter: "vrt-migration",
+      input: vrtMigrationFixture,
+    });
+
+    expect(summary.totals).toMatchObject({
+      total: 3,
+      passed: 2,
+      failed: 1,
+      flaky: 0,
+      skipped: 0,
+      retries: 0,
+      durationMs: 0,
+    });
+    expect(summary.files).toEqual([
+      expect.objectContaining({
+        suite: "fixtures/migration/reset-css/after.html",
+        totals: expect.objectContaining({ total: 3, passed: 2, failed: 1 }),
+      }),
+    ]);
+    expect(summary.unstable).toEqual([
+      expect.objectContaining({
+        suite: "fixtures/migration/reset-css/after.html",
+        testName: "viewport:desktop",
+        taskId: "migration/reset-css",
+        status: "failed",
+      }),
+    ]);
+  });
+
+  it("normalizes vrt bench reports into the same summary shape", () => {
+    const summary = runReportSummarize({
+      adapter: "vrt-bench",
+      input: vrtBenchFixture,
+    });
+
+    expect(summary.totals).toMatchObject({
+      total: 3,
+      passed: 2,
+      failed: 1,
+      flaky: 0,
+      skipped: 0,
+      retries: 0,
+      durationMs: 0,
+    });
+    expect(summary.files).toEqual([
+      expect.objectContaining({
+        suite: "fixtures/css-challenge/dashboard.html",
+        totals: expect.objectContaining({ total: 3, passed: 2, failed: 1 }),
+      }),
+    ]);
+    expect(summary.unstable).toEqual([
+      expect.objectContaining({
+        suite: "fixtures/css-challenge/dashboard.html",
+        testName: ".search-box input:focus { border-color: rgb(59, 130, 246) }",
+        taskId: "css-bench/dashboard",
         status: "failed",
       }),
     ]);

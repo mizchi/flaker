@@ -5,7 +5,7 @@ import { parse } from "smol-toml";
 export interface FlakerConfig {
   repo: { owner: string; name: string };
   storage: { path: string };
-  adapter: { type: string; command?: string };
+  adapter: { type: string; command?: string; artifact_name?: string };
   runner: {
     type: string;
     command: string;
@@ -21,7 +21,7 @@ export interface FlakerConfig {
 const DEFAULT_CONFIG: FlakerConfig = {
   repo: { owner: "", name: "" },
   storage: { path: ".flaker/data" },
-  adapter: { type: "command" },
+  adapter: { type: "playwright" },
   runner: { type: "vitest", command: "pnpm test" },
   affected: { resolver: "git", config: "" },
   quarantine: { auto: true, flaky_rate_threshold: 0.3, min_runs: 5 },

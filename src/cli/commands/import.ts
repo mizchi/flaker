@@ -1,7 +1,5 @@
 import { readFileSync } from "node:fs";
-import { playwrightAdapter } from "../adapters/playwright.js";
-import { junitAdapter } from "../adapters/junit.js";
-import type { TestResultAdapter } from "../adapters/types.js";
+import { createTestResultAdapter } from "../adapters/index.js";
 import type { MetricStore, WorkflowRun, TestResult } from "../storage/types.js";
 import { toStoredTestResult } from "../storage/test-result-mapper.js";
 
@@ -9,6 +7,7 @@ interface ImportOpts {
   store: MetricStore;
   filePath: string;
   adapterType: string;
+  customCommand?: string;
   commitSha?: string;
   branch?: string;
   repo?: string;
@@ -18,15 +17,9 @@ interface ImportResult {
   testsImported: number;
 }
 
-function getAdapter(type: string): TestResultAdapter {
-  if (type === "playwright") return playwrightAdapter;
-  if (type === "junit") return junitAdapter;
-  throw new Error(`Unknown adapter type: ${type}`);
-}
-
 export async function runImport(opts: ImportOpts): Promise<ImportResult> {
-  const { store, filePath, adapterType } = opts;
-  const adapter = getAdapter(adapterType);
+  const { store, filePath, adapterType, customCommand } = opts;
+  const adapter = createTestResultAdapter(adapterType, customCommand);
 
   const content = readFileSync(filePath, "utf-8");
   const testCases = adapter.parse(content);
@@ -35,13 +28,11 @@ export async function runImport(opts: ImportOpts): Promise<ImportResult> {
     return { testsImported: 0 };
   }
 
-  // Get commit info from options or use defaults
   const commitSha = opts.commitSha ?? "local-" + Date.now();
   const branch = opts.branch ?? "local";
   const repo = opts.repo ?? "local/local";
   const now = new Date();
 
-  // Create a synthetic workflow run
   const runId = Date.now();
   const workflowRun: WorkflowRun = {
     id: runId,

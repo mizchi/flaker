@@ -42,6 +42,22 @@ flaker import report.json --adapter playwright --commit $(git rev-parse HEAD)
 
 # JUnit XML レポート
 flaker import results.xml --adapter junit --commit $(git rev-parse HEAD)
+
+# vrt-harness migration-report.json 用の built-in adapter
+flaker import ../vrt-harness/test-results/migration/migration-report.json \
+  --adapter vrt-migration \
+  --commit $(git rev-parse HEAD)
+
+# vrt-harness bench-report.json 用の built-in adapter
+flaker import ../vrt-harness/test-results/css-bench/dashboard/bench-report.json \
+  --adapter vrt-bench \
+  --commit $(git rev-parse HEAD)
+
+# 任意フォーマット向け custom adapter
+flaker import ../vrt-harness/test-results/migration/migration-report.json \
+  --adapter custom \
+  --custom-command "node --experimental-strip-types ../vrt-harness/src/flaker-vrt-report-adapter.ts --scenario-id migration/tailwind-to-vanilla --backend chromium" \
+  --commit $(git rev-parse HEAD)
 ```
 
 ### 3. 分析する
@@ -84,7 +100,9 @@ path = ".flaker/data.duckdb"
 
 # テスト結果のパース形式
 [adapter]
-type = "playwright"     # "playwright" | "junit" | "custom"
+type = "playwright"     # "playwright" | "junit" | "vrt-migration" | "vrt-bench" | "custom"
+artifact_name = "playwright-report"
+# command = "node ./adapter.js"  # custom のときだけ必要
 
 # テストランナー
 [runner]
@@ -119,17 +137,22 @@ flaker collect --last 90          # 直近 90 日分
 flaker collect --branch main      # main ブランチのみ
 ```
 
-GitHub Actions の artifact から Playwright JSON / JUnit XML を自動抽出します。`GITHUB_TOKEN` 環境変数が必要です。
+GitHub Actions の artifact からテストレポートを自動抽出します。既定の artifact 名は `playwright` が `playwright-report`、`junit` が `junit-report`、`vrt-migration` が `migration-report`、`vrt-bench` が `bench-report` です。workflow 側で別名を使う場合は `[adapter].artifact_name` で上書きします。`GITHUB_TOKEN` 環境変数が必要です。
 
 ### `flaker import` — ローカルレポートの取り込み
 
 ```bash
 flaker import report.json --adapter playwright
 flaker import results.xml --adapter junit
+flaker import migration-report.json --adapter vrt-migration
+flaker import bench-report.json --adapter vrt-bench
+flaker import migration-report.json --adapter custom --custom-command "node ./adapter.js"
 flaker import report.json --commit abc123 --branch feature-x
 ```
 
 CI を使わずローカルで生成したテストレポートを直接 DB に格納します。
+
+`--adapter custom` では、入力ファイルの中身を stdin で受けて `TestCaseResult[]` JSON を stdout に返す任意コマンドを指定できます。Playwright/JUnit 以外の独自レポートを bridge する用途です。
 
 ### `flaker collect-local` — actrun 実行履歴の取り込み
 

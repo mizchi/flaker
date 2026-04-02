@@ -10,7 +10,9 @@ name = "${name}"
 path = ".flaker/data"
 
 [adapter]
-type = "command"
+type = "playwright"
+artifact_name = "playwright-report"
+# command = "node ./adapter.js"
 
 [runner]
 type = "vitest"

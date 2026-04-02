@@ -1,8 +1,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { TestCaseResult } from "../adapters/types.js";
-import { junitAdapter } from "../adapters/junit.js";
-import { playwrightAdapter } from "../adapters/playwright.js";
+import { createTestResultAdapter } from "../adapters/index.js";
 import { normalizeVariant, resolveTestIdentity } from "../identity.js";
 
 export interface ReportTotals {
@@ -268,14 +267,7 @@ function parseAdapterReport(
   adapter: string,
   input: string,
 ): TestCaseResult[] {
-  switch (adapter) {
-    case "playwright":
-      return playwrightAdapter.parse(input);
-    case "junit":
-      return junitAdapter.parse(input);
-    default:
-      throw new Error(`Unsupported adapter: ${adapter}`);
-  }
+  return createTestResultAdapter(adapter).parse(input);
 }
 
 export function runReportSummarize(opts: {

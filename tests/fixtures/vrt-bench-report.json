@@ -1,0 +1,119 @@
+{
+  "meta": {
+    "fixture": "dashboard",
+    "trials": 3,
+    "startSeed": 1,
+    "elapsed": "6.1",
+    "viewports": [
+      { "width": 1440, "height": 900, "label": "wide" },
+      { "width": 375, "height": 812, "label": "mobile" }
+    ],
+    "llmEnabled": false,
+    "totalDeclarations": 412,
+    "strict": false,
+    "suggestApproval": false,
+    "approvalWarnings": [],
+    "prescanner": {
+      "craterResolved": 1,
+      "chromiumFallback": 1,
+      "noSignal": 1,
+      "total": 3
+    }
+  },
+  "detection": {
+    "visualDetected": 2,
+    "a11yDetected": 0,
+    "eitherDetected": 2,
+    "neitherDetected": 1,
+    "rate": 0.6666666667
+  },
+  "trials": [
+    {
+      "runId": "2026-04-02T08:00:00.000Z",
+      "fixture": "dashboard",
+      "backend": "chromium",
+      "fallbackUsed": false,
+      "backendResolvedBy": "chromium",
+      "selector": ".hero-card",
+      "property": "border-radius",
+      "value": "12px",
+      "category": "visual",
+      "selectorType": "class",
+      "isInteractive": false,
+      "mediaCondition": null,
+      "viewports": [
+        {
+          "width": 1440,
+          "height": 900,
+          "visualDiffDetected": true,
+          "visualDiffRatio": 0.0000123,
+          "a11yDiffDetected": false,
+          "a11yChangeCount": 0,
+          "computedStyleDiffCount": 1,
+          "hoverDiffDetected": false,
+          "paintTreeDiffCount": 0
+        }
+      ],
+      "detected": true,
+      "undetectedReason": null
+    },
+    {
+      "runId": "2026-04-02T08:00:00.000Z",
+      "fixture": "dashboard",
+      "backend": "crater",
+      "fallbackUsed": false,
+      "backendResolvedBy": "crater",
+      "selector": ".search-box input:focus",
+      "property": "border-color",
+      "value": "rgb(59, 130, 246)",
+      "category": "visual",
+      "selectorType": "compound",
+      "isInteractive": true,
+      "mediaCondition": "(max-width: 768px)",
+      "viewports": [
+        {
+          "width": 375,
+          "height": 812,
+          "visualDiffDetected": false,
+          "visualDiffRatio": 0,
+          "a11yDiffDetected": false,
+          "a11yChangeCount": 0,
+          "computedStyleDiffCount": 0,
+          "hoverDiffDetected": false,
+          "paintTreeDiffCount": 0
+        }
+      ],
+      "detected": false,
+      "undetectedReason": "hover-only"
+    },
+    {
+      "runId": "2026-04-02T08:00:00.000Z",
+      "fixture": "dashboard",
+      "backend": "prescanner",
+      "fallbackUsed": true,
+      "backendResolvedBy": "chromium",
+      "selector": ".toolbar",
+      "property": "padding-top",
+      "value": "24px",
+      "category": "layout",
+      "selectorType": "class",
+      "isInteractive": false,
+      "mediaCondition": null,
+      "viewports": [
+        {
+          "width": 1440,
+          "height": 900,
+          "visualDiffDetected": true,
+          "visualDiffRatio": 0.000042,
+          "a11yDiffDetected": false,
+          "a11yChangeCount": 0,
+          "computedStyleDiffCount": 1,
+          "hoverDiffDetected": false,
+          "paintTreeDiffCount": 1
+        }
+      ],
+      "detected": true,
+      "undetectedReason": null
+    }
+  ]
+}
