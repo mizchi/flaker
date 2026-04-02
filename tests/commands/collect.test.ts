@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,6 +7,7 @@ import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
 import {
   collectWorkflowRuns,
   defaultArtifactNameForAdapter,
+  formatCollectSummary,
   type GitHubClient,
 } from "../../src/cli/commands/collect.js";
 
@@ -76,6 +77,64 @@ describe("defaultArtifactNameForAdapter", () => {
     expect(defaultArtifactNameForAdapter("vrt-migration")).toBe("migration-report");
     expect(defaultArtifactNameForAdapter("vrt-bench")).toBe("bench-report");
     expect(defaultArtifactNameForAdapter("custom")).toBe("custom-report");
+  });
+});
+
+describe("formatCollectSummary", () => {
+  it("formats collect summaries with failed runs", () => {
+    expect(formatCollectSummary({
+      runsCollected: 1,
+      testsCollected: 3,
+      failedRuns: 2,
+      failedRunIds: [1007, 1009],
+      failures: [
+        { runId: 1007, message: "temporary artifact download error" },
+        { runId: 1009, message: "invalid zip" },
+      ],
+    })).toBe("Collected 1 runs, 3 test results, 2 failed runs (1007, 1009)");
+  });
+
+  it("returns empty failure details when there are no failures", async () => {
+    const mockRuns = [
+      {
+        id: 1010,
+        head_branch: "main",
+        head_sha: "ok456",
+        event: "workflow_dispatch",
+        conclusion: "success",
+        created_at: "2025-06-09T00:00:00Z",
+        run_started_at: "2025-06-09T00:00:00Z",
+        updated_at: "2025-06-09T00:04:00Z",
+      },
+    ];
+
+    const github = createMockGitHubClient(mockRuns, {
+      1010: [{ name: "bench-report", content: benchFixtureReport }],
+    });
+
+    const store = new DuckDBStore(":memory:");
+    await store.initialize();
+    try {
+      const result = await collectWorkflowRuns({
+        store,
+        github,
+        repo: "owner/repo",
+        adapterType: "vrt-bench",
+      });
+      expect(result.failures).toEqual([]);
+    } finally {
+      await store.close();
+    }
+  });
+
+  it("keeps the summary short when there are no failures", () => {
+    expect(formatCollectSummary({
+      runsCollected: 1,
+      testsCollected: 3,
+      failedRuns: 0,
+      failedRunIds: [],
+      failures: [],
+    })).toBe("Collected 1 runs, 3 test results");
   });
 });
 
@@ -347,6 +406,96 @@ describe("collectWorkflowRuns", () => {
       [1006],
     );
     expect(testCount[0].count).toBe(3);
+  });
+
+  it("continues when one run fails to download its artifact", async () => {
+    const mockRuns = [
+      {
+        id: 1007,
+        head_branch: "main",
+        head_sha: "err123",
+        event: "workflow_dispatch",
+        conclusion: "success",
+        created_at: "2025-06-07T00:00:00Z",
+        run_started_at: "2025-06-07T00:00:00Z",
+        updated_at: "2025-06-07T00:04:00Z",
+      },
+      {
+        id: 1008,
+        head_branch: "main",
+        head_sha: "ok123",
+        event: "workflow_dispatch",
+        conclusion: "success",
+        created_at: "2025-06-08T00:00:00Z",
+        run_started_at: "2025-06-08T00:00:00Z",
+        updated_at: "2025-06-08T00:04:00Z",
+      },
+    ];
+
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const github: GitHubClient = {
+      async listWorkflowRuns() {
+        return { total_count: mockRuns.length, workflow_runs: mockRuns };
+      },
+      async listArtifacts(runId: number) {
+        return {
+          total_count: 1,
+          artifacts: [{ id: runId * 100, name: "bench-report", expired: false }],
+        };
+      },
+      async downloadArtifact(artifactId: number) {
+        if (artifactId === 100700) {
+          throw new Error("temporary artifact download error");
+        }
+        const zip = new AdmZip();
+        zip.addFile("report.json", Buffer.from(benchFixtureReport));
+        return zip.toBuffer();
+      },
+    };
+
+    try {
+      const result = await collectWorkflowRuns({
+        store,
+        github,
+        repo: "owner/repo",
+        adapterType: "vrt-bench",
+      });
+
+      expect(result.runsCollected).toBe(1);
+      expect(result.testsCollected).toBe(3);
+      expect(result.failedRuns).toBe(1);
+      expect(result.failedRunIds).toEqual([1007]);
+      expect(result.failures).toEqual([
+        { runId: 1007, message: "temporary artifact download error" },
+      ]);
+      expect(warn).toHaveBeenCalledTimes(1);
+
+      const failedRunCollected = await store.raw<{ count: number }>(
+        "SELECT COUNT(*)::INTEGER AS count FROM collected_artifacts WHERE workflow_run_id = ? AND adapter_type = ?",
+        [1007, "vrt-bench"],
+      );
+      expect(failedRunCollected[0].count).toBe(0);
+
+      const succeededRunCollected = await store.raw<{ count: number }>(
+        "SELECT COUNT(*)::INTEGER AS count FROM collected_artifacts WHERE workflow_run_id = ? AND adapter_type = ?",
+        [1008, "vrt-bench"],
+      );
+      expect(succeededRunCollected[0].count).toBe(1);
+
+      const failedRunTests = await store.raw<{ count: number }>(
+        "SELECT COUNT(*)::INTEGER AS count FROM test_results WHERE workflow_run_id = ?",
+        [1007],
+      );
+      expect(failedRunTests[0].count).toBe(0);
+
+      const succeededRunTests = await store.raw<{ count: number }>(
+        "SELECT COUNT(*)::INTEGER AS count FROM test_results WHERE workflow_run_id = ?",
+        [1008],
+      );
+      expect(succeededRunTests[0].count).toBe(3);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("skips already collected runs (idempotent)", async () => {

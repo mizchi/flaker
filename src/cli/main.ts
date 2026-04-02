@@ -7,6 +7,7 @@ import { loadConfig } from "./config.js";
 import { runInit } from "./commands/init.js";
 import {
   collectWorkflowRuns,
+  formatCollectSummary,
   type GitHubClient,
 } from "./commands/collect.js";
 import { runFlaky, formatFlakyTable, runFlakyTrend, formatFlakyTrend, runTrueFlaky, formatTrueFlakyTable } from "./commands/flaky.js";
@@ -251,9 +252,7 @@ program
         artifactName: config.adapter.artifact_name,
         customCommand: config.adapter.command,
       });
-      console.log(
-        `Collected ${result.runsCollected} runs, ${result.testsCollected} test results`,
-      );
+      console.log(formatCollectSummary(result));
     } finally {
       await store.close();
     }

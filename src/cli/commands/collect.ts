@@ -34,9 +34,28 @@ export interface CollectOpts {
   customCommand?: string;
 }
 
+export interface CollectFailure {
+  runId: number;
+  message: string;
+}
+
 export interface CollectResult {
   runsCollected: number;
   testsCollected: number;
+  failedRuns: number;
+  failedRunIds: number[];
+  failures: CollectFailure[];
+}
+
+export function formatCollectSummary(result: CollectResult): string {
+  const base = `Collected ${result.runsCollected} runs, ${result.testsCollected} test results`;
+  if (result.failedRuns === 0) {
+    return base;
+  }
+  const suffix = result.failedRunIds.length > 0
+    ? ` (${result.failedRunIds.join(", ")})`
+    : "";
+  return `${base}, ${result.failedRuns} failed runs${suffix}`;
 }
 
 export function defaultArtifactNameForAdapter(adapterType: string): string {
@@ -77,6 +96,9 @@ export async function collectWorkflowRuns(
 
   let runsCollected = 0;
   let testsCollected = 0;
+  let failedRuns = 0;
+  const failedRunIds: number[] = [];
+  const failures: CollectFailure[] = [];
 
   for (const run of workflow_runs) {
     const existing = await store.hasCollectedArtifact({
@@ -114,60 +136,68 @@ export async function collectWorkflowRuns(
       collectedAt: new Date(run.created_at),
     };
 
-    const { artifacts } = await github.listArtifacts(run.id);
-    const artifact = artifacts.find(
-      (a) => a.name === artifactName && !a.expired,
-    );
-    if (!artifact) {
-      runsCollected++;
-      continue;
-    }
-
-    const zipBuffer = await github.downloadArtifact(artifact.id);
-    const zip = new AdmZip(zipBuffer);
-    const entries = zip.getEntries();
-
-    let reportContent: string | null = null;
-    for (const entry of entries) {
-      const name = entry.entryName.toLowerCase();
-      if (
-        (adapterType === "playwright" || adapterType === "vrt-migration" || adapterType === "vrt-bench")
-        && name.endsWith(".json")
-      ) {
-        reportContent = entry.getData().toString("utf-8");
-        break;
+    try {
+      const { artifacts } = await github.listArtifacts(run.id);
+      const artifact = artifacts.find(
+        (a) => a.name === artifactName && !a.expired,
+      );
+      if (!artifact) {
+        runsCollected++;
+        continue;
       }
-      if (adapterType === "junit" && name.endsWith(".xml")) {
-        reportContent = entry.getData().toString("utf-8");
-        break;
+
+      const zipBuffer = await github.downloadArtifact(artifact.id);
+      const zip = new AdmZip(zipBuffer);
+      const entries = zip.getEntries();
+
+      let reportContent: string | null = null;
+      for (const entry of entries) {
+        const name = entry.entryName.toLowerCase();
+        if (
+          (adapterType === "playwright" || adapterType === "vrt-migration" || adapterType === "vrt-bench")
+          && name.endsWith(".json")
+        ) {
+          reportContent = entry.getData().toString("utf-8");
+          break;
+        }
+        if (adapterType === "junit" && name.endsWith(".xml")) {
+          reportContent = entry.getData().toString("utf-8");
+          break;
+        }
+        if (!reportContent) {
+          reportContent = entry.getData().toString("utf-8");
+        }
       }
       if (!reportContent) {
-        reportContent = entry.getData().toString("utf-8");
+        runsCollected++;
+        continue;
       }
-    }
-    if (!reportContent) {
+
+      const testCases = adapter.parse(reportContent);
+
+      const testResults: TestResult[] = testCases.map((tc) =>
+        toStoredTestResult(tc, {
+          workflowRunId: run.id,
+          commitSha: run.head_sha,
+          createdAt: new Date(run.created_at),
+        }),
+      );
+
+      if (testResults.length > 0) {
+        await store.insertTestResults(testResults);
+      }
+      await store.recordCollectedArtifact(collectedRecord);
+
       runsCollected++;
-      continue;
+      testsCollected += testResults.length;
+    } catch (error) {
+      failedRuns++;
+      failedRunIds.push(run.id);
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push({ runId: run.id, message });
+      console.warn(`Warning: failed to collect workflow run ${run.id}: ${message}`);
     }
-
-    const testCases = adapter.parse(reportContent);
-
-    const testResults: TestResult[] = testCases.map((tc) =>
-      toStoredTestResult(tc, {
-        workflowRunId: run.id,
-        commitSha: run.head_sha,
-        createdAt: new Date(run.created_at),
-      }),
-    );
-
-    if (testResults.length > 0) {
-      await store.insertTestResults(testResults);
-    }
-    await store.recordCollectedArtifact(collectedRecord);
-
-    runsCollected++;
-    testsCollected += testResults.length;
   }
 
-  return { runsCollected, testsCollected };
+  return { runsCollected, testsCollected, failedRuns, failedRunIds, failures };
 }
