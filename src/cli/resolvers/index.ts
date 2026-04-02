@@ -1,12 +1,14 @@
 import type { DependencyResolver } from "./types.js";
 import { SimpleResolver } from "./simple.js";
 import { BitflowNativeResolver } from "./bitflow-native.js";
+import { GlobRuleResolver } from "./glob.js";
 import { WorkspaceResolver } from "./workspace.js";
 import { MoonResolver } from "./moon.js";
 
 export type { DependencyResolver } from "./types.js";
 export { SimpleResolver } from "./simple.js";
 export { BitflowNativeResolver } from "./bitflow-native.js";
+export { GlobRuleResolver } from "./glob.js";
 export { WorkspaceResolver } from "./workspace.js";
 export { MoonResolver } from "./moon.js";
 
@@ -26,6 +28,9 @@ export function createResolver(
     case "bitflow":
       if (!config.config) throw new Error("bitflow resolver requires a config path");
       return new BitflowNativeResolver(config.config);
+    case "glob":
+      if (!config.config) throw new Error("glob resolver requires a config path");
+      return new GlobRuleResolver(config.config);
     case "workspace":
       return new WorkspaceResolver(rootDir);
     case "moon":

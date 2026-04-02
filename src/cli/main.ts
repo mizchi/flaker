@@ -147,21 +147,13 @@ async function createConfiguredResolver(
   cwd: string,
   affectedConfig: { resolver: string; config: string },
 ) {
-  const resolverType = affectedConfig.resolver ?? "simple";
-  if (resolverType === "bitflow" && affectedConfig.config) {
-    const { BitflowNativeResolver } = await import("./resolvers/bitflow-native.js");
-    return new BitflowNativeResolver(resolve(affectedConfig.config));
-  }
-  if (resolverType === "workspace") {
-    const { WorkspaceResolver } = await import("./resolvers/workspace.js");
-    return new WorkspaceResolver(cwd);
-  }
-  if (resolverType === "moon") {
-    const { MoonResolver } = await import("./resolvers/moon.js");
-    return new MoonResolver(cwd);
-  }
-  const { SimpleResolver } = await import("./resolvers/simple.js");
-  return new SimpleResolver();
+  return createResolver(
+    {
+      resolver: affectedConfig.resolver ?? "simple",
+      config: affectedConfig.config ? resolve(cwd, affectedConfig.config) : undefined,
+    },
+    cwd,
+  );
 }
 
 program
