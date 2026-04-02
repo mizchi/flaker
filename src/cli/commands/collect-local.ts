@@ -25,6 +25,13 @@ interface ActrunRunListEntry {
   status: string;
 }
 
+function actrunArtifactDirs(workspace: string, runId: string): string[] {
+  return [
+    join(workspace, ".actrun", "runs", runId, "artifacts"),
+    join(workspace, "_build", "actrun", "runs", runId, "artifacts"),
+  ];
+}
+
 export async function runCollectLocal(opts: CollectLocalOpts): Promise<CollectLocalResult> {
   const { store } = opts;
   const execFn = opts.exec ?? ((cmd: string) => execSync(cmd, { encoding: "utf-8" }));
@@ -58,9 +65,9 @@ export async function runCollectLocal(opts: CollectLocalOpts): Promise<CollectLo
 
     // Try to extract richer test reports from actrun artifacts
     const workspace = opts.workspace ?? process.cwd();
-    const artifactsDir = join(workspace, ".actrun", "runs", entry.run_id, "artifacts");
-    let testCases = existsSync(artifactsDir)
-      ? extractTestReportsFromArtifacts([artifactsDir], {
+    const artifactDirs = actrunArtifactDirs(workspace, entry.run_id).filter(existsSync);
+    let testCases = artifactDirs.length > 0
+      ? extractTestReportsFromArtifacts(artifactDirs, {
           playwright: playwrightAdapter,
           junit: junitAdapter,
         })

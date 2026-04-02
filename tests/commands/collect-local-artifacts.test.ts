@@ -55,6 +55,28 @@ const playwrightReportFixture = JSON.stringify({
   ],
 });
 
+const vitestReportFixture = JSON.stringify({
+  testResults: [
+    {
+      name: "tests/math.test.ts",
+      assertionResults: [
+        {
+          fullName: "math > adds numbers",
+          status: "passed",
+          duration: 5,
+          failureMessages: [],
+        },
+        {
+          fullName: "math > subtracts numbers",
+          status: "failed",
+          duration: 8,
+          failureMessages: ["Expected 3 but got 4"],
+        },
+      ],
+    },
+  ],
+});
+
 function makeRunViewJson(runId: string) {
   return JSON.stringify({
     run_id: runId,
@@ -126,6 +148,23 @@ describe("extractTestReportsFromArtifacts", () => {
     expect(results[0].testName).toBe("GET /health");
     expect(results[0].status).toBe("passed");
     expect(results[1].testName).toBe("POST /login");
+    expect(results[1].status).toBe("failed");
+  });
+
+  it("extracts Vitest JSON reports from artifact directory", () => {
+    const reportDir = join(tmpDir, "vitest-report");
+    mkdirSync(reportDir, { recursive: true });
+    writeFileSync(join(reportDir, "report.json"), vitestReportFixture);
+
+    const results = extractTestReportsFromArtifacts([tmpDir], {
+      playwright: playwrightAdapter,
+      junit: junitAdapter,
+    });
+
+    expect(results.length).toBe(2);
+    expect(results[0].testName).toBe("adds numbers");
+    expect(results[0].status).toBe("passed");
+    expect(results[1].testName).toBe("subtracts numbers");
     expect(results[1].status).toBe("failed");
   });
 
@@ -228,5 +267,44 @@ describe("collect-local with artifacts", () => {
       "SELECT test_name FROM test_results",
     );
     expect(tests[0].test_name).toBe("e2e");
+  });
+
+  it("loads artifacts from actrun default _build run root", async () => {
+    const artifactDir = join(
+      tmpDir,
+      "_build",
+      "actrun",
+      "runs",
+      "run-3",
+      "artifacts",
+      "vitest-report",
+    );
+    mkdirSync(artifactDir, { recursive: true });
+    writeFileSync(join(artifactDir, "report.json"), vitestReportFixture);
+
+    const listJson = JSON.stringify([
+      { run_id: "run-3", conclusion: "failure", status: "completed" },
+    ]);
+
+    const result = await runCollectLocal({
+      store,
+      workspace: tmpDir,
+      exec: (cmd) => {
+        if (cmd.includes("run list")) return listJson;
+        if (cmd.includes("run view")) return makeRunViewJson("run-3");
+        return "";
+      },
+    });
+
+    expect(result.runsImported).toBe(1);
+    expect(result.testsImported).toBe(2);
+
+    const tests = await store.raw<{ test_name: string; status: string }>(
+      "SELECT test_name, status FROM test_results ORDER BY test_name",
+    );
+    expect(tests).toEqual([
+      { test_name: "adds numbers", status: "passed" },
+      { test_name: "subtracts numbers", status: "failed" },
+    ]);
   });
 });

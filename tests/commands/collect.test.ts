@@ -4,9 +4,9 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import AdmZip from "adm-zip";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
-import type { MetricStore } from "../../src/cli/storage/types.js";
 import {
   collectWorkflowRuns,
+  defaultArtifactNameForAdapter,
   type GitHubClient,
 } from "../../src/cli/commands/collect.js";
 
@@ -15,33 +15,69 @@ const fixtureReport = readFileSync(
   join(__dirname, "../fixtures/playwright-report.json"),
   "utf-8",
 );
+const migrationFixtureReport = readFileSync(
+  join(__dirname, "../fixtures/vrt-migration-report.json"),
+  "utf-8",
+);
+const benchFixtureReport = readFileSync(
+  join(__dirname, "../fixtures/vrt-bench-report.json"),
+  "utf-8",
+);
+
+interface MockArtifact {
+  name: string;
+  content: string;
+  expired?: boolean;
+  entryName?: string;
+}
 
 function createMockGitHubClient(
   runs: GitHubClient extends { listWorkflowRuns(): Promise<infer R> }
     ? R["workflow_runs"]
     : never,
-  artifactName: string,
-  reportContent: string,
+  artifactsByRunId: Record<number, MockArtifact[]>,
 ): GitHubClient {
+  const artifactContents = new Map<number, { content: string; entryName: string }>();
+
   return {
     async listWorkflowRuns() {
       return { total_count: runs.length, workflow_runs: runs };
     },
     async listArtifacts(runId: number) {
+      const artifacts = (artifactsByRunId[runId] ?? []).map((artifact, index) => {
+        const id = runId * 100 + index;
+        artifactContents.set(id, {
+          content: artifact.content,
+          entryName: artifact.entryName ?? "report.json",
+        });
+        return { id, name: artifact.name, expired: artifact.expired ?? false };
+      });
       return {
-        total_count: 1,
-        artifacts: [
-          { id: runId * 100, name: artifactName, expired: false },
-        ],
+        total_count: artifacts.length,
+        artifacts,
       };
     },
-    async downloadArtifact(_artifactId: number) {
+    async downloadArtifact(artifactId: number) {
+      const artifact = artifactContents.get(artifactId);
+      if (!artifact) {
+        throw new Error(`Unknown artifact id: ${artifactId}`);
+      }
       const zip = new AdmZip();
-      zip.addFile("report.json", Buffer.from(reportContent));
+      zip.addFile(artifact.entryName, Buffer.from(artifact.content));
       return zip.toBuffer();
     },
   };
 }
+
+describe("defaultArtifactNameForAdapter", () => {
+  it("returns adapter-specific defaults", () => {
+    expect(defaultArtifactNameForAdapter("playwright")).toBe("playwright-report");
+    expect(defaultArtifactNameForAdapter("junit")).toBe("junit-report");
+    expect(defaultArtifactNameForAdapter("vrt-migration")).toBe("migration-report");
+    expect(defaultArtifactNameForAdapter("vrt-bench")).toBe("bench-report");
+    expect(defaultArtifactNameForAdapter("custom")).toBe("custom-report");
+  });
+});
 
 describe("collectWorkflowRuns", () => {
   let store: DuckDBStore;
@@ -69,11 +105,9 @@ describe("collectWorkflowRuns", () => {
       },
     ];
 
-    const github = createMockGitHubClient(
-      mockRuns,
-      "playwright-report",
-      fixtureReport,
-    );
+    const github = createMockGitHubClient(mockRuns, {
+      1001: [{ name: "playwright-report", content: fixtureReport }],
+    });
 
     const result = await collectWorkflowRuns({
       store,
@@ -84,22 +118,235 @@ describe("collectWorkflowRuns", () => {
     });
 
     expect(result.runsCollected).toBe(1);
-    // The fixture has 4 specs with 1 test each
     expect(result.testsCollected).toBe(4);
 
-    // Verify workflow run was stored
     const runs = await store.raw<{ id: number }>(
       "SELECT id FROM workflow_runs WHERE id = ?",
       [1001],
     );
     expect(runs).toHaveLength(1);
 
-    // Verify test results were stored
     const tests = await store.raw<{ count: number }>(
       "SELECT COUNT(*)::INTEGER AS count FROM test_results WHERE workflow_run_id = ?",
       [1001],
     );
     expect(tests[0].count).toBe(4);
+  });
+
+  it("collects built-in vrt migration reports from artifacts", async () => {
+    const mockRuns = [
+      {
+        id: 1002,
+        head_branch: "main",
+        head_sha: "vrt123",
+        event: "workflow_dispatch",
+        conclusion: "success",
+        created_at: "2025-06-02T00:00:00Z",
+        run_started_at: "2025-06-02T00:00:00Z",
+        updated_at: "2025-06-02T00:03:00Z",
+      },
+    ];
+
+    const github = createMockGitHubClient(mockRuns, {
+      1002: [{ name: "migration-report", content: migrationFixtureReport }],
+    });
+
+    const result = await collectWorkflowRuns({
+      store,
+      github,
+      repo: "owner/repo",
+      adapterType: "vrt-migration",
+      artifactName: "migration-report",
+    });
+
+    expect(result.runsCollected).toBe(1);
+    expect(result.testsCollected).toBe(3);
+
+    const tests = await store.raw<{ status: string }>(
+      "SELECT status FROM test_results WHERE workflow_run_id = ? ORDER BY test_name",
+      [1002],
+    );
+    expect(tests.map((row) => row.status)).toEqual(["failed", "passed", "passed"]);
+  });
+
+  it("uses the default migration artifact name when omitted", async () => {
+    const mockRuns = [
+      {
+        id: 1003,
+        head_branch: "main",
+        head_sha: "vrt456",
+        event: "workflow_dispatch",
+        conclusion: "success",
+        created_at: "2025-06-03T00:00:00Z",
+        run_started_at: "2025-06-03T00:00:00Z",
+        updated_at: "2025-06-03T00:03:00Z",
+      },
+    ];
+
+    const github = createMockGitHubClient(mockRuns, {
+      1003: [{ name: "migration-report", content: migrationFixtureReport }],
+    });
+
+    const result = await collectWorkflowRuns({
+      store,
+      github,
+      repo: "owner/repo",
+      adapterType: "vrt-migration",
+    });
+
+    expect(result.runsCollected).toBe(1);
+    expect(result.testsCollected).toBe(3);
+  });
+
+  it("collects built-in vrt bench reports from artifacts", async () => {
+    const mockRuns = [
+      {
+        id: 1004,
+        head_branch: "main",
+        head_sha: "bench123",
+        event: "workflow_dispatch",
+        conclusion: "success",
+        created_at: "2025-06-04T00:00:00Z",
+        run_started_at: "2025-06-04T00:00:00Z",
+        updated_at: "2025-06-04T00:04:00Z",
+      },
+    ];
+
+    const github = createMockGitHubClient(mockRuns, {
+      1004: [{ name: "bench-report", content: benchFixtureReport }],
+    });
+
+    const result = await collectWorkflowRuns({
+      store,
+      github,
+      repo: "owner/repo",
+      adapterType: "vrt-bench",
+    });
+
+    expect(result.runsCollected).toBe(1);
+    expect(result.testsCollected).toBe(3);
+
+    const tests = await store.raw<{ status: string }>(
+      "SELECT status FROM test_results WHERE workflow_run_id = ? ORDER BY test_name",
+      [1004],
+    );
+    expect(tests.map((row) => row.status)).toEqual(["passed", "failed", "passed"]);
+  });
+
+  it("does not let an artifact miss block a later collect with another adapter", async () => {
+    const mockRuns = [
+      {
+        id: 1005,
+        head_branch: "main",
+        head_sha: "mix123",
+        event: "workflow_dispatch",
+        conclusion: "success",
+        created_at: "2025-06-05T00:00:00Z",
+        run_started_at: "2025-06-05T00:00:00Z",
+        updated_at: "2025-06-05T00:04:00Z",
+      },
+    ];
+
+    const github = createMockGitHubClient(mockRuns, {
+      1005: [{ name: "bench-report", content: benchFixtureReport }],
+    });
+
+    const migrationResult = await collectWorkflowRuns({
+      store,
+      github,
+      repo: "owner/repo",
+      adapterType: "vrt-migration",
+    });
+    expect(migrationResult.runsCollected).toBe(1);
+    expect(migrationResult.testsCollected).toBe(0);
+
+    const benchResult = await collectWorkflowRuns({
+      store,
+      github,
+      repo: "owner/repo",
+      adapterType: "vrt-bench",
+    });
+    expect(benchResult.runsCollected).toBe(1);
+    expect(benchResult.testsCollected).toBe(3);
+
+    const runCount = await store.raw<{ count: number }>(
+      "SELECT COUNT(*)::INTEGER AS count FROM workflow_runs WHERE id = ?",
+      [1005],
+    );
+    expect(runCount[0].count).toBe(1);
+
+    const testCount = await store.raw<{ count: number }>(
+      "SELECT COUNT(*)::INTEGER AS count FROM test_results WHERE workflow_run_id = ?",
+      [1005],
+    );
+    expect(testCount[0].count).toBe(3);
+  });
+
+  it("retries when the artifact is temporarily missing", async () => {
+    const mockRuns = [
+      {
+        id: 1006,
+        head_branch: "main",
+        head_sha: "retry123",
+        event: "workflow_dispatch",
+        conclusion: "success",
+        created_at: "2025-06-06T00:00:00Z",
+        run_started_at: "2025-06-06T00:00:00Z",
+        updated_at: "2025-06-06T00:04:00Z",
+      },
+    ];
+
+    let listArtifactsCalls = 0;
+    const github: GitHubClient = {
+      async listWorkflowRuns() {
+        return { total_count: mockRuns.length, workflow_runs: mockRuns };
+      },
+      async listArtifacts(runId: number) {
+        listArtifactsCalls += 1;
+        if (listArtifactsCalls === 1) {
+          return { total_count: 0, artifacts: [] };
+        }
+        return {
+          total_count: 1,
+          artifacts: [{ id: runId * 100, name: "bench-report", expired: false }],
+        };
+      },
+      async downloadArtifact() {
+        const zip = new AdmZip();
+        zip.addFile("report.json", Buffer.from(benchFixtureReport));
+        return zip.toBuffer();
+      },
+    };
+
+    const firstResult = await collectWorkflowRuns({
+      store,
+      github,
+      repo: "owner/repo",
+      adapterType: "vrt-bench",
+    });
+    expect(firstResult.runsCollected).toBe(1);
+    expect(firstResult.testsCollected).toBe(0);
+
+    const pendingCount = await store.raw<{ count: number }>(
+      "SELECT COUNT(*)::INTEGER AS count FROM collected_artifacts WHERE workflow_run_id = ? AND adapter_type = ?",
+      [1006, "vrt-bench"],
+    );
+    expect(pendingCount[0].count).toBe(0);
+
+    const secondResult = await collectWorkflowRuns({
+      store,
+      github,
+      repo: "owner/repo",
+      adapterType: "vrt-bench",
+    });
+    expect(secondResult.runsCollected).toBe(1);
+    expect(secondResult.testsCollected).toBe(3);
+
+    const testCount = await store.raw<{ count: number }>(
+      "SELECT COUNT(*)::INTEGER AS count FROM test_results WHERE workflow_run_id = ?",
+      [1006],
+    );
+    expect(testCount[0].count).toBe(3);
   });
 
   it("skips already collected runs (idempotent)", async () => {
@@ -116,13 +363,10 @@ describe("collectWorkflowRuns", () => {
       },
     ];
 
-    const github = createMockGitHubClient(
-      mockRuns,
-      "playwright-report",
-      fixtureReport,
-    );
+    const github = createMockGitHubClient(mockRuns, {
+      2001: [{ name: "playwright-report", content: fixtureReport }],
+    });
 
-    // First collection
     const result1 = await collectWorkflowRuns({
       store,
       github,
@@ -133,7 +377,6 @@ describe("collectWorkflowRuns", () => {
     expect(result1.runsCollected).toBe(1);
     expect(result1.testsCollected).toBe(4);
 
-    // Second collection - same runs should be skipped
     const result2 = await collectWorkflowRuns({
       store,
       github,
@@ -144,14 +387,12 @@ describe("collectWorkflowRuns", () => {
     expect(result2.runsCollected).toBe(0);
     expect(result2.testsCollected).toBe(0);
 
-    // Verify only one workflow run in DB
     const runs = await store.raw<{ count: number }>(
       "SELECT COUNT(*)::INTEGER AS count FROM workflow_runs WHERE id = ?",
       [2001],
     );
     expect(runs[0].count).toBe(1);
 
-    // Verify test results were not duplicated
     const tests = await store.raw<{ count: number }>(
       "SELECT COUNT(*)::INTEGER AS count FROM test_results WHERE workflow_run_id = ?",
       [2001],

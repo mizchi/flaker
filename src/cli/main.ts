@@ -248,6 +248,8 @@ program
         github,
         repo: `${owner}/${repo}`,
         adapterType: config.adapter.type,
+        artifactName: config.adapter.artifact_name,
+        customCommand: config.adapter.command,
       });
       console.log(
         `Collected ${result.runsCollected} runs, ${result.testsCollected} test results`,
@@ -537,7 +539,7 @@ const reportCommand = program
 reportCommand
   .command("summarize")
   .description("Summarize a raw adapter report")
-  .requiredOption("--adapter <type>", "Adapter type (playwright, junit)")
+  .requiredOption("--adapter <type>", "Adapter type (playwright, junit, vrt-migration, vrt-bench)")
   .requiredOption("--input <file>", "Raw adapter report file")
   .option("--bundle", "Wrap summary with shard metadata for aggregation")
   .option("--shard <name>", "Shard name")
@@ -885,10 +887,11 @@ program
 program
   .command("import <file>")
   .description("Import a local test report file")
-  .option("--adapter <type>", "Adapter type (playwright, junit)", "playwright")
+  .option("--adapter <type>", "Adapter type (playwright, junit, vrt-migration, vrt-bench, custom)", "playwright")
+  .option("--custom-command <cmd>", "Custom adapter command (required with --adapter custom)")
   .option("--commit <sha>", "Commit SHA")
   .option("--branch <branch>", "Branch name")
-  .action(async (file: string, opts: { adapter: string; commit?: string; branch?: string }) => {
+  .action(async (file: string, opts: { adapter: string; customCommand?: string; commit?: string; branch?: string }) => {
     const config = loadConfig(process.cwd());
     const store = new DuckDBStore(resolve(config.storage.path));
     await store.initialize();
@@ -897,6 +900,7 @@ program
         store,
         filePath: resolve(file),
         adapterType: opts.adapter,
+        customCommand: opts.customCommand,
         commitSha: opts.commit,
         branch: opts.branch,
         repo: `${config.repo.owner}/${config.repo.name}`,

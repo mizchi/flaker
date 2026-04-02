@@ -23,12 +23,13 @@ describe("runInit", () => {
     expect(content).toContain('name = "myrepo"');
     expect(content).toContain('[storage]');
     expect(content).toContain('[adapter]');
+    expect(content).toContain('type = "playwright"');
+    expect(content).toContain('artifact_name = "playwright-report"');
     expect(content).toContain('[runner]');
     expect(content).toContain('[affected]');
     expect(content).toContain('[quarantine]');
     expect(content).toContain('[flaky]');
 
-    // .flaker directory should be created
     expect(existsSync(join(dir, ".flaker"))).toBe(true);
   });
 });
@@ -42,7 +43,8 @@ describe("loadConfig", () => {
     expect(config.repo.owner).toBe("testowner");
     expect(config.repo.name).toBe("testrepo");
     expect(config.storage.path).toBe(".flaker/data");
-    expect(config.adapter.type).toBe("command");
+    expect(config.adapter.type).toBe("playwright");
+    expect(config.adapter.artifact_name).toBe("playwright-report");
     expect(config.runner.type).toBe("vitest");
     expect(config.quarantine.auto).toBe(true);
     expect(config.flaky.window_days).toBe(14);

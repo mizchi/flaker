@@ -13,6 +13,7 @@ import type {
   TrueFlakyScore,
   VariantFlakyScore,
   TestSelector,
+  CollectedArtifactRecord,
 } from "./types.js";
 
 export class DuckDBStore implements MetricStore {
@@ -81,7 +82,8 @@ export class DuckDBStore implements MetricStore {
   async insertWorkflowRun(run: WorkflowRun): Promise<void> {
     await this.run(
       `INSERT INTO workflow_runs (id, repo, branch, commit_sha, event, status, created_at, duration_ms)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (id) DO NOTHING`,
       [
         run.id,
         run.repo,
@@ -92,6 +94,36 @@ export class DuckDBStore implements MetricStore {
         run.createdAt,
         run.durationMs,
       ]
+    );
+  }
+
+  async hasCollectedArtifact(record: CollectedArtifactRecord): Promise<boolean> {
+    const rows = await this.all(
+      `SELECT 1
+       FROM collected_artifacts
+       WHERE workflow_run_id = ? AND adapter_type = ? AND artifact_name = ? AND adapter_config = ?`,
+      [
+        record.workflowRunId,
+        record.adapterType,
+        record.artifactName,
+        record.adapterConfig ?? "",
+      ],
+    );
+    return rows.length > 0;
+  }
+
+  async recordCollectedArtifact(record: CollectedArtifactRecord): Promise<void> {
+    await this.run(
+      `INSERT INTO collected_artifacts (workflow_run_id, adapter_type, artifact_name, adapter_config, collected_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (workflow_run_id, adapter_type, artifact_name, adapter_config) DO NOTHING`,
+      [
+        record.workflowRunId,
+        record.adapterType,
+        record.artifactName,
+        record.adapterConfig ?? "",
+        record.collectedAt ?? new Date(),
+      ],
     );
   }
 

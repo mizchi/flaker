@@ -28,6 +28,15 @@ CREATE TABLE IF NOT EXISTS test_results (
   created_at      TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS collected_artifacts (
+  workflow_run_id BIGINT REFERENCES workflow_runs(id),
+  adapter_type    VARCHAR NOT NULL,
+  artifact_name   VARCHAR NOT NULL,
+  adapter_config  VARCHAR NOT NULL DEFAULT '',
+  collected_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (workflow_run_id, adapter_type, artifact_name, adapter_config)
+);
+
 CREATE SEQUENCE IF NOT EXISTS test_results_id_seq START 1;
 
 CREATE TABLE IF NOT EXISTS quarantined_tests (
