@@ -1,6 +1,14 @@
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
-import type { DependencyResolver } from "./types.js";
+import {
+  buildAffectedReport,
+  createAffectedSelection,
+} from "./affected-report.js";
+import type {
+  AffectedReport,
+  AffectedTarget,
+  DependencyResolver,
+} from "./types.js";
 
 interface MoonPackage {
   path: string;
@@ -133,10 +141,15 @@ export class MoonResolver implements DependencyResolver {
     return null;
   }
 
-  resolve(changedFiles: string[], allTestFiles: string[]): string[] {
-    // 1. Find packages containing changed files
-    const changedPackages = new Set<string>();
+  private matchChangedPackages(changedFiles: string[]): {
+    directMatches: Map<string, string[]>;
+    unmatched: string[];
+  } {
+    const directMatches = new Map<string, string[]>();
+    const unmatched: string[] = [];
+
     for (const file of changedFiles) {
+      const matchedPackages: string[] = [];
       for (const [path, pkg] of this.packages) {
         if (
           file.startsWith(path + "/") ||
@@ -144,26 +157,85 @@ export class MoonResolver implements DependencyResolver {
           pkg.sourceFiles.includes(file) ||
           pkg.testFiles.includes(file)
         ) {
-          changedPackages.add(path);
+          matchedPackages.push(path);
+        }
+      }
+
+      if (matchedPackages.length === 0) {
+        unmatched.push(file);
+        continue;
+      }
+
+      for (const path of matchedPackages) {
+        const existing = directMatches.get(path);
+        if (existing) {
+          existing.push(file);
+        } else {
+          directMatches.set(path, [file]);
         }
       }
     }
 
-    // 2. Build reverse dependency map
-    const dependents: Map<string, string[]> = new Map();
+    return {
+      directMatches,
+      unmatched,
+    };
+  }
+
+  private buildDependents(): Map<string, string[]> {
+    const dependents = new Map<string, string[]>();
     for (const [path, pkg] of this.packages) {
       for (const imp of pkg.imports) {
         const resolved = this.resolveImportToPath(imp);
-        if (resolved) {
-          if (!dependents.has(resolved)) dependents.set(resolved, []);
-          dependents.get(resolved)!.push(path);
+        if (!resolved) continue;
+
+        const existing = dependents.get(resolved);
+        if (existing) {
+          existing.push(path);
+        } else {
+          dependents.set(resolved, [path]);
+        }
+      }
+    }
+    return dependents;
+  }
+
+  private expandAffectedPackages(
+    directMatches: Map<string, string[]>,
+  ): Map<string, string[]> {
+    const dependents = this.buildDependents();
+    const affected = new Set(directMatches.keys());
+    const includedBy = new Map<string, Set<string>>();
+    const queue = [...directMatches.keys()];
+
+    for (let index = 0; index < queue.length; index++) {
+      const current = queue[index];
+      for (const dependent of dependents.get(current) ?? []) {
+        let parents = includedBy.get(dependent);
+        if (!parents) {
+          parents = new Set<string>();
+          includedBy.set(dependent, parents);
+        }
+        parents.add(current);
+
+        if (!affected.has(dependent)) {
+          affected.add(dependent);
+          queue.push(dependent);
         }
       }
     }
 
-    // 3. Expand transitively via reverse deps
-    const affected = new Set(changedPackages);
-    const queue = [...changedPackages];
+    return new Map(
+      [...includedBy.entries()].map(([key, value]) => [key, [...value].sort()]),
+    );
+  }
+
+  resolve(changedFiles: string[], allTestFiles: string[]): string[] {
+    const { directMatches } = this.matchChangedPackages(changedFiles);
+    const dependents = this.buildDependents();
+    const affected = new Set<string>(directMatches.keys());
+    const queue = [...directMatches.keys()];
+
     while (queue.length > 0) {
       const pkg = queue.pop()!;
       const deps = dependents.get(pkg) ?? [];
@@ -175,7 +247,6 @@ export class MoonResolver implements DependencyResolver {
       }
     }
 
-    // 4. Collect test files
     const affectedTests = new Set<string>();
     for (const path of affected) {
       const pkg = this.packages.get(path);
@@ -188,5 +259,42 @@ export class MoonResolver implements DependencyResolver {
 
     const testSet = new Set(allTestFiles);
     return Array.from(affectedTests).filter((t) => testSet.has(t));
+  }
+
+  explain(changedFiles: string[], targets: AffectedTarget[]): AffectedReport {
+    const { directMatches, unmatched } = this.matchChangedPackages(changedFiles);
+    const includedBy = this.expandAffectedPackages(directMatches);
+    const affectedPackages = new Set<string>([
+      ...directMatches.keys(),
+      ...includedBy.keys(),
+    ]);
+    const targetsByTaskId = new Map<string, AffectedTarget[]>();
+
+    for (const target of targets) {
+      const existing = targetsByTaskId.get(target.taskId);
+      if (existing) {
+        existing.push(target);
+      } else {
+        targetsByTaskId.set(target.taskId, [target]);
+      }
+    }
+
+    const selected = [...affectedPackages].flatMap((taskId) => {
+      const matchedTargets = targetsByTaskId.get(taskId) ?? [];
+      const direct = directMatches.has(taskId);
+      const parents = includedBy.get(taskId) ?? [];
+      return matchedTargets.map((target) =>
+        createAffectedSelection(target, {
+          direct,
+          includedBy: direct ? [] : parents,
+          matchedPaths: direct ? (directMatches.get(taskId) ?? []) : [],
+          matchReasons: direct
+            ? [`package:${taskId}`]
+            : parents.map((parent) => `dependency:${parent}`),
+        }),
+      );
+    });
+
+    return buildAffectedReport("moon", changedFiles, selected, unmatched);
   }
 }

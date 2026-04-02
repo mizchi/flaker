@@ -45,4 +45,30 @@ describe("SimpleResolver", () => {
     expect(result).toContain("tests/auth/oauth/github.spec.ts");
     expect(result).not.toContain("tests/core/utils.spec.ts");
   });
+
+  it("explains direct matches and unmatched paths", async () => {
+    const resolver = new SimpleResolver();
+    const report = await resolver.explain?.(
+      ["src/auth/login.ts", "docs/notes.md"],
+      [
+        {
+          spec: "tests/auth/login.spec.ts",
+          taskId: "auth-login",
+          filter: null,
+        },
+        {
+          spec: "tests/auth/register.spec.ts",
+          taskId: "auth-register",
+          filter: null,
+        },
+      ],
+    );
+
+    expect(report?.matched.map((entry) => entry.taskId)).toEqual([
+      "auth-login",
+      "auth-register",
+    ]);
+    expect(report?.selected.every((entry) => entry.direct)).toBe(true);
+    expect(report?.unmatched).toEqual(["docs/notes.md"]);
+  });
 });

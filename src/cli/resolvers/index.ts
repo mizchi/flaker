@@ -20,6 +20,7 @@ export function createResolver(
   rootDir: string,
 ): DependencyResolver {
   switch (config.resolver) {
+    case "git":
     case "simple":
       return new SimpleResolver();
     case "bitflow":

@@ -140,4 +140,45 @@ describe("WorkspaceResolver", () => {
     const result = resolver.resolve(["packages/core/src/index.ts"], allTests);
     expect(result.sort()).toEqual(allTests.sort());
   });
+
+  it("explains direct and transitive package selection", async () => {
+    const resolver = new WorkspaceResolver(tmpDir);
+    const report = await resolver.explain?.(
+      ["packages/core/src/index.ts", "README.md"],
+      [
+        {
+          spec: "packages/core/tests/core.test.ts",
+          taskId: "@app/core",
+          filter: null,
+        },
+        {
+          spec: "packages/utils/tests/utils.test.ts",
+          taskId: "@app/utils",
+          filter: null,
+        },
+        {
+          spec: "packages/app/tests/app.test.ts",
+          taskId: "@app/app",
+          filter: null,
+        },
+      ],
+    );
+
+    expect(
+      report?.matched.map((entry) => entry.taskId),
+    ).toEqual(["@app/core"]);
+    expect(
+      report?.selected.find((entry) => entry.taskId === "@app/utils"),
+    ).toMatchObject({
+      direct: false,
+      includedBy: ["@app/core"],
+    });
+    expect(
+      report?.selected.find((entry) => entry.taskId === "@app/app"),
+    ).toMatchObject({
+      direct: false,
+      includedBy: ["@app/utils"],
+    });
+    expect(report?.unmatched).toEqual(["README.md"]);
+  });
 });

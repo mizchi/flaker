@@ -1,6 +1,14 @@
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
-import type { DependencyResolver } from "./types.js";
+import {
+  buildAffectedReport,
+  createAffectedSelection,
+} from "./affected-report.js";
+import type {
+  AffectedReport,
+  AffectedTarget,
+  DependencyResolver,
+} from "./types.js";
 
 interface PackageInfo {
   name: string;
@@ -116,35 +124,103 @@ export class WorkspaceResolver implements DependencyResolver {
     }
   }
 
-  resolve(changedFiles: string[], allTestFiles: string[]): string[] {
-    // 1. Find packages containing changed files
-    const changedPackages = new Set<string>();
+  private buildDependents(): Map<string, string[]> {
+    const dependents = new Map<string, string[]>();
+    for (const [name, pkg] of this.packages) {
+      for (const dep of pkg.dependencies) {
+        const existing = dependents.get(dep);
+        if (existing) {
+          existing.push(name);
+        } else {
+          dependents.set(dep, [name]);
+        }
+      }
+    }
+    return dependents;
+  }
+
+  private matchChangedPackages(changedFiles: string[]): {
+    directMatches: Map<string, string[]>;
+    unmatched: string[];
+  } {
+    const directMatches = new Map<string, string[]>();
+    const unmatched: string[] = [];
+
     for (const file of changedFiles) {
+      const matchedPackages: string[] = [];
       for (const [name, pkg] of this.packages) {
         if (file.startsWith(pkg.dir + "/") || file.startsWith(pkg.dir + "\\")) {
-          changedPackages.add(name);
+          matchedPackages.push(name);
+        }
+      }
+
+      if (matchedPackages.length === 0) {
+        unmatched.push(file);
+        continue;
+      }
+
+      for (const packageName of matchedPackages) {
+        const existing = directMatches.get(packageName);
+        if (existing) {
+          existing.push(file);
+        } else {
+          directMatches.set(packageName, [file]);
         }
       }
     }
 
-    // 2. Expand transitively: find all packages that depend on changed packages
-    const affected = new Set(changedPackages);
-    let expanded = true;
-    while (expanded) {
-      expanded = false;
-      for (const [name, pkg] of this.packages) {
-        if (affected.has(name)) continue;
-        for (const dep of pkg.dependencies) {
-          if (affected.has(dep)) {
-            affected.add(name);
-            expanded = true;
-            break;
-          }
+    return {
+      directMatches,
+      unmatched,
+    };
+  }
+
+  private expandAffectedPackages(
+    directMatches: Map<string, string[]>,
+  ): Map<string, string[]> {
+    const dependents = this.buildDependents();
+    const affected = new Set(directMatches.keys());
+    const includedBy = new Map<string, Set<string>>();
+    const queue = [...directMatches.keys()];
+
+    for (let index = 0; index < queue.length; index++) {
+      const current = queue[index];
+      for (const dependent of dependents.get(current) ?? []) {
+        let parents = includedBy.get(dependent);
+        if (!parents) {
+          parents = new Set<string>();
+          includedBy.set(dependent, parents);
+        }
+        parents.add(current);
+
+        if (!affected.has(dependent)) {
+          affected.add(dependent);
+          queue.push(dependent);
         }
       }
     }
 
-    // 3. Collect test files from affected packages
+    return new Map(
+      [...includedBy.entries()].map(([key, value]) => [key, [...value].sort()]),
+    );
+  }
+
+  resolve(changedFiles: string[], allTestFiles: string[]): string[] {
+    const { directMatches } = this.matchChangedPackages(changedFiles);
+    const affected = new Set<string>(directMatches.keys());
+    const queue = [...directMatches.keys()];
+    const dependents = this.buildDependents();
+
+    for (let index = 0; index < queue.length; index++) {
+      const current = queue[index];
+      for (const dependent of dependents.get(current) ?? []) {
+        if (!affected.has(dependent)) {
+          affected.add(dependent);
+          queue.push(dependent);
+        }
+      }
+    }
+
     const affectedTests = new Set<string>();
     for (const name of affected) {
       const pkg = this.packages.get(name);
@@ -155,8 +231,45 @@ export class WorkspaceResolver implements DependencyResolver {
       }
     }
 
-    // 4. Filter against allTestFiles
     const testSet = new Set(allTestFiles);
     return Array.from(affectedTests).filter((t) => testSet.has(t));
+  }
+
+  explain(changedFiles: string[], targets: AffectedTarget[]): AffectedReport {
+    const { directMatches, unmatched } = this.matchChangedPackages(changedFiles);
+    const includedBy = this.expandAffectedPackages(directMatches);
+    const affectedPackages = new Set<string>([
+      ...directMatches.keys(),
+      ...includedBy.keys(),
+    ]);
+    const targetsByTaskId = new Map<string, AffectedTarget[]>();
+
+    for (const target of targets) {
+      const existing = targetsByTaskId.get(target.taskId);
+      if (existing) {
+        existing.push(target);
+      } else {
+        targetsByTaskId.set(target.taskId, [target]);
+      }
+    }
+
+    const selected = [...affectedPackages].flatMap((taskId) => {
+      const matchedTargets = targetsByTaskId.get(taskId) ?? [];
+      const pkg = this.packages.get(taskId);
+      const direct = directMatches.has(taskId);
+      const parents = includedBy.get(taskId) ?? [];
+      return matchedTargets.map((target) =>
+        createAffectedSelection(target, {
+          direct,
+          includedBy: direct ? [] : parents,
+          matchedPaths: direct ? (directMatches.get(taskId) ?? []) : [],
+          matchReasons: direct
+            ? [`package:${pkg?.dir ?? taskId}`]
+            : parents.map((parent) => `dependency:${parent}`),
+        }),
+      );
+    });
+
+    return buildAffectedReport("workspace", changedFiles, selected, unmatched);
   }
 }

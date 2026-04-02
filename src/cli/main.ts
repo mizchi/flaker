@@ -24,10 +24,15 @@ import { runEval, formatEvalReport } from "./commands/eval.js";
 import { runReason, formatReasoningReport } from "./commands/reason.js";
 import { runSelfEval, formatSelfEvalReport } from "./commands/self-eval.js";
 import { runDoctor, formatDoctorReport } from "./commands/doctor.js";
+import {
+  runAffected,
+  formatAffectedReport,
+} from "./commands/affected.js";
 import { DuckDBStore } from "./storage/duckdb.js";
 import { createRunner } from "./runners/index.js";
 import { resolveTestIdentity } from "./identity.js";
 import { toStoredTestResult } from "./storage/test-result-mapper.js";
+import { createResolver } from "./resolvers/index.js";
 import {
   formatQuarantineManifestReport,
   loadQuarantineManifest,
@@ -384,6 +389,55 @@ program
       } finally {
         await store.close();
       }
+    },
+  );
+
+// --- affected ---
+program
+  .command("affected [paths...]")
+  .description("Explain affected test selection for changed files")
+  .option("--changed <files>", "Comma-separated list of changed files")
+  .option("--json", "Output JSON report")
+  .option("--markdown", "Output Markdown report")
+  .action(
+    async (
+      paths: string[],
+      opts: { changed?: string; json?: boolean; markdown?: boolean },
+    ) => {
+      if (opts.json && opts.markdown) {
+        console.error("Error: choose either --json or --markdown");
+        process.exit(1);
+      }
+
+      const changedFiles = [
+        ...paths,
+        ...(opts.changed
+          ? opts.changed
+              .split(",")
+              .map((value) => value.trim())
+              .filter(Boolean)
+          : []),
+      ];
+
+      if (changedFiles.length === 0) {
+        console.error("Error: at least one changed file is required");
+        process.exit(1);
+      }
+
+      const cwd = process.cwd();
+      const config = loadConfig(cwd);
+      const resolver = createResolver(config.affected, cwd);
+      const listedTests = await listRunnerTests(cwd, config.runner);
+      const report = await runAffected({
+        resolverName: config.affected.resolver,
+        resolver,
+        changedFiles,
+        listedTests,
+      });
+
+      console.log(
+        formatAffectedReport(report, opts.json ? "json" : "markdown"),
+      );
     },
   );
 

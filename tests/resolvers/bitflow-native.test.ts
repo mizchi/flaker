@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { loadCore } from "../../src/cli/core/loader.js";
+import { BitflowNativeResolver } from "../../src/cli/resolvers/bitflow-native.js";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 describe("BitflowNativeResolver", () => {
   it("resolves affected targets via MoonBit core (no CLI)", async () => {
@@ -96,5 +100,41 @@ describe("BitflowNativeResolver", () => {
     ].join("\n");
     const result = core.resolveAffected(workflow, ["src\\auth\\login.ts"]);
     expect(result).toContain("test-auth");
+  });
+
+  it("explains direct and dependency-expanded bitflow tasks", async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), "bitflow-native-"));
+    try {
+      const configPath = join(tmpDir, "workflow.star");
+      writeFileSync(
+        configPath,
+        [
+          'workflow(name="ci")',
+          'node(id="lib", depends_on=[])',
+          'node(id="app", depends_on=["lib"])',
+          'task(id="lib", node="lib", cmd="test", needs=[], srcs=["src/lib/**"])',
+          'task(id="app", node="app", cmd="test", needs=["lib"], srcs=["src/app/**"])',
+        ].join("\n"),
+      );
+      const resolver = new BitflowNativeResolver(configPath);
+      const report = await resolver.explain?.(
+        ["src/lib/core.ts", "docs/notes.md"],
+        [
+          { spec: "tests/lib.spec.ts", taskId: "lib", filter: null },
+          { spec: "tests/app.spec.ts", taskId: "app", filter: null },
+        ],
+      );
+
+      expect(report?.matched.map((entry) => entry.taskId)).toEqual(["lib"]);
+      expect(
+        report?.selected.find((entry) => entry.taskId === "app"),
+      ).toMatchObject({
+        direct: false,
+        includedBy: ["lib"],
+      });
+      expect(report?.unmatched).toEqual(["docs/notes.md"]);
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });

@@ -119,4 +119,45 @@ describe("MoonResolver", () => {
       "src/extra/extra_test.mbt",
     ]);
   });
+
+  it("explains direct and transitive moon package selection", async () => {
+    const resolver = new MoonResolver(tmpDir);
+    const report = await resolver.explain?.(
+      ["src/types/types.mbt", "README.md"],
+      [
+        {
+          spec: "src/types/types_test.mbt",
+          taskId: "src/types",
+          filter: null,
+        },
+        {
+          spec: "src/core/core_test.mbt",
+          taskId: "src/core",
+          filter: null,
+        },
+        {
+          spec: "src/app/app_test.mbt",
+          taskId: "src/app",
+          filter: null,
+        },
+      ],
+    );
+
+    expect(report?.matched.map((entry) => entry.taskId)).toEqual([
+      "src/types",
+    ]);
+    expect(
+      report?.selected.find((entry) => entry.taskId === "src/core"),
+    ).toMatchObject({
+      direct: false,
+      includedBy: ["src/types"],
+    });
+    expect(
+      report?.selected.find((entry) => entry.taskId === "src/app"),
+    ).toMatchObject({
+      direct: false,
+      includedBy: ["src/core"],
+    });
+    expect(report?.unmatched).toEqual(["README.md"]);
+  });
 });
