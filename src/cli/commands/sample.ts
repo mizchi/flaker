@@ -29,6 +29,30 @@ export interface SampleOpts {
   listedTests?: TestId[];
 }
 
+export interface SamplingSummary {
+  strategy: SamplingMode;
+  requestedCount: number | null;
+  requestedPercentage: number | null;
+  seed: number;
+  changedFiles: string[] | null;
+  candidateCount: number;
+  selectedCount: number;
+  sampleRatio: number | null;
+  estimatedSavedTests: number;
+  estimatedSavedMinutes: number | null;
+  fallbackReason: string | null;
+}
+
+export interface SamplingConfidenceEstimate {
+  ciPassWhenLocalPassRate: number | null;
+}
+
+export interface SamplePlan {
+  sampled: TestMeta[];
+  allTests: TestMeta[];
+  summary: SamplingSummary;
+}
+
 function toCoreVariantEntries(
   variant?: Record<string, string> | null,
 ): StableVariantEntryInput[] | null {
@@ -81,10 +105,43 @@ function buildListedTestIndex(listedTests: TestId[]): Map<string, TestId[]> {
   return index;
 }
 
+function filterMetaToListedTests(
+  tests: TestMeta[],
+  listedTests: TestId[],
+): TestMeta[] {
+  if (listedTests.length === 0) {
+    return tests;
+  }
+
+  const remainingCounts = new Map<string, number>();
+  for (const test of listedTests) {
+    const key = createListedTestKey(test);
+    remainingCounts.set(key, (remainingCounts.get(key) ?? 0) + 1);
+  }
+
+  const filtered: TestMeta[] = [];
+  for (const test of tests) {
+    const key = createMetaKey(test);
+    const remaining = remainingCounts.get(key) ?? 0;
+    if (remaining <= 0) {
+      continue;
+    }
+    filtered.push(test);
+    remainingCounts.set(key, remaining - 1);
+  }
+  return filtered;
+}
+
 export async function runSample(opts: SampleOpts): Promise<TestMeta[]> {
+  const plan = await planSample(opts);
+  return plan.sampled;
+}
+
+export async function planSample(opts: SampleOpts): Promise<SamplePlan> {
   const core = await loadCore();
   const listedTests = opts.listedTests ?? [];
-  let allTests = await buildSamplingMeta(opts.store, listedTests, core);
+  const meta = await buildSamplingMeta(opts.store, listedTests, core);
+  let allTests = meta.tests;
   if (opts.skipQuarantined) {
     const quarantined = await opts.store.queryQuarantined();
     const qSet = new Set(quarantined.map((q) => q.testId));
@@ -114,6 +171,7 @@ export async function runSample(opts: SampleOpts): Promise<TestMeta[]> {
   }
 
   const seed = opts.seed ?? Date.now();
+  let sampled: TestMeta[];
 
   if (opts.mode === "affected") {
     if (!opts.resolver || !opts.changedFiles) {
@@ -124,10 +182,8 @@ export async function runSample(opts: SampleOpts): Promise<TestMeta[]> {
       opts.changedFiles,
       allSuites,
     );
-    return allTests.filter((test) => affectedSuites.includes(test.suite));
-  }
-
-  if (opts.mode === "hybrid") {
+    sampled = allTests.filter((test) => affectedSuites.includes(test.suite));
+  } else if (opts.mode === "hybrid") {
     if (!opts.resolver || !opts.changedFiles) {
       throw new Error("hybrid mode requires resolver and changedFiles");
     }
@@ -136,20 +192,99 @@ export async function runSample(opts: SampleOpts): Promise<TestMeta[]> {
       opts.changedFiles,
       allSuites,
     );
-    return core.sampleHybrid(allTests, affectedSuites, count, seed);
+    sampled = core.sampleHybrid(allTests, affectedSuites, count, seed);
+  } else if (opts.mode === "weighted") {
+    sampled = core.sampleWeighted(allTests, count, seed);
+  } else {
+    sampled = core.sampleRandom(allTests, count, seed);
   }
 
-  if (opts.mode === "weighted") {
-    return core.sampleWeighted(allTests, count, seed);
+  return {
+    sampled,
+    allTests,
+    summary: buildSamplingSummary({
+      strategy: opts.mode,
+      requestedCount: opts.count ?? null,
+      requestedPercentage: opts.percentage ?? null,
+      seed,
+      changedFiles: opts.changedFiles ?? null,
+      allTests,
+      sampled,
+      fallbackReason: meta.fallbackReason,
+    }),
+  };
+}
+
+interface BuildSamplingSummaryOpts {
+  strategy: SamplingMode;
+  requestedCount: number | null;
+  requestedPercentage: number | null;
+  seed: number;
+  changedFiles: string[] | null;
+  allTests: TestMeta[];
+  sampled: TestMeta[];
+  fallbackReason: string | null;
+}
+
+function roundMetric(value: number): number {
+  return Number(value.toFixed(1));
+}
+
+function buildSamplingSummary(opts: BuildSamplingSummaryOpts): SamplingSummary {
+  const totalDurationMs = opts.allTests.reduce(
+    (sum, test) => sum + test.avg_duration_ms,
+    0,
+  );
+  const selectedDurationMs = opts.sampled.reduce(
+    (sum, test) => sum + test.avg_duration_ms,
+    0,
+  );
+  const candidateCount = opts.allTests.length;
+  const selectedCount = opts.sampled.length;
+  const estimatedSavedMinutes = totalDurationMs > selectedDurationMs
+    ? roundMetric((totalDurationMs - selectedDurationMs) / 60_000)
+    : 0;
+  return {
+    strategy: opts.strategy,
+    requestedCount: opts.requestedCount,
+    requestedPercentage: opts.requestedPercentage,
+    seed: opts.seed,
+    changedFiles: opts.changedFiles,
+    candidateCount,
+    selectedCount,
+    sampleRatio: candidateCount > 0
+      ? roundMetric((selectedCount / candidateCount) * 100)
+      : null,
+    estimatedSavedTests: Math.max(candidateCount - selectedCount, 0),
+    estimatedSavedMinutes,
+    fallbackReason: opts.fallbackReason,
+  };
+}
+
+export function formatSamplingSummary(
+  summary: SamplingSummary,
+  confidence?: SamplingConfidenceEstimate,
+): string {
+  const lines = [
+    "# Sampling Summary",
+    "",
+    `  Strategy:                 ${summary.strategy}`,
+    `  Selected tests:           ${summary.selectedCount} / ${summary.candidateCount}${summary.sampleRatio != null ? ` (${summary.sampleRatio}%)` : ""}`,
+    `  Estimated saved tests:    ${summary.estimatedSavedTests}`,
+    `  Estimated saved minutes:  ${summary.estimatedSavedMinutes ?? "N/A"}`,
+    `  CI pass when local pass:  ${confidence?.ciPassWhenLocalPassRate != null ? `${confidence.ciPassWhenLocalPassRate}%` : "N/A"}`,
+  ];
+  if (summary.fallbackReason) {
+    lines.push(`  Fallback reason:          ${summary.fallbackReason}`);
   }
-  return core.sampleRandom(allTests, count, seed);
+  return lines.join("\n");
 }
 
 async function buildSamplingMeta(
   store: MetricStore,
   listedTests: TestId[],
   core: MetriciCore,
-): Promise<TestMeta[]> {
+): Promise<{ tests: TestMeta[]; fallbackReason: string | null }> {
   const rows = await store.raw<{
     suite: string;
     test_name: string;
@@ -201,5 +336,14 @@ async function buildSamplingMeta(
     test_id: test.testId,
   }));
 
-  return core.buildSamplingMeta(historyRows, listedInputs);
+  return {
+    tests: filterMetaToListedTests(
+      core.buildSamplingMeta(historyRows, listedInputs),
+      listedTests,
+    ),
+    fallbackReason:
+      rows.length === 0 && listedTests.length > 0
+        ? "cold-start-listed-tests"
+        : null,
+  };
 }

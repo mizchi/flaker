@@ -1,6 +1,9 @@
 import type { MetricStore } from "../storage/types.js";
 import { createStableTestId } from "../identity.js";
-import { runSample } from "./sample.js";
+import {
+  planSample,
+  type SamplingSummary,
+} from "./sample.js";
 import type { SamplingMode } from "./sampling-options.js";
 import type { QuarantineManifestEntry } from "../quarantine-manifest.js";
 import type { DependencyResolver } from "../resolvers/types.js";
@@ -24,6 +27,11 @@ export interface RunOpts {
   skipQuarantined?: boolean;
   quarantineManifestEntries?: QuarantineManifestEntry[];
   cwd?: string;
+}
+
+export interface RunCommandResult extends ExecuteResult {
+  samplingSummary: SamplingSummary;
+  sampledTests: TestId[];
 }
 
 function createListedTestKey(test: TestId): string {
@@ -108,9 +116,9 @@ async function loadListedTests(
   }
 }
 
-export async function runTests(opts: RunOpts): Promise<ExecuteResult> {
+export async function runTests(opts: RunOpts): Promise<RunCommandResult> {
   const listedTests = await loadListedTests(opts.runner, opts.cwd);
-  const sampled = await runSample({
+  const plan = await planSample({
     store: opts.store,
     count: opts.count,
     percentage: opts.percentage,
@@ -126,6 +134,11 @@ export async function runTests(opts: RunOpts): Promise<ExecuteResult> {
     opts.quarantineManifestEntries && opts.quarantineManifestEntries.length > 0
       ? withQuarantineRuntime(opts.runner, opts.quarantineManifestEntries)
       : opts.runner;
-  const tests = enrichSampledTests(sampled, listedTests);
-  return orchestrate(runtimeRunner, tests, { cwd: opts.cwd });
+  const tests = enrichSampledTests(plan.sampled, listedTests);
+  const result = await orchestrate(runtimeRunner, tests, { cwd: opts.cwd });
+  return {
+    ...result,
+    samplingSummary: plan.summary,
+    sampledTests: tests,
+  };
 }

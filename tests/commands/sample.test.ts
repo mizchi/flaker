@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
 import type { TestResult, WorkflowRun } from "../../src/cli/storage/types.js";
-import { runSample } from "../../src/cli/commands/sample.js";
+import {
+  formatSamplingSummary,
+  planSample,
+  runSample,
+} from "../../src/cli/commands/sample.js";
 import type { DependencyResolver } from "../../src/cli/resolvers/types.js";
 
 describe("sample command", () => {
@@ -214,6 +218,63 @@ describe("sample command without history", () => {
       "third_party/git/t/t7004-tag.sh",
       "third_party/git/t/t7030-verify-tag.sh",
     ]);
+  });
+
+  it("marks listedTests cold start as a fallback reason", async () => {
+    const plan = await planSample({
+      store,
+      mode: "random",
+      count: 2,
+      seed: 42,
+      listedTests: [
+        {
+          suite: "third_party/git/t/t7004-tag.sh",
+          testName: "t7004-tag.sh",
+          taskId: "git-compat",
+        },
+        {
+          suite: "third_party/git/t/t7030-verify-tag.sh",
+          testName: "t7030-verify-tag.sh",
+          taskId: "git-compat",
+        },
+        {
+          suite: "third_party/git/t/t7031-verify-tag-signed-ssh.sh",
+          testName: "t7031-verify-tag-signed-ssh.sh",
+          taskId: "git-compat",
+        },
+      ],
+    });
+
+    expect(plan.summary.candidateCount).toBe(3);
+    expect(plan.summary.selectedCount).toBe(2);
+    expect(plan.summary.fallbackReason).toBe("cold-start-listed-tests");
+  });
+
+  it("formats a human-readable sampling summary", () => {
+    const output = formatSamplingSummary(
+      {
+        strategy: "hybrid",
+        requestedCount: 25,
+        requestedPercentage: null,
+        seed: 42,
+        changedFiles: ["src/cmd/bit/verify_tag.mbt"],
+        candidateCount: 100,
+        selectedCount: 15,
+        sampleRatio: 15,
+        estimatedSavedTests: 85,
+        estimatedSavedMinutes: 12.3,
+        fallbackReason: "cold-start-listed-tests",
+      },
+      {
+        ciPassWhenLocalPassRate: 97.2,
+      },
+    );
+
+    expect(output).toContain("Selected tests:           15 / 100 (15%)");
+    expect(output).toContain("Estimated saved tests:    85");
+    expect(output).toContain("Estimated saved minutes:  12.3");
+    expect(output).toContain("CI pass when local pass:  97.2%");
+    expect(output).toContain("Fallback reason:          cold-start-listed-tests");
   });
 
   it("supports hybrid mode from listedTests on cold start", async () => {

@@ -194,6 +194,8 @@ describe("run command", () => {
       suite: "tests/auth.spec.ts",
       testName: "auth works",
     });
+    expect(result.samplingSummary.selectedCount).toBe(1);
+    expect(result.samplingSummary.candidateCount).toBe(2);
   });
 
   it("supports hybrid mode in runTests", async () => {
@@ -275,6 +277,8 @@ describe("run command", () => {
       ]),
     );
     expect(result.results).toHaveLength(2);
+    expect(result.samplingSummary.selectedCount).toBe(2);
+    expect(result.samplingSummary.candidateCount).toBe(3);
   });
 
   it("enriches sampled tests by stable test_id when suite and test name collide", async () => {
