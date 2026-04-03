@@ -1,5 +1,5 @@
 import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { SCHEMA_DDL, FLAKY_QUERY, CO_FAILURE_QUERY } from "./schema.js";
 import { createStableTestId, resolveTestIdentity } from "../identity.js";
 import type {
@@ -19,6 +19,8 @@ import type {
   CommitChange,
   CoFailureResult,
   CoFailureQueryOpts,
+  ExportResult,
+  ImportResult,
 } from "./types.js";
 
 export class DuckDBStore implements MetricStore {
@@ -506,6 +508,100 @@ export class DuckDBStore implements MetricStore {
       boosts.set(cf.testId, Math.max(existing, cf.coFailureRate));
     }
     return boosts;
+  }
+
+  async exportRunToParquet(workflowRunId: number, outputDir: string): Promise<ExportResult> {
+    mkdirSync(outputDir, { recursive: true });
+
+    const wrPath = join(outputDir, `workflow_run_${workflowRunId}.parquet`);
+    const trPath = join(outputDir, `test_results_${workflowRunId}.parquet`);
+    const ccPath = join(outputDir, `commit_changes_${workflowRunId}.parquet`);
+
+    // Get commit_sha for this run
+    const [run] = await this.all(
+      `SELECT commit_sha FROM workflow_runs WHERE id = ?`,
+      [workflowRunId],
+    );
+    if (!run) throw new Error(`Workflow run ${workflowRunId} not found`);
+    const commitSha = run.commit_sha;
+
+    // Export workflow_runs
+    await this.run(
+      `COPY (SELECT * FROM workflow_runs WHERE id = ${workflowRunId}) TO '${wrPath}' (FORMAT PARQUET)`,
+    );
+
+    // Export test_results for this run
+    const [trCount] = await this.all(
+      `SELECT COUNT(*)::INTEGER AS cnt FROM test_results WHERE workflow_run_id = ?`,
+      [workflowRunId],
+    );
+    await this.run(
+      `COPY (SELECT * FROM test_results WHERE workflow_run_id = ${workflowRunId}) TO '${trPath}' (FORMAT PARQUET)`,
+    );
+
+    // Export commit_changes for this commit
+    const [ccCount] = await this.all(
+      `SELECT COUNT(*)::INTEGER AS cnt FROM commit_changes WHERE commit_sha = ?`,
+      [commitSha],
+    );
+    await this.run(
+      `COPY (SELECT * FROM commit_changes WHERE commit_sha = '${commitSha}') TO '${ccPath}' (FORMAT PARQUET)`,
+    );
+
+    return {
+      testResultsCount: trCount.cnt,
+      commitChangesCount: ccCount.cnt,
+      workflowRunPath: wrPath,
+      testResultsPath: trPath,
+      commitChangesPath: ccPath,
+    };
+  }
+
+  async importFromParquetDir(inputDir: string): Promise<ImportResult> {
+    const { readdirSync } = await import("node:fs");
+    const files = readdirSync(inputDir).filter((f) => f.endsWith(".parquet"));
+
+    // Sort: workflow_run_ first, then commit_changes_, then test_results_
+    // (test_results has FK to workflow_runs)
+    const priorityOrder = (name: string): number => {
+      if (name.startsWith("workflow_run_")) return 0;
+      if (name.startsWith("commit_changes_")) return 1;
+      if (name.startsWith("test_results_")) return 2;
+      return 3;
+    };
+    files.sort((a, b) => priorityOrder(a) - priorityOrder(b));
+
+    let workflowRunsImported = 0;
+    let testResultsImported = 0;
+    let commitChangesImported = 0;
+
+    for (const file of files) {
+      const filePath = join(inputDir, file);
+      if (file.startsWith("workflow_run_")) {
+        const [before] = await this.all("SELECT COUNT(*)::INTEGER AS cnt FROM workflow_runs");
+        await this.exec(
+          `INSERT OR IGNORE INTO workflow_runs SELECT * FROM read_parquet('${filePath}')`,
+        );
+        const [after] = await this.all("SELECT COUNT(*)::INTEGER AS cnt FROM workflow_runs");
+        workflowRunsImported += after.cnt - before.cnt;
+      } else if (file.startsWith("test_results_")) {
+        const [before] = await this.all("SELECT COUNT(*)::INTEGER AS cnt FROM test_results");
+        await this.exec(
+          `INSERT OR IGNORE INTO test_results SELECT * FROM read_parquet('${filePath}')`,
+        );
+        const [after] = await this.all("SELECT COUNT(*)::INTEGER AS cnt FROM test_results");
+        testResultsImported += after.cnt - before.cnt;
+      } else if (file.startsWith("commit_changes_")) {
+        const [before] = await this.all("SELECT COUNT(*)::INTEGER AS cnt FROM commit_changes");
+        await this.exec(
+          `INSERT OR IGNORE INTO commit_changes SELECT * FROM read_parquet('${filePath}')`,
+        );
+        const [after] = await this.all("SELECT COUNT(*)::INTEGER AS cnt FROM commit_changes");
+        commitChangesImported += after.cnt - before.cnt;
+      }
+    }
+
+    return { workflowRunsImported, testResultsImported, commitChangesImported };
   }
 
   // Private helpers

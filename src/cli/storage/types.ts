@@ -155,6 +155,20 @@ export interface CoFailureQueryOpts {
   minCoRuns?: number;
 }
 
+export interface ExportResult {
+  testResultsCount: number;
+  commitChangesCount: number;
+  workflowRunPath: string;
+  testResultsPath: string;
+  commitChangesPath: string;
+}
+
+export interface ImportResult {
+  workflowRunsImported: number;
+  testResultsImported: number;
+  commitChangesImported: number;
+}
+
 export interface MetricStore {
   initialize(): Promise<void>;
   close(): Promise<void>;
@@ -178,4 +192,6 @@ export interface MetricStore {
   hasCommitChanges(commitSha: string): Promise<boolean>;
   queryCoFailures(opts: CoFailureQueryOpts): Promise<CoFailureResult[]>;
   getCoFailureBoosts(changedFiles: string[], opts?: CoFailureQueryOpts): Promise<Map<string, number>>;
+  exportRunToParquet(workflowRunId: number, outputDir: string): Promise<ExportResult>;
+  importFromParquetDir(inputDir: string): Promise<ImportResult>;
 }
