@@ -375,8 +375,9 @@ program
   .option("--percentage <n>", "Percentage of tests to sample")
   .option("--skip-quarantined", "Exclude quarantined tests")
   .option("--changed <files>", "Comma-separated list of changed files (for affected/hybrid)")
+  .option("--co-failure-days <days>", "Co-failure analysis window in days (default: 90)")
   .action(
-    async (opts: { strategy: string; count?: string; percentage?: string; skipQuarantined?: boolean; changed?: string }) => {
+    async (opts: { strategy: string; count?: string; percentage?: string; skipQuarantined?: boolean; changed?: string; coFailureDays?: string }) => {
       const config = loadConfig(process.cwd());
       const store = new DuckDBStore(resolve(config.storage.path));
       await store.initialize();
@@ -406,6 +407,7 @@ program
           changedFiles,
           quarantineManifestEntries: manifest?.entries,
           listedTests,
+          coFailureDays: opts.coFailureDays ? parseInt(opts.coFailureDays, 10) : undefined,
         });
         await recordSamplingRunFromSummary(store, {
           commitSha: resolveCurrentCommitSha(process.cwd()),
@@ -436,11 +438,12 @@ program
   .option("--count <n>", "Number of tests to run")
   .option("--percentage <n>", "Percentage of tests to run")
   .option("--changed <files>", "Comma-separated list of changed files (for affected/hybrid)")
+  .option("--co-failure-days <days>", "Co-failure analysis window in days (default: 90)")
   .option("--runner <runner>", "Runner type: direct or actrun", "direct")
   .option("--retry", "Retry failed tests (actrun only)")
   .option("--skip-quarantined", "Exclude quarantined tests")
   .action(
-    async (opts: { strategy: string; count?: string; percentage?: string; changed?: string; runner: string; retry?: boolean; skipQuarantined?: boolean }) => {
+    async (opts: { strategy: string; count?: string; percentage?: string; changed?: string; coFailureDays?: string; runner: string; retry?: boolean; skipQuarantined?: boolean }) => {
       const cwd = process.cwd();
       const config = loadConfig(cwd);
       const store = new DuckDBStore(resolve(config.storage.path));
@@ -523,6 +526,7 @@ program
           skipQuarantined: opts.skipQuarantined,
           quarantineManifestEntries: manifest?.entries,
           cwd,
+          coFailureDays: opts.coFailureDays ? parseInt(opts.coFailureDays, 10) : undefined,
         });
         console.log(formatSamplingSummary(runResult.samplingSummary, {
           ciPassWhenLocalPassRate: kpi.passSignal.rate,

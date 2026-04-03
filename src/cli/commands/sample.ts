@@ -27,6 +27,7 @@ export interface SampleOpts {
   skipQuarantined?: boolean;
   quarantineManifestEntries?: QuarantineManifestEntry[];
   listedTests?: TestId[];
+  coFailureDays?: number;
 }
 
 export interface SamplingSummary {
@@ -149,7 +150,10 @@ export async function planSample(opts: SampleOpts): Promise<SamplePlan> {
 
   // Apply co-failure boosts if changedFiles are provided
   if (opts.changedFiles && opts.changedFiles.length > 0) {
-    const boosts = await opts.store.getCoFailureBoosts(opts.changedFiles);
+    const boosts = await opts.store.getCoFailureBoosts(
+      opts.changedFiles,
+      { windowDays: opts.coFailureDays ?? 90 },
+    );
     if (boosts.size > 0) {
       allTests = allTests.map((test) => {
         const key = test.test_id ?? createStableTestId({

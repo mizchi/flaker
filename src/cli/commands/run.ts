@@ -27,6 +27,7 @@ export interface RunOpts {
   skipQuarantined?: boolean;
   quarantineManifestEntries?: QuarantineManifestEntry[];
   cwd?: string;
+  coFailureDays?: number;
 }
 
 export interface RunCommandResult extends ExecuteResult {
@@ -129,6 +130,7 @@ export async function runTests(opts: RunOpts): Promise<RunCommandResult> {
     skipQuarantined: opts.skipQuarantined,
     quarantineManifestEntries: opts.quarantineManifestEntries,
     listedTests,
+    coFailureDays: opts.coFailureDays,
   });
   const runtimeRunner =
     opts.quarantineManifestEntries && opts.quarantineManifestEntries.length > 0
