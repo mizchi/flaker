@@ -56,5 +56,6 @@ export function formatSweepReport(reports: EvalFixtureReport[]): string {
     );
   }
 
+  lines.push("", `Gain = recall improvement of best strategy over Random.`);
   return lines.join("\n");
 }

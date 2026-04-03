@@ -658,7 +658,10 @@ program
 // --- report ---
 const reportCommand = program
   .command("report")
-  .description("Summarize and diff normalized test reports");
+  .description("Summarize and diff normalized test reports")
+  .action(() => {
+    reportCommand.outputHelp();
+  });
 
 reportCommand
   .command("summarize")
@@ -1132,16 +1135,31 @@ program
   .option("--seed <n>", "Random seed", "42")
   .option("--sweep", "Sweep co-failure strength 0.0-1.0")
   .action(async (opts) => {
-    const baseConfig = {
-      testCount: parseInt(opts.tests, 10),
-      commitCount: parseInt(opts.commits, 10),
-      flakyRate: parseFloat(opts.flakyRate),
-      coFailureStrength: parseFloat(opts.coFailureStrength),
-      filesPerCommit: parseInt(opts.filesPerCommit, 10),
-      testsPerFile: parseInt(opts.testsPerFile, 10),
-      samplePercentage: parseInt(opts.samplePercentage, 10),
-      seed: parseInt(opts.seed, 10),
-    };
+    // Validate inputs
+    const testCount = parseInt(opts.tests, 10);
+    const commitCount = parseInt(opts.commits, 10);
+    const flakyRate = parseFloat(opts.flakyRate);
+    const coFailureStrength = parseFloat(opts.coFailureStrength);
+    const filesPerCommit = parseInt(opts.filesPerCommit, 10);
+    const testsPerFile = parseInt(opts.testsPerFile, 10);
+    const samplePercentage = parseInt(opts.samplePercentage, 10);
+    const seed = parseInt(opts.seed, 10);
+
+    const errors: string[] = [];
+    if (!Number.isFinite(testCount) || testCount < 1) errors.push("--tests must be a positive integer");
+    if (!Number.isFinite(commitCount) || commitCount < 1) errors.push("--commits must be a positive integer");
+    if (!Number.isFinite(flakyRate) || flakyRate < 0 || flakyRate > 1) errors.push("--flaky-rate must be between 0 and 1");
+    if (!Number.isFinite(coFailureStrength) || coFailureStrength < 0 || coFailureStrength > 1) errors.push("--co-failure-strength must be between 0 and 1");
+    if (!Number.isFinite(filesPerCommit) || filesPerCommit < 1) errors.push("--files-per-commit must be a positive integer");
+    if (!Number.isFinite(testsPerFile) || testsPerFile < 1) errors.push("--tests-per-file must be a positive integer");
+    if (!Number.isFinite(samplePercentage) || samplePercentage < 1 || samplePercentage > 100) errors.push("--sample-percentage must be between 1 and 100");
+    if (!Number.isFinite(seed)) errors.push("--seed must be an integer");
+    if (errors.length > 0) {
+      console.error(errors.join("\n"));
+      process.exit(1);
+    }
+
+    const baseConfig = { testCount, commitCount, flakyRate, coFailureStrength, filesPerCommit, testsPerFile, samplePercentage, seed };
 
     if (opts.sweep) {
       const strengths = [0.0, 0.25, 0.5, 0.75, 1.0];
