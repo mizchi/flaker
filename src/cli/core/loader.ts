@@ -229,11 +229,13 @@ function sampleHybrid(meta: TestMeta[], affectedSuites: string[], count: number,
 
   // Priority 1: affected
   meta.forEach((m, i) => { if (affectedSet.has(m.suite) && !used.has(i)) { selected.push(m); used.add(i); } });
-  // Priority 2: previously failed
+  // Priority 2: co-failure correlated
+  meta.forEach((m, i) => { if ((m.co_failure_boost ?? 0) > 0 && !used.has(i)) { selected.push(m); used.add(i); } });
+  // Priority 3: previously failed
   meta.forEach((m, i) => { if (m.previously_failed && !used.has(i)) { selected.push(m); used.add(i); } });
-  // Priority 3: new
+  // Priority 4: new
   meta.forEach((m, i) => { if (m.is_new && !used.has(i)) { selected.push(m); used.add(i); } });
-  // Priority 4: weighted random for remaining
+  // Priority 5: weighted random for remaining
   if (selected.length < actualCount) {
     const remaining = meta.filter((_, i) => !used.has(i));
     const extra = sampleWeighted(remaining, actualCount - selected.length, seed);

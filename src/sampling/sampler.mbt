@@ -125,7 +125,15 @@ pub fn sample_hybrid(
     }
   }
 
-  // Priority 2: previously failed tests
+  // Priority 2: co-failure correlated tests
+  for i, m in meta {
+    if m.co_failure_boost.or(0.0) > 0.0 && !used.contains(i) {
+      selected.push(m)
+      used.set(i, true)
+    }
+  }
+
+  // Priority 3: previously failed tests
   for i, m in meta {
     if m.previously_failed && !used.contains(i) {
       selected.push(m)
@@ -133,7 +141,7 @@ pub fn sample_hybrid(
     }
   }
 
-  // Priority 3: new tests
+  // Priority 4: new tests
   for i, m in meta {
     if m.is_new && !used.contains(i) {
       selected.push(m)
@@ -141,7 +149,7 @@ pub fn sample_hybrid(
     }
   }
 
-  // Priority 4: fill remaining with weighted random
+  // Priority 5: fill remaining with weighted random
   if selected.length() < actual_count {
     let remaining : Array[@types.TestMeta] = []
     for i, m in meta {
