@@ -28,6 +28,15 @@ import {
 import { ActrunRunner } from "./runners/actrun.js";
 import { runBisect } from "./commands/bisect.js";
 import { runImport } from "./commands/import.js";
+import { loadTuningConfig, type TuningConfig } from "./eval/alpha-tuner.js";
+
+function loadTuningConfigSafe(storagePath: string): TuningConfig {
+  try {
+    return loadTuningConfig(storagePath);
+  } catch {
+    return { alpha: 1.0 };
+  }
+}
 import { runCollectLocal } from "./commands/collect-local.js";
 import { runQuery, formatQueryResult } from "./commands/query.js";
 import {
@@ -413,6 +422,7 @@ program
           quarantineManifestEntries: manifest?.entries,
           listedTests,
           coFailureDays: opts.coFailureDays ? parseInt(opts.coFailureDays, 10) : undefined,
+          coFailureAlpha: loadTuningConfigSafe(config.storage.path).alpha,
         });
         await recordSamplingRunFromSummary(store, {
           commitSha: resolveCurrentCommitSha(process.cwd()),
@@ -1182,6 +1192,86 @@ program
       await loadFixtureIntoStore(store, fixture);
       const results = await evaluateFixture(store, fixture);
       console.log(formatEvalFixtureReport({ config: baseConfig, results }));
+      await store.close();
+    }
+  });
+
+// --- tune ---
+program
+  .command("tune")
+  .description("Auto-tune co-failure alpha parameter using historical data")
+  .option("--window <days>", "Analysis window in days", "90")
+  .option("--sample-percentage <n>", "Sample percentage for evaluation", "20")
+  .option("--dry-run", "Show results without saving")
+  .action(async (opts) => {
+    const config = loadConfig(process.cwd());
+    const store = new DuckDBStore(resolve(config.storage.path));
+    await store.initialize();
+
+    try {
+      const windowDays = parseInt(opts.window, 10);
+      const samplePercentage = parseInt(opts.samplePercentage, 10);
+
+      // Get recent commits with changed files and test results
+      const commits = await store.raw<{
+        commit_sha: string;
+      }>(`SELECT DISTINCT commit_sha FROM test_results
+          WHERE created_at > CURRENT_TIMESTAMP - INTERVAL '${windowDays} days'
+          ORDER BY commit_sha`);
+
+      if (commits.length < 5) {
+        console.log("Not enough data for tuning (need at least 5 commits with test results)");
+        return;
+      }
+
+      const changedFilesPerCommit = new Map<string, string[]>();
+      const groundTruth = new Map<string, Set<string>>();
+
+      for (const { commit_sha } of commits) {
+        const changes = await store.raw<{ file_path: string }>(
+          `SELECT file_path FROM commit_changes WHERE commit_sha = ?`,
+          [commit_sha],
+        );
+        if (changes.length === 0) continue;
+        changedFilesPerCommit.set(commit_sha, changes.map((c) => c.file_path));
+
+        const failures = await store.raw<{ suite: string }>(
+          `SELECT DISTINCT suite FROM test_results
+           WHERE commit_sha = ? AND status IN ('failed', 'flaky')`,
+          [commit_sha],
+        );
+        groundTruth.set(commit_sha, new Set(failures.map((f) => f.suite)));
+      }
+
+      if (changedFilesPerCommit.size < 3) {
+        console.log("Not enough commits with change data for tuning");
+        return;
+      }
+
+      const allSuites = await store.raw<{ suite: string }>(
+        `SELECT DISTINCT suite FROM test_results`,
+      );
+      const sampleCount = Math.round(allSuites.length * (samplePercentage / 100));
+
+      const { tuneAlpha, findBestAlpha, formatTuningReport, saveTuningConfig } =
+        await import("./eval/alpha-tuner.js");
+
+      const results = await tuneAlpha({
+        store,
+        changedFilesPerCommit,
+        groundTruth,
+        allTestSuites: allSuites.map((s) => s.suite),
+        sampleCount,
+      });
+
+      console.log(formatTuningReport(results));
+
+      if (!opts.dryRun) {
+        const best = findBestAlpha(results);
+        saveTuningConfig(config.storage.path, { alpha: best.alpha });
+        console.log(`\nSaved alpha=${best.alpha} to .flaker/models/tuning.json`);
+      }
+    } finally {
       await store.close();
     }
   });
