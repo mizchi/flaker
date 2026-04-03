@@ -315,3 +315,63 @@ pub fn build_sampling_kpi_json(rows_json : String) -> String {
   let result = @eval_core.build_sampling_kpi(rows)
   result.to_json().stringify()
 }
+
+///|
+pub fn select_by_coverage_json(
+  coverages_json : String,
+  changed_edges_json : String,
+  count : Int,
+) -> String {
+  let coverages : Array[@coverage.TestCoverage] = try! @json.from_json(
+    try! @json.parse(coverages_json),
+  )
+  let changed_edges : Array[String] = try! @json.from_json(
+    try! @json.parse(changed_edges_json),
+  )
+  let result = @coverage.select_by_coverage(coverages, changed_edges, count~)
+  result.to_json().stringify()
+}
+
+///|
+pub fn bucketize_rate_json(rate : Double) -> Int {
+  @coverage.bucketize_rate(rate)
+}
+
+///|
+pub fn train_gbdt_json(
+  data_json : String,
+  num_trees : Int,
+  learning_rate : Double,
+) -> String {
+  let data : Array[@gbdt.TrainingRow] = try! @json.from_json(
+    try! @json.parse(data_json),
+  )
+  let model = @gbdt.train(data, num_trees~, learning_rate~)
+  model.to_json().stringify()
+}
+
+///|
+pub fn predict_gbdt_json(model_json : String, features_json : String) -> Double {
+  let model : @gbdt.GBDTModel = try! @json.from_json(
+    try! @json.parse(model_json),
+  )
+  let features : Array[Double] = try! @json.from_json(
+    try! @json.parse(features_json),
+  )
+  @gbdt.predict(model, features)
+}
+
+///|
+pub fn predict_batch_gbdt_json(
+  model_json : String,
+  batch_json : String,
+) -> String {
+  let model : @gbdt.GBDTModel = try! @json.from_json(
+    try! @json.parse(model_json),
+  )
+  let batch : Array[Array[Double]] = try! @json.from_json(
+    try! @json.parse(batch_json),
+  )
+  let result = @gbdt.predict_batch(model, batch)
+  result.to_json().stringify()
+}

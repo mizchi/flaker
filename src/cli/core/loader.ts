@@ -9,6 +9,30 @@ import {
   getAffectedTestPatterns as getAffectedTestPatternsFallback,
   topologicalSort as topologicalSortFallback,
 } from "../graph/analyzer.js";
+import {
+  selectByCoverage as selectByCoverageFallback,
+} from "../eval/coverage-guided.js";
+import {
+  trainGBDT as trainGBDTImport,
+  predictGBDT as predictGBDTImport,
+} from "../eval/gbdt.js";
+
+function bucketizeRateFallback(rate: number): number {
+  if (rate <= 0) return 0;
+  if (rate <= 5) return 1;
+  if (rate <= 15) return 2;
+  if (rate <= 35) return 3;
+  if (rate <= 65) return 4;
+  return 5;
+}
+
+function trainGBDTFallback(data: { features: number[]; label: number }[], numTrees: number, learningRate: number): unknown {
+  return trainGBDTImport(data, { numTrees, learningRate });
+}
+
+function predictGBDTFallback(model: unknown, features: number[]): number {
+  return predictGBDTImport(model as any, features);
+}
 
 export interface DetectInput {
   results: Array<{
@@ -93,6 +117,10 @@ export interface MetriciCore {
   buildReverseDeps(graph: DependencyGraph): Map<string, string[]>;
   topologicalSort(graph: DependencyGraph): string[];
   getAffectedTestPatterns(graph: DependencyGraph, affectedIds: string[]): string[];
+  selectByCoverage(coverages: { suite: string; edges: string[] }[], changedEdges: string[], count: number): { selected: string[]; covered_edges: number; total_changed_edges: number; coverage_ratio: number };
+  bucketizeRate(rate: number): number;
+  trainGBDT(data: { features: number[]; label: number }[], numTrees: number, learningRate: number): unknown;
+  predictGBDT(model: unknown, features: number[]): number;
 }
 
 interface SerializableGraphNode {
@@ -470,6 +498,11 @@ interface MbtJsExports {
   build_reverse_deps_json: (graph: string) => string;
   topological_sort_json: (graph: string) => string;
   get_affected_test_patterns_json: (graph: string, affectedIds: string) => string;
+  select_by_coverage_json: (coverages: string, changedEdges: string, count: number) => string;
+  bucketize_rate_json: (rate: number) => number;
+  train_gbdt_json: (data: string, numTrees: number, learningRate: number) => string;
+  predict_gbdt_json: (model: string, features: string) => number;
+  predict_batch_gbdt_json: (model: string, batch: string) => string;
 }
 
 function serializeGraph(graph: DependencyGraph): string {
@@ -564,6 +597,18 @@ function wrapMbtCore(mbt: MbtJsExports): MetriciCore {
     getAffectedTestPatterns(graph: DependencyGraph, affectedIds: string[]): string[] {
       return JSON.parse(mbt.get_affected_test_patterns_json(serializeGraph(graph), JSON.stringify(affectedIds)));
     },
+    selectByCoverage(coverages, changedEdges, count) {
+      return JSON.parse(mbt.select_by_coverage_json(JSON.stringify(coverages), JSON.stringify(changedEdges), count));
+    },
+    bucketizeRate(rate) {
+      return mbt.bucketize_rate_json(rate);
+    },
+    trainGBDT(data, numTrees, learningRate) {
+      return JSON.parse(mbt.train_gbdt_json(JSON.stringify(data), numTrees, learningRate));
+    },
+    predictGBDT(model, features) {
+      return mbt.predict_gbdt_json(JSON.stringify(model), JSON.stringify(features));
+    },
   };
 }
 
@@ -605,6 +650,10 @@ export async function loadCore(): Promise<MetriciCore> {
     buildReverseDeps: buildReverseDepsFallback,
     topologicalSort: topologicalSortFallback,
     getAffectedTestPatterns: getAffectedTestPatternsFallback,
+    selectByCoverage: selectByCoverageFallback,
+    bucketizeRate: bucketizeRateFallback,
+    trainGBDT: trainGBDTFallback,
+    predictGBDT: predictGBDTFallback,
   };
   return cachedCore;
 }
