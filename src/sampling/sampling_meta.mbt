@@ -141,6 +141,7 @@ fn to_test_meta(acc : SamplingMetaAcc) -> @types.TestMeta {
     task_id: Some(acc.task_id),
     filter: acc.filter,
     test_id: Some(acc.test_id),
+    co_failure_boost: 0.0,
   }
 }
 

@@ -55,7 +55,7 @@ pub fn sample_weighted(
     return []
   }
   // Build weights
-  let weights = Array::makei(n, fn(i) { 1.0 + meta[i].flaky_rate })
+  let weights = Array::makei(n, fn(i) { 1.0 + meta[i].flaky_rate + meta[i].co_failure_boost })
   let selected : Array[@types.TestMeta] = []
   let used = Array::make(n, false)
   let mut state = seed

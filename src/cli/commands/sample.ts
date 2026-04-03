@@ -141,7 +141,29 @@ export async function planSample(opts: SampleOpts): Promise<SamplePlan> {
   const core = await loadCore();
   const listedTests = opts.listedTests ?? [];
   const meta = await buildSamplingMeta(opts.store, listedTests, core);
-  let allTests = meta.tests;
+  // Ensure co_failure_boost is always present (MoonBit may not include it until rebuilt)
+  let allTests = meta.tests.map((t) => ({
+    ...t,
+    co_failure_boost: t.co_failure_boost ?? 0,
+  }));
+
+  // Apply co-failure boosts if changedFiles are provided
+  if (opts.changedFiles && opts.changedFiles.length > 0) {
+    const boosts = await opts.store.getCoFailureBoosts(opts.changedFiles);
+    if (boosts.size > 0) {
+      allTests = allTests.map((test) => {
+        const key = test.test_id ?? createStableTestId({
+          suite: test.suite,
+          testName: test.test_name,
+          taskId: test.task_id,
+          filter: test.filter,
+        });
+        const boost = boosts.get(key) ?? 0;
+        return boost > 0 ? { ...test, co_failure_boost: boost } : test;
+      });
+    }
+  }
+
   if (opts.skipQuarantined) {
     const quarantined = await opts.store.queryQuarantined();
     const qSet = new Set(quarantined.map((q) => q.testId));

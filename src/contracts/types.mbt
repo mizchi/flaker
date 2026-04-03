@@ -18,6 +18,7 @@ pub(all) struct TestMeta {
   task_id : String?
   filter : String?
   test_id : String?
+  co_failure_boost : Double
 } derive(Eq, Show, FromJson, ToJson)
 
 ///|

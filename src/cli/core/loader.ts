@@ -48,6 +48,7 @@ export interface TestMeta {
   task_id?: string | null;
   filter?: string | null;
   test_id?: string | null;
+  co_failure_boost: number;
 }
 
 export interface StableVariantEntryInput {
@@ -193,7 +194,7 @@ function sampleWeighted(meta: TestMeta[], count: number, seed: number): TestMeta
   const n = actualCount;
   for (let picked = 0; picked < n; picked++) {
     // Compute weights
-    const weights = remaining.map((m) => 1.0 + m.flaky_rate);
+    const weights = remaining.map((m) => 1.0 + m.flaky_rate + (m.co_failure_boost ?? 0));
     const totalWeight = weights.reduce((a, b) => a + b, 0);
 
     const r = lcg(s);
@@ -414,6 +415,7 @@ function buildSamplingMetaFallback(
       task_id: entry.task_id,
       filter: entry.filter,
       test_id: entry.test_id,
+      co_failure_boost: 0,
     }))
     .sort(
       (a, b) =>
