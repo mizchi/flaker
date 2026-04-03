@@ -41,6 +41,10 @@ import {
 } from "./commands/eval.js";
 import { runReason, formatReasoningReport } from "./commands/reason.js";
 import { runSelfEval, formatSelfEvalReport } from "./commands/self-eval.js";
+import { generateFixture } from "./eval/fixture-generator.js";
+import { loadFixtureIntoStore } from "./eval/fixture-loader.js";
+import { evaluateFixture } from "./eval/fixture-evaluator.js";
+import { formatEvalFixtureReport, formatSweepReport } from "./eval/fixture-report.js";
 import { runDoctor, formatDoctorReport } from "./commands/doctor.js";
 import {
   runAffected,
@@ -1110,6 +1114,56 @@ program
       console.log(formatSelfEvalReport(report));
     }
     process.exit(report.overallScore >= 80 ? 0 : 1);
+  });
+
+// --- eval-fixture ---
+program
+  .command("eval-fixture")
+  .description("Evaluate sampling strategies with synthetic data")
+  .option("--tests <n>", "Number of tests", "100")
+  .option("--commits <n>", "Number of commits", "50")
+  .option("--flaky-rate <n>", "Flaky rate (0-1)", "0.1")
+  .option("--co-failure-strength <n>", "Co-failure correlation (0-1)", "0.8")
+  .option("--files-per-commit <n>", "Files changed per commit", "2")
+  .option("--tests-per-file <n>", "Tests per source file", "5")
+  .option("--sample-percentage <n>", "Sample percentage", "20")
+  .option("--seed <n>", "Random seed", "42")
+  .option("--sweep", "Sweep co-failure strength 0.0-1.0")
+  .action(async (opts) => {
+    const baseConfig = {
+      testCount: parseInt(opts.tests, 10),
+      commitCount: parseInt(opts.commits, 10),
+      flakyRate: parseFloat(opts.flakyRate),
+      coFailureStrength: parseFloat(opts.coFailureStrength),
+      filesPerCommit: parseInt(opts.filesPerCommit, 10),
+      testsPerFile: parseInt(opts.testsPerFile, 10),
+      samplePercentage: parseInt(opts.samplePercentage, 10),
+      seed: parseInt(opts.seed, 10),
+    };
+
+    if (opts.sweep) {
+      const strengths = [0.0, 0.25, 0.5, 0.75, 1.0];
+      const reports = [];
+      for (const strength of strengths) {
+        const config = { ...baseConfig, coFailureStrength: strength };
+        const store = new DuckDBStore(":memory:");
+        await store.initialize();
+        const fixture = generateFixture(config);
+        await loadFixtureIntoStore(store, fixture);
+        const results = await evaluateFixture(store, fixture);
+        reports.push({ config, results });
+        await store.close();
+      }
+      console.log(formatSweepReport(reports));
+    } else {
+      const store = new DuckDBStore(":memory:");
+      await store.initialize();
+      const fixture = generateFixture(baseConfig);
+      await loadFixtureIntoStore(store, fixture);
+      const results = await evaluateFixture(store, fixture);
+      console.log(formatEvalFixtureReport({ config: baseConfig, results }));
+      await store.close();
+    }
   });
 
 // --- doctor ---

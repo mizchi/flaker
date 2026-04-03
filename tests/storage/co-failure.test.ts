@@ -107,9 +107,9 @@ describe("co-failure query", () => {
       { windowDays: 90, minCoRuns: 2 },
     );
     expect(boosts.size).toBeGreaterThan(0);
-    // login test should have boost of 1.0 (100% co-failure rate / 100)
+    // login test should have boost of 100 (100% co-failure rate)
     const loginBoost = [...boosts.values()].find((v) => v > 0);
-    expect(loginBoost).toBe(1.0);
+    expect(loginBoost).toBe(100);
   });
 
   it("getCoFailureBoosts returns empty for unrelated files", async () => {

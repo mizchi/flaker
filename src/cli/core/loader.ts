@@ -492,19 +492,45 @@ function deserializeReverseDeps(entries: ReverseDepEntry[]): Map<string, string[
   return reverse;
 }
 
+/** Restore co_failure_boost from input meta after MoonBit round-trip (MoonBit Option<Double> may serialize differently) */
+function normalizeMetaBoosts(result: TestMeta[], inputMeta: TestMeta[]): TestMeta[] {
+  const boostByKey = new Map<string, number>();
+  for (const m of inputMeta) {
+    const key = m.test_id ?? `${m.suite}\0${m.test_name}`;
+    if (m.co_failure_boost && m.co_failure_boost > 0) {
+      boostByKey.set(key, m.co_failure_boost);
+    }
+  }
+  if (boostByKey.size === 0) return result;
+  return result.map((m) => {
+    const key = m.test_id ?? `${m.suite}\0${m.test_name}`;
+    const boost = boostByKey.get(key);
+    return boost != null ? { ...m, co_failure_boost: boost } : { ...m, co_failure_boost: m.co_failure_boost ?? 0 };
+  });
+}
+
 function wrapMbtCore(mbt: MbtJsExports): MetriciCore {
   return {
     detectFlaky(input: DetectInput): DetectOutput {
       return JSON.parse(mbt.detect_flaky_json(JSON.stringify(input)));
     },
     sampleRandom(meta: TestMeta[], count: number, seed: number): TestMeta[] {
-      return JSON.parse(mbt.sample_random_json(JSON.stringify(meta), count, seed));
+      return normalizeMetaBoosts(
+        JSON.parse(mbt.sample_random_json(JSON.stringify(meta), count, seed)),
+        meta,
+      );
     },
     sampleWeighted(meta: TestMeta[], count: number, seed: number): TestMeta[] {
-      return JSON.parse(mbt.sample_weighted_json(JSON.stringify(meta), count, seed));
+      return normalizeMetaBoosts(
+        JSON.parse(mbt.sample_weighted_json(JSON.stringify(meta), count, seed)),
+        meta,
+      );
     },
     sampleHybrid(meta: TestMeta[], affectedSuites: string[], count: number, seed: number): TestMeta[] {
-      return JSON.parse(mbt.sample_hybrid_json(JSON.stringify(meta), JSON.stringify(affectedSuites), count, seed));
+      return normalizeMetaBoosts(
+        JSON.parse(mbt.sample_hybrid_json(JSON.stringify(meta), JSON.stringify(affectedSuites), count, seed)),
+        meta,
+      );
     },
     buildSamplingMeta(
       historyRows: SamplingHistoryRowInput[],

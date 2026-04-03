@@ -503,7 +503,7 @@ export class DuckDBStore implements MetricStore {
     for (const cf of allCoFailures) {
       if (!changedSet.has(cf.filePath)) continue;
       const existing = boosts.get(cf.testId) ?? 0;
-      boosts.set(cf.testId, Math.max(existing, cf.coFailureRate / 100));
+      boosts.set(cf.testId, Math.max(existing, cf.coFailureRate));
     }
     return boosts;
   }
