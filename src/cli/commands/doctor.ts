@@ -94,8 +94,20 @@ export async function runDoctor(cwd: string, deps?: Partial<DoctorDeps>): Promis
   };
 }
 
+const REMEDIATION: Record<string, string> = {
+  config: "Run 'flaker init --owner <org> --name <repo>' to create one",
+  duckdb: "Run 'pnpm rebuild duckdb' or 'npm rebuild duckdb'",
+  moonbit: "Install MoonBit from https://moonbitlang.com (optional, fallback available)",
+};
+
 export function formatDoctorReport(report: DoctorReport): string {
-  const lines = report.checks.map((c) => `${c.ok ? "OK" : "NG"} ${c.name}: ${c.detail}`);
+  const lines: string[] = [];
+  for (const c of report.checks) {
+    lines.push(`${c.ok ? "OK" : "NG"}  ${c.name.padEnd(10)}${c.detail}`);
+    if (!c.ok && REMEDIATION[c.name]) {
+      lines.push(`              → ${REMEDIATION[c.name]}`);
+    }
+  }
   lines.push("");
   lines.push(report.ok ? "Doctor checks passed." : "Doctor checks failed.");
   return lines.join("\n");
