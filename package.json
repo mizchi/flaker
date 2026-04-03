@@ -20,7 +20,8 @@
   "author": "",
   "license": "ISC",
   "files": [
-    "dist"
+    "dist/cli/main.js",
+    "dist/moonbit/flaker.js"
   ],
   "publishConfig": {
     "access": "public"

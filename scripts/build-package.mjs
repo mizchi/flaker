@@ -42,7 +42,7 @@ await build({
     file: cliOutputFile,
     format: "esm",
     codeSplitting: false,
-    sourcemap: true,
+    sourcemap: false,
     banner: "#!/usr/bin/env node",
   },
 });

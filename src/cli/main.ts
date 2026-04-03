@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { Octokit } from "@octokit/rest";
 import { loadConfig } from "./config.js";
@@ -76,7 +77,37 @@ import {
   validateQuarantineManifest,
 } from "./quarantine-manifest.js";
 
-const program = new Command();
+function formatHelpExamples(
+  title: string,
+  examples: string[],
+): string {
+  return `\n${title}:\n${examples.map((example) => `  ${example}`).join("\n")}\n`;
+}
+
+function appendHelpText<T extends Command>(
+  command: T,
+  extra: string,
+): T {
+  const originalHelpInformation = command.helpInformation.bind(command);
+  command.helpInformation = () => `${originalHelpInformation()}${extra}`;
+  return command;
+}
+
+function appendExamplesToCommand(
+  command: Command | undefined,
+  examples: string[],
+): void {
+  if (!command) return;
+  appendHelpText(command, formatHelpExamples("Examples", examples));
+}
+
+function isDirectCliExecution(): boolean {
+  return process.argv[1] != null
+    && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+}
+
+export function createProgram(): Command {
+  const program = new Command();
 
 async function collectKnownQuarantineTaskIds(
   cwd: string,
@@ -175,8 +206,25 @@ async function createConfiguredResolver(
 
 program
   .name("flaker")
-  .description("CI metrics collection and analysis tool")
-  .version("0.1.0");
+  .description("Sample meaningful tests from CI and flaky history")
+  .version("0.1.0")
+  .showHelpAfterError()
+  .showSuggestionAfterError();
+
+appendHelpText(
+  program,
+  formatHelpExamples("Quick start", [
+    "flaker init --owner your-org --name your-repo",
+    "flaker collect --last 30",
+    "flaker run --strategy hybrid --count 25 --changed src/foo.ts",
+    "flaker eval --markdown --window 7",
+  ]) + formatHelpExamples("Common workflows", [
+    "Build history from CI:    flaker collect --last 30",
+    "Import local history:     flaker collect-local --last 20",
+    "Inspect flaky behavior:   flaker flaky && flaker reason",
+    "Review sampling quality:  flaker eval --markdown --window 7",
+  ]),
+);
 
 // --- init ---
 program
@@ -283,7 +331,7 @@ program
 // --- flaky ---
 program
   .command("flaky")
-  .description("Show flaky test statistics")
+  .description("Inspect flaky tests and failure-rate trends")
   .option("--top <n>", "Number of top flaky tests to show")
   .option("--test <filter>", "Filter by test name")
   .option("--trend", "Show weekly flaky trend (requires --test)")
@@ -321,7 +369,7 @@ program
 // --- sample ---
 program
   .command("sample")
-  .description("Sample tests for selective execution")
+  .description("Choose a smaller local test set")
   .option("--strategy <s>", "Sampling strategy: random, weighted, affected, hybrid", "random")
   .option("--count <n>", "Number of tests to sample")
   .option("--percentage <n>", "Percentage of tests to sample")
@@ -383,7 +431,7 @@ program
 // --- run ---
 program
   .command("run")
-  .description("Sample and run tests")
+  .description("Select tests and execute them locally")
   .option("--strategy <s>", "Sampling strategy: random, weighted, affected, hybrid", "random")
   .option("--count <n>", "Number of tests to run")
   .option("--percentage <n>", "Percentage of tests to run")
@@ -910,7 +958,7 @@ quarantineCommand
 // --- eval ---
 program
   .command("eval")
-  .description("Evaluate test suite health and flaker effectiveness")
+  .description("Measure whether local sampled runs predict CI")
   .option("--window <days>", "Analysis window in days")
   .option("--json", "Output raw JSON report")
   .option("--markdown", "Output markdown review report")
@@ -1072,4 +1120,76 @@ program
     process.exit(report.ok ? 0 : 1);
   });
 
-program.parse();
+  appendExamplesToCommand(program.commands.find((command) => command.name() === "collect"), [
+    "flaker collect --last 30",
+    "flaker collect --branch main --last 14",
+    "flaker collect --json --output .artifacts/collect.json --fail-on-errors",
+  ]);
+  appendExamplesToCommand(program.commands.find((command) => command.name() === "flaky"), [
+    "flaker flaky --top 20",
+    "flaker flaky --true-flaky",
+    "flaker flaky --trend --test \"should redirect\"",
+  ]);
+  appendExamplesToCommand(program.commands.find((command) => command.name() === "sample"), [
+    "flaker sample --strategy hybrid --count 25",
+    "flaker sample --strategy affected --changed src/foo.ts",
+    "flaker sample --strategy weighted --percentage 20 --skip-quarantined",
+  ]);
+  appendExamplesToCommand(program.commands.find((command) => command.name() === "run"), [
+    "flaker run --strategy hybrid --count 25",
+    "flaker run --strategy affected --changed src/foo.ts",
+    "flaker run --runner actrun --strategy hybrid --count 50",
+  ]);
+  appendExamplesToCommand(program.commands.find((command) => command.name() === "affected"), [
+    "flaker affected src/foo.ts src/bar.ts",
+    "flaker affected --changed src/foo.ts,src/bar.ts",
+    "flaker affected --json --changed src/foo.ts",
+  ]);
+  appendExamplesToCommand(program.commands.find((command) => command.name() === "check"), [
+    "flaker check",
+    "flaker check --json",
+  ]);
+  appendExamplesToCommand(program.commands.find((command) => command.name() === "quarantine"), [
+    "flaker quarantine",
+    "flaker quarantine --auto",
+    "flaker quarantine --add \"tests/login.spec.ts:should redirect\"",
+  ]);
+  appendExamplesToCommand(program.commands.find((command) => command.name() === "eval"), [
+    "flaker eval",
+    "flaker eval --json",
+    "flaker eval --markdown --window 7",
+  ]);
+  appendExamplesToCommand(program.commands.find((command) => command.name() === "reason"), [
+    "flaker reason",
+    "flaker reason --window 7",
+    "flaker reason --json",
+  ]);
+  appendExamplesToCommand(program.commands.find((command) => command.name() === "import"), [
+    "flaker import report.json --adapter playwright --commit $(git rev-parse HEAD)",
+    "flaker import results.xml --adapter junit",
+    "flaker import report.json --adapter custom --custom-command \"node ./adapter.js\"",
+  ]);
+  appendExamplesToCommand(program.commands.find((command) => command.name() === "bisect"), [
+    "flaker bisect --test \"should redirect\"",
+    "flaker bisect --test \"should redirect\" --suite tests/login.spec.ts",
+  ]);
+  appendExamplesToCommand(program.commands.find((command) => command.name() === "collect-local"), [
+    "flaker collect-local",
+    "flaker collect-local --last 10",
+  ]);
+  appendExamplesToCommand(program.commands.find((command) => command.name() === "self-eval"), [
+    "flaker self-eval",
+    "flaker self-eval --json",
+  ]);
+  appendExamplesToCommand(program.commands.find((command) => command.name() === "doctor"), [
+    "flaker doctor",
+  ]);
+
+  return program;
+}
+
+const program = createProgram();
+
+if (isDirectCliExecution()) {
+  program.parse();
+}
