@@ -1,24 +1,24 @@
 # Sampling Strategy Evaluation Report
 
-## 概要
+## Overview
 
-flaker が提供する6つのサンプリング戦略を合成フィクスチャデータで定量評価した。
-テスト数・コミット数・フレーキー率・co-failure 相関強度・サンプリング予算を変化させ、各戦略の Recall（失敗検出率）、Precision（選択精度）、Efficiency（random 比効率）を測定した。
+We evaluated six sampling strategies provided by flaker using synthetic fixture data.
+By varying test count, commit count, flaky rate, co-failure correlation strength, and sampling budget, we measured each strategy's Recall (failure detection rate), Precision (selection accuracy), and Efficiency (improvement over random).
 
-## 戦略一覧
+## Strategies
 
-| 戦略 | 説明 | Resolver 必要 | ML 学習 |
-|------|------|:---:|:---:|
-| **random** | 均一ランダム選択 | No | No |
-| **weighted** | flaky_rate による重み付きランダム | No | No |
+| Strategy | Description | Resolver Required | ML Training |
+|----------|-------------|:-:|:-:|
+| **random** | Uniform random selection | No | No |
+| **weighted** | Weighted random by flaky_rate | No | No |
 | **weighted+co-failure** | flaky_rate + co_failure_boost | No | No |
 | **hybrid+co-failure** | affected + co-failure priority + weighted fill | Yes | No |
-| **coverage-guided** | greedy set cover (変更エッジカバレッジ最大化) | Coverage data | No |
-| **gbdt** | Gradient Boosted Decision Tree による予測スコアランキング | No | Yes |
+| **coverage-guided** | Greedy set cover (maximize changed-edge coverage) | Coverage data | No |
+| **gbdt** | Gradient Boosted Decision Tree score ranking | No | Yes |
 
-## ベンチマーク結果
+## Benchmark Results
 
-### Scenario A: 標準（tests=200, commits=100, flaky=5%, co-failure=1.0, sample=20%）
+### Scenario A: Standard (tests=200, commits=100, flaky=5%, co-failure=1.0, sample=20%)
 
 | Strategy | Recall | Precision | F1 | FNR | Efficiency |
 |----------|--------|-----------|-----|-----|------------|
@@ -29,7 +29,7 @@ flaker が提供する6つのサンプリング戦略を合成フィクスチャ
 | coverage-guided | 18.8% | **100.0%** | 0.32 | 81.2% | 0.94 |
 | gbdt | 90.2% | 24.0% | 0.38 | 9.8% | 4.51 |
 
-### Scenario B: 中程度の相関（tests=200, commits=100, flaky=10%, co-failure=0.5, sample=20%）
+### Scenario B: Moderate Correlation (tests=200, commits=100, flaky=10%, co-failure=0.5, sample=20%)
 
 | Strategy | Recall | Precision | F1 | FNR | Efficiency |
 |----------|--------|-----------|-----|-----|------------|
@@ -39,7 +39,7 @@ flaker が提供する6つのサンプリング戦略を合成フィクスチャ
 | coverage-guided | 14.8% | 54.0% | 0.23 | 85.2% | 0.74 |
 | gbdt | **84.1%** | 15.3% | **0.26** | **15.9%** | **4.20** |
 
-### Scenario C: タイトな予算（tests=200, commits=100, flaky=5%, co-failure=1.0, sample=10%）
+### Scenario C: Tight Budget (tests=200, commits=100, flaky=5%, co-failure=1.0, sample=10%)
 
 | Strategy | Recall | Precision | F1 | FNR | Efficiency |
 |----------|--------|-----------|-----|-----|------------|
@@ -49,97 +49,93 @@ flaker が提供する6つのサンプリング戦略を合成フィクスチャ
 | coverage-guided | 18.8% | 100.0% | 0.32 | 81.2% | 1.88 |
 | gbdt | 88.3% | 47.0% | 0.61 | 11.7% | 8.83 |
 
-## 分析
+## Analysis
 
-### 1. Hybrid+co-failure が最高性能
+### 1. Hybrid+co-failure Delivers the Highest Performance
 
-依存グラフ解析（resolver）が利用可能な場合、hybrid+co-failure が全シナリオで最高の Recall を達成する。
-特にタイトな予算（10%）では Efficiency 9.44 を記録 — random の約 9.4 倍の効率でテスト失敗を検出する。
+When a dependency graph resolver is available, hybrid+co-failure achieves the highest Recall across all scenarios. Under a tight budget (10%), it records an Efficiency of 9.44 — detecting test failures 9.4x more efficiently than random.
 
-**メカニズム**: affected（dependency graph）で変更に関連するテストを確定的に選択 → co-failure priority で履歴的相関が強いテストを追加 → 残り枠を weighted で埋める。
+**Mechanism**: Deterministically select affected tests via dependency graph → add co-failure correlated tests as priority → fill remaining slots with weighted random.
 
-### 2. GBDT は resolver 不要で 90% recall
+### 2. GBDT Achieves 90% Recall Without a Resolver
 
-GBDT の最大の価値は **resolver を設定せずに 90% 近い recall を達成する**こと。
-hybrid (94.4%) との差はわずか 4% だが、**設定コストがゼロ**。新しいリポジトリへの導入が即座に可能。
+The key value of GBDT is achieving near-90% recall **without any resolver configuration**. The gap to hybrid (94.4%) is only ~4%, but **setup cost is zero**. Immediate adoption on new repositories.
 
-- Scenario A: 90.2% recall（hybrid: 94.4%）
-- Scenario B: **84.1% recall**（hybrid: 78.6%）— 中程度の相関では **GBDT が hybrid を上回る**
-- Scenario C: 88.3% recall（hybrid: 94.4%）
+- Scenario A: 90.2% recall (hybrid: 94.4%)
+- Scenario B: **84.1% recall** (hybrid: 78.6%) — **GBDT outperforms hybrid under moderate correlation**
+- Scenario C: 88.3% recall (hybrid: 94.4%)
 
-Scenario B で GBDT が hybrid を上回る理由: co-failure 相関が弱い場合、hybrid の co-failure priority が的外れなテストを選ぶことがあるが、GBDT は複数の特徴量を総合的に学習するため頑健。
+GBDT outperforms hybrid in Scenario B because when co-failure correlation is weak, hybrid's co-failure priority tier may select irrelevant tests, while GBDT learns from multiple features holistically and remains robust.
 
-### 3. Weighted+co-failure は weighted と同等
+### 3. Weighted+co-failure Equals Weighted
 
-現在の実装では weighted+co-failure が weighted と同じ結果を示す。これは MoonBit bridge の `Option<Double>` round-trip 問題による。co_failure_boost が MoonBit 経由で失われている。
+The current implementation shows weighted+co-failure producing identical results to weighted. This is caused by the MoonBit bridge `Option<Double>` round-trip issue where co_failure_boost is lost during JSON serialization.
 
-**対策**: normalizeMetaBoosts workaround は #24 で追加済みだが、本質的には MoonBit の `Double?` の `ToJson` が `null` を正しく出力するか、あるいは `Double` に戻して bridge 側でデフォルト値を保証する必要がある。
+**Mitigation**: A normalizeMetaBoosts workaround was added in #24. The fundamental fix requires either reverting `co_failure_boost` to `Double` with bridge-side default, or fixing MoonBit's `ToJson` for optional doubles.
 
-### 4. Coverage-guided は精度特化
+### 4. Coverage-guided Specializes in Precision
 
-coverage-guided は **Precision 100%**（Scenario A）を達成するが、Recall は低い。
-これは greedy set cover が「変更されたコードをカバーするテスト」のみを選ぶため、カバレッジ外の失敗（フレーキー等）を見逃すから。
+Coverage-guided achieves **100% Precision** (Scenario A) but low Recall. This is because greedy set cover only selects tests covering changed code edges, missing failures caused by flaky behavior or implicit dependencies.
 
-**最適な用途**: 単独ではなく hybrid の Priority 1 として組み込み、affected analysis を補完する。
+**Best use**: Not standalone, but as Priority 1 within hybrid, complementing dependency-graph-based affected analysis.
 
-### 5. Random は予算に比例
+### 5. Random Scales Linearly with Budget
 
-Random の Recall はほぼ sample% に等しい（20% → ~22%, 10% → ~14%）。これは理論的期待値と一致。
-他の戦略はこの baseline をどれだけ上回るかが評価基準。
+Random's Recall approximately equals the sample percentage (20% → ~22%, 10% → ~14%), matching the theoretical expectation. All other strategies are evaluated by how much they exceed this baseline.
 
-## 推奨使用パターン
+## Recommended Usage Patterns
 
-### パターン 1: Resolver あり（推奨）
+### Pattern 1: With Resolver (Recommended)
 ```bash
 flaker sample --strategy hybrid --changed $(git diff --name-only HEAD~1)
 ```
 - Recall: 94%+
-- 依存グラフ + co-failure + weighted の全層が機能
+- All layers active: dependency graph + co-failure + weighted
 
-### パターン 2: Resolver なし（GBDT）
+### Pattern 2: Without Resolver (GBDT)
 ```bash
 flaker sample --strategy weighted --changed $(git diff --name-only HEAD~1)
-# GBDT モデルが .flaker/models/ にあれば自動適用（将来実装）
+# GBDT model auto-applied if present in .flaker/models/ (future)
 ```
 - Recall: 84-90%
-- 設定不要、新規リポジトリで即使用可能
+- Zero configuration, immediately usable on new repositories
 
-### パターン 3: 高精度が必要（coverage-guided + hybrid）
-- Coverage データ収集パイプラインが必要（将来実装）
-- coverage-guided で変更コードに直結するテストを確実に選択
-- hybrid の残り枠で exploration
+### Pattern 3: High Precision Required (coverage-guided + hybrid)
+- Requires coverage data collection pipeline (future)
+- Coverage-guided ensures tests directly covering changed code are selected
+- Hybrid fills remaining slots for exploration
 
-## 技術的制約と今後の課題
+## Technical Constraints and Future Work
 
-### 現在の制約
+### Current Constraints
 
-1. **weighted+co-failure の MoonBit bridge 問題**: `Double?` の JSON round-trip で boost が失われる
-2. **GBDT は eval-fixture 内のみ**: `planSample` への統合は未実装
-3. **Coverage-guided はカバレッジデータ収集が未実装**: 合成データでのみ評価
-4. **合成データの限界**: 実リポジトリでの検証が必要
+1. **weighted+co-failure MoonBit bridge issue**: `Double?` JSON round-trip loses the boost value
+2. **GBDT is eval-fixture only**: Not yet integrated into `planSample`
+3. **Coverage-guided lacks real coverage collection**: Evaluated on synthetic data only
+4. **Synthetic data limitations**: Real-repository validation needed
 
-### 今後の改善
+### Future Improvements
 
-1. **GBDT を `planSample` に統合**: `flaker train` → `.flaker/models/gbdt.json` → `flaker sample` で自動ロード
-2. **LightGBM C API への差し替え**: 精度向上（特に深いツリーと多数のツリー）
-3. **V8/Istanbul カバレッジ収集**: `flaker collect-coverage` → coverage-guided を実データで使用可能に
-4. **MoonBit bridge 修正**: `co_failure_boost` を `Double` に戻し、bridge 側でデフォルト 0.0 を保証
-5. **Holdout サンプリング**: スキップしたテストの一部をランダム実行し、モデルの劣化を検出
+1. **Integrate GBDT into `planSample`**: `flaker train` → `.flaker/models/gbdt.json` → auto-load during `flaker sample`
+2. **Replace with LightGBM C API**: Better accuracy (deeper trees, more trees)
+3. **V8/Istanbul coverage collection**: `flaker collect-coverage` → enable coverage-guided on real data
+4. **Fix MoonBit bridge**: Revert `co_failure_boost` to `Double`, ensure default 0.0 in bridge
+5. **Holdout sampling**: Randomly run a fraction of skipped tests to detect model degradation
 
-## 再現方法
+## How to Reproduce
 
 ```bash
-# 標準ベンチマーク
+# Standard benchmark
 flaker eval-fixture --tests 200 --commits 100 --co-failure-strength 1.0 --flaky-rate 0.05 --sample-percentage 20
 
-# Co-failure 強度の sweep
+# Co-failure strength sweep
 flaker eval-fixture --sweep --tests 200 --commits 100
 
-# タイトな予算
+# Tight budget
 flaker eval-fixture --tests 200 --commits 100 --sample-percentage 10
 
-# 大規模
+# Large scale
 flaker eval-fixture --tests 500 --commits 200 --co-failure-strength 0.8 --flaky-rate 0.05 --sample-percentage 10
 ```
 
-全ベンチマークは合成データで実行され、外部依存なし・設定不要で再現可能。
+All benchmarks run on synthetic data with no external dependencies and no configuration required.
