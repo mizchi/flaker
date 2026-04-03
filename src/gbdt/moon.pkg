@@ -1,0 +1,4 @@
+import {
+  "mizchi/flaker/contracts" @types,
+  "moonbitlang/core/json" @json,
+}
