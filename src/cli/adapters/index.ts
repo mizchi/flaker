@@ -3,6 +3,7 @@ import { CustomAdapter } from "./custom.js";
 import { junitAdapter } from "./junit.js";
 import { playwrightAdapter } from "./playwright.js";
 import { vrtBenchAdapter } from "./vrt-bench.js";
+import { vitestAdapter } from "./vitest.js";
 import { vrtMigrationAdapter } from "./vrt-migration.js";
 
 export function createTestResultAdapter(
@@ -12,6 +13,8 @@ export function createTestResultAdapter(
   switch (type) {
     case "playwright":
       return playwrightAdapter;
+    case "vitest":
+      return vitestAdapter;
     case "junit":
       return junitAdapter;
     case "vrt-migration":

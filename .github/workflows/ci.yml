@@ -45,3 +45,15 @@ jobs:
           tests/reporting/*.test.ts
           tests/commands/collect.test.ts
           tests/storage/duckdb.test.ts
+
+      - name: Full test with JSON report
+        if: always()
+        run: pnpm exec vitest run --reporter=json > vitest-report.json || true
+
+      - name: Upload vitest report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-report
+          path: vitest-report.json
+          if-no-files-found: warn

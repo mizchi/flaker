@@ -1,0 +1,14 @@
+[repo]
+owner = "mizchi"
+name = "flaker"
+
+[storage]
+path = ".flaker/data.duckdb"
+
+[adapter]
+type = "vitest"
+artifact_name = "vitest-report"
+
+[runner]
+type = "direct"
+command = "pnpm exec vitest run"
