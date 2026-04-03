@@ -1,4 +1,0 @@
-import {
-  "mizchi/flaker/contracts" @types,
-  "mizchi/flaker/analysis/identity" @identity_core,
-}

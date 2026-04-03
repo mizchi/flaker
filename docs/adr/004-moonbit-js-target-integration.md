@@ -19,10 +19,18 @@ metrici のコア計算（flaky 検出、サンプリング、依存分析）を
 ```
 src/ (MoonBit source root)
 ├── contracts/           共有 JSON 契約
-├── analysis/            flaky / sampling / affected / graph
-├── reporting/           summary / diff / aggregate
-├── policy/              quarantine / config ownership
-├── metrics/             eval / KPI reducer
+├── flaky/               flaky detection
+├── sampling/            sampling strategy and metadata reducer
+├── affected/            bitflow-based affected resolution
+├── affected_explain/    affected explain / inspect reducer
+├── identity/            stable test identity helpers
+├── graph/               dependency graph helpers
+├── report_summary/      summary reducer
+├── report_diff/         diff classifier
+├── report_aggregate/    shard/matrix aggregate reducer
+├── quarantine/          quarantine summary / match / exit policy
+├── config_check/        config ownership analysis
+├── eval/                KPI reducer
 └── cmd/flaker/          JS FFI export (ESM)
 
 src/cli/core/loader.ts (TypeScript)

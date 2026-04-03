@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "mizchi/flaker/metrics/eval"
+package "mizchi/flaker/eval"
 
 import {
   "mizchi/flaker/contracts",

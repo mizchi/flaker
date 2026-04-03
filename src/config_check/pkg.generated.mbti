@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "mizchi/flaker/policy/config"
+package "mizchi/flaker/config_check"
 
 import {
   "mizchi/flaker/contracts",

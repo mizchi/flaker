@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "mizchi/flaker/policy/quarantine"
+package "mizchi/flaker/quarantine"
 
 import {
   "mizchi/flaker/contracts",

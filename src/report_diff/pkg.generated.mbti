@@ -1,12 +1,12 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "mizchi/flaker/reporting/aggregate"
+package "mizchi/flaker/report_diff"
 
 import {
   "mizchi/flaker/contracts",
 }
 
 // Values
-pub fn aggregate_report(Array[@contracts.ReportAggregateShardInput]) -> @contracts.ReportAggregateOutput
+pub fn classify_report_diff(Array[@contracts.ReportDiffStatusInput]) -> @contracts.ReportDiffBuckets
 
 // Errors
 

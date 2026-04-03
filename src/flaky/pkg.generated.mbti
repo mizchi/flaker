@@ -1,16 +1,17 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "mizchi/flaker/reporting/summary"
+package "mizchi/flaker/flaky"
 
 import {
   "mizchi/flaker/contracts",
 }
 
 // Values
-pub fn summarize_report(Array[@contracts.ReportSummaryTestInput]) -> @contracts.ReportSummaryOutput
+pub fn detect_flaky(@contracts.DetectInput) -> @contracts.DetectOutput
 
 // Errors
 
 // Types and methods
+type TestKey derive(Eq, Hash, Show)
 
 // Type aliases
 

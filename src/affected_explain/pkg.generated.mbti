@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "mizchi/flaker/analysis/affected_explain"
+package "mizchi/flaker/affected_explain"
 
 import {
   "mizchi/flaker/contracts",

@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "mizchi/flaker/analysis/affected"
+package "mizchi/flaker/affected"
 
 // Values
 pub fn resolve_affected(String, Array[String]) -> Array[String]

@@ -1,17 +1,16 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "mizchi/flaker/analysis/flaky"
+package "mizchi/flaker/report_aggregate"
 
 import {
   "mizchi/flaker/contracts",
 }
 
 // Values
-pub fn detect_flaky(@contracts.DetectInput) -> @contracts.DetectOutput
+pub fn aggregate_report(Array[@contracts.ReportAggregateShardInput]) -> @contracts.ReportAggregateOutput
 
 // Errors
 
 // Types and methods
-type TestKey derive(Eq, Hash, Show)
 
 // Type aliases
 

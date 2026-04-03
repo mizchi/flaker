@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "mizchi/flaker/analysis/graph"
+package "mizchi/flaker/graph"
 
 import {
   "mizchi/flaker/contracts",
