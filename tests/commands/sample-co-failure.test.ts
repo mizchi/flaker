@@ -108,7 +108,7 @@ describe("sample with co-failure boost", () => {
 
     const loginTest = plan.allTests.find((t) => t.suite === "tests/login.spec.ts");
     expect(loginTest).toBeDefined();
-    expect(loginTest!.co_failure_boost).toBe(1.0);
+    expect(loginTest!.co_failure_boost).toBe(100);
 
     const signupTest = plan.allTests.find((t) => t.suite === "tests/signup.spec.ts");
     expect(signupTest).toBeDefined();
