@@ -1,6 +1,27 @@
 import type { MetricStore } from "../storage/types.js";
 import type { FixtureData } from "./fixture-generator.js";
+import type { DependencyResolver } from "../resolvers/types.js";
 import { planSample } from "../commands/sample.js";
+
+function createFixtureResolver(fixture: FixtureData): DependencyResolver {
+  return {
+    resolve(changedFiles: string[], allTestFiles: string[]): string[] {
+      const allTestSet = new Set(allTestFiles);
+      const affected = new Set<string>();
+      for (const file of changedFiles) {
+        const deps = fixture.fileDeps.get(file);
+        if (deps) {
+          for (const suite of deps) {
+            if (allTestSet.has(suite)) {
+              affected.add(suite);
+            }
+          }
+        }
+      }
+      return [...affected];
+    },
+  };
+}
 
 export interface EvalStrategyResult {
   strategy: string;
@@ -19,10 +40,12 @@ export async function evaluateFixture(
   store: MetricStore,
   fixture: FixtureData,
 ): Promise<EvalStrategyResult[]> {
+  const resolver = createFixtureResolver(fixture);
   const strategies = [
-    { name: "random", mode: "random" as const, useCoFailure: false },
-    { name: "weighted", mode: "weighted" as const, useCoFailure: false },
-    { name: "weighted+co-failure", mode: "weighted" as const, useCoFailure: true },
+    { name: "random", mode: "random" as const, useCoFailure: false, useResolver: false },
+    { name: "weighted", mode: "weighted" as const, useCoFailure: false, useResolver: false },
+    { name: "weighted+co-failure", mode: "weighted" as const, useCoFailure: true, useResolver: false },
+    { name: "hybrid+co-failure", mode: "hybrid" as const, useCoFailure: true, useResolver: true },
   ];
 
   // Use last 25% of commits as evaluation set
@@ -51,6 +74,7 @@ export async function evaluateFixture(
         mode: strategy.mode,
         seed: 42,
         changedFiles,
+        resolver: strategy.useResolver ? resolver : undefined,
       });
 
       const sampledSuites = new Set(plan.sampled.map((t) => t.suite));

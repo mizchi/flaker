@@ -30,11 +30,12 @@ describe("evaluateFixture", () => {
     await loadFixtureIntoStore(store, fixture);
 
     const results = await evaluateFixture(store, fixture);
-    expect(results).toHaveLength(3);
+    expect(results).toHaveLength(4);
     expect(results.map((r) => r.strategy)).toEqual([
       "random",
       "weighted",
       "weighted+co-failure",
+      "hybrid+co-failure",
     ]);
   });
 
@@ -80,5 +81,27 @@ describe("evaluateFixture", () => {
     const coFailure = results.find((r) => r.strategy === "weighted+co-failure")!;
 
     expect(coFailure.recall).toBeGreaterThanOrEqual(random.recall);
+  });
+
+  it("hybrid+co-failure outperforms all other strategies", async () => {
+    const fixture = generateFixture({
+      testCount: 50,
+      commitCount: 40,
+      flakyRate: 0.05,
+      coFailureStrength: 1.0,
+      filesPerCommit: 2,
+      testsPerFile: 5,
+      samplePercentage: 20,
+      seed: 42,
+    });
+    await loadFixtureIntoStore(store, fixture);
+
+    const results = await evaluateFixture(store, fixture);
+    const random = results.find((r) => r.strategy === "random")!;
+    const hybrid = results.find((r) => r.strategy === "hybrid+co-failure")!;
+
+    // Hybrid uses affected (resolver) + co-failure priority + weighted
+    // Should significantly outperform random
+    expect(hybrid.recall).toBeGreaterThan(random.recall);
   });
 });

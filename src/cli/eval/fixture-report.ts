@@ -39,20 +39,21 @@ export function formatSweepReport(reports: EvalFixtureReport[]): string {
   const lines: string[] = [
     "# Co-failure Strength Sweep",
     "",
-    `| ${pad("Strength", 10)} | ${pad("Random", 8)} | ${pad("Weighted", 10)} | ${pad("W+CoFail", 10)} | ${pad("Gain", 6)} |`,
-    `|${"-".repeat(12)}|${"-".repeat(10)}|${"-".repeat(12)}|${"-".repeat(12)}|${"-".repeat(8)}|`,
+    `| ${pad("Strength", 10)} | ${pad("Random", 8)} | ${pad("Weighted", 10)} | ${pad("W+CoFail", 10)} | ${pad("Hybrid", 8)} | ${pad("Gain", 6)} |`,
+    `|${"-".repeat(12)}|${"-".repeat(10)}|${"-".repeat(12)}|${"-".repeat(12)}|${"-".repeat(10)}|${"-".repeat(8)}|`,
   ];
 
   for (const report of reports) {
     const random = report.results.find((r) => r.strategy === "random")!;
     const weighted = report.results.find((r) => r.strategy === "weighted")!;
     const coFailure = report.results.find((r) => r.strategy === "weighted+co-failure")!;
+    const hybrid = report.results.find((r) => r.strategy === "hybrid+co-failure");
     const gain = random.recall > 0
-      ? `${((coFailure.recall / random.recall - 1) * 100).toFixed(0)}%`
+      ? `${(((hybrid?.recall ?? coFailure.recall) / random.recall - 1) * 100).toFixed(0)}%`
       : "N/A";
 
     lines.push(
-      `| ${pad(report.config.coFailureStrength.toFixed(2), 10)} | ${pad(pct(random.recall), 8)} | ${pad(pct(weighted.recall), 10)} | ${pad(pct(coFailure.recall), 10)} | ${pad(gain, 6)} |`,
+      `| ${pad(report.config.coFailureStrength.toFixed(2), 10)} | ${pad(pct(random.recall), 8)} | ${pad(pct(weighted.recall), 10)} | ${pad(pct(coFailure.recall), 10)} | ${pad(hybrid ? pct(hybrid.recall) : "N/A", 8)} | ${pad(gain, 6)} |`,
     );
   }
 
