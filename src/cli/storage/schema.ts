@@ -92,6 +92,15 @@ CREATE TABLE IF NOT EXISTS sampling_run_tests (
   filter_text     VARCHAR,
   PRIMARY KEY (sampling_run_id, ordinal)
 );
+
+CREATE TABLE IF NOT EXISTS commit_changes (
+  commit_sha  VARCHAR NOT NULL,
+  file_path   VARCHAR NOT NULL,
+  change_type VARCHAR,
+  additions   INTEGER DEFAULT 0,
+  deletions   INTEGER DEFAULT 0,
+  PRIMARY KEY (commit_sha, file_path)
+);
 `;
 
 export const FLAKY_QUERY = `

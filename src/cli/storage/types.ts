@@ -133,6 +133,13 @@ export interface SamplingRunTestRecord {
   testId?: string | null;
 }
 
+export interface CommitChange {
+  filePath: string;
+  changeType: string;
+  additions: number;
+  deletions: number;
+}
+
 export interface MetricStore {
   initialize(): Promise<void>;
   close(): Promise<void>;
@@ -152,4 +159,6 @@ export interface MetricStore {
   removeQuarantine(test: TestSelector): Promise<void>;
   queryQuarantined(): Promise<QuarantinedTest[]>;
   isQuarantined(test: TestSelector): Promise<boolean>;
+  insertCommitChanges(commitSha: string, changes: CommitChange[]): Promise<void>;
+  hasCommitChanges(commitSha: string): Promise<boolean>;
 }

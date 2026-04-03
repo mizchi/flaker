@@ -16,6 +16,7 @@ import type {
   CollectedArtifactRecord,
   SamplingRunRecord,
   SamplingRunTestRecord,
+  CommitChange,
 } from "./types.js";
 
 export class DuckDBStore implements MetricStore {
@@ -449,6 +450,25 @@ export class DuckDBStore implements MetricStore {
     const rows = await this.all(
       `SELECT 1 FROM quarantined_test_identities WHERE test_id = ?`,
       [resolved.testId],
+    );
+    return rows.length > 0;
+  }
+
+  async insertCommitChanges(commitSha: string, changes: CommitChange[]): Promise<void> {
+    for (const change of changes) {
+      await this.run(
+        `INSERT INTO commit_changes (commit_sha, file_path, change_type, additions, deletions)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT (commit_sha, file_path) DO NOTHING`,
+        [commitSha, change.filePath, change.changeType, change.additions, change.deletions],
+      );
+    }
+  }
+
+  async hasCommitChanges(commitSha: string): Promise<boolean> {
+    const rows = await this.all(
+      `SELECT 1 FROM commit_changes WHERE commit_sha = ? LIMIT 1`,
+      [commitSha],
     );
     return rows.length > 0;
   }
