@@ -28,6 +28,7 @@ export interface SampleOpts {
   quarantineManifestEntries?: QuarantineManifestEntry[];
   listedTests?: TestId[];
   coFailureDays?: number;
+  coFailureAlpha?: number;
 }
 
 export interface SamplingSummary {
@@ -162,7 +163,9 @@ export async function planSample(opts: SampleOpts): Promise<SamplePlan> {
           taskId: test.task_id,
           filter: test.filter,
         });
-        const boost = boosts.get(key) ?? 0;
+        const rawBoost = boosts.get(key) ?? 0;
+        const alpha = opts.coFailureAlpha ?? 1.0;
+        const boost = rawBoost * alpha;
         return boost > 0 ? { ...test, co_failure_boost: boost } : test;
       });
     }
