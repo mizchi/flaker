@@ -6,6 +6,8 @@ import { playwrightAdapter } from "../adapters/playwright.js";
 import { junitAdapter } from "../adapters/junit.js";
 import type { MetricStore, WorkflowRun, TestResult } from "../storage/types.js";
 import { toStoredTestResult } from "../storage/test-result-mapper.js";
+import { collectCommitChanges } from "./collect-commit-changes.js";
+import { resolveCurrentCommitSha } from "../core/git.js";
 
 export interface CollectLocalOpts {
   store: MetricStore;
@@ -106,6 +108,11 @@ export async function runCollectLocal(opts: CollectLocalOpts): Promise<CollectLo
       );
       await store.insertTestResults(testResults);
       testsImported += testResults.length;
+    }
+
+    const realCommitSha = resolveCurrentCommitSha(workspace);
+    if (realCommitSha) {
+      await collectCommitChanges(store, workspace, realCommitSha);
     }
 
     runsImported++;

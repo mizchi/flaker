@@ -5,6 +5,7 @@ import { createTestResultAdapter } from "../adapters/index.js";
 import type { TestResultAdapter } from "../adapters/types.js";
 import type { MetricStore, WorkflowRun, TestResult } from "../storage/types.js";
 import { toStoredTestResult } from "../storage/test-result-mapper.js";
+import { collectCommitChanges } from "./collect-commit-changes.js";
 
 export interface GitHubClient {
   listWorkflowRuns(): Promise<{
@@ -218,6 +219,7 @@ export async function collectWorkflowRuns(
       if (testResults.length > 0) {
         await store.insertTestResults(testResults);
       }
+      await collectCommitChanges(store, process.cwd(), run.head_sha);
       await store.recordCollectedArtifact(collectedRecord);
 
       runsCollected++;
