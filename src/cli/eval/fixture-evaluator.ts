@@ -2,6 +2,29 @@ import type { MetricStore } from "../storage/types.js";
 import type { FixtureData } from "./fixture-generator.js";
 import type { DependencyResolver } from "../resolvers/types.js";
 import { planSample } from "../commands/sample.js";
+import { selectByCoverage, type TestCoverageInput } from "./coverage-guided.js";
+
+function generateSyntheticCoverage(fixture: FixtureData): TestCoverageInput[] {
+  return fixture.tests.map((t) => {
+    const moduleMatch = t.suite.match(/module_(\d+)/);
+    const moduleIdx = moduleMatch ? parseInt(moduleMatch[1]) : 0;
+    const edges: string[] = [];
+    for (let e = 0; e < 10; e++) {
+      edges.push(`src/module_${moduleIdx}.ts:${e}`);
+    }
+    return { suite: t.suite, edges };
+  });
+}
+
+function getChangedEdges(changedFiles: { filePath: string }[]): string[] {
+  const edges: string[] = [];
+  for (const f of changedFiles) {
+    for (let e = 0; e < 10; e++) {
+      edges.push(`${f.filePath}:${e}`);
+    }
+  }
+  return edges;
+}
 
 function createFixtureResolver(fixture: FixtureData): DependencyResolver {
   return {
@@ -97,6 +120,50 @@ export async function evaluateFixture(
 
     results.push({
       strategy: strategy.name,
+      recall: Math.round(recall * 1000) / 1000,
+      precision: Math.round(precision * 1000) / 1000,
+      f1: Math.round(f1 * 1000) / 1000,
+      falseNegativeRate: Math.round((1 - recall) * 1000) / 1000,
+      sampleRatio: Math.round(sampleRatio * 1000) / 1000,
+      efficiency: Math.round(efficiency * 100) / 100,
+      totalFailures,
+      detectedFailures,
+      totalSampled,
+    });
+  }
+
+  // Coverage-guided strategy (separate path, doesn't use planSample)
+  {
+    const coverages = generateSyntheticCoverage(fixture);
+    let totalFailures = 0;
+    let detectedFailures = 0;
+    let totalSampled = 0;
+    let totalSampledFailures = 0;
+
+    for (const commit of evalCommits) {
+      const changedEdges = getChangedEdges(commit.changedFiles);
+      const cgResult = selectByCoverage(coverages, changedEdges, sampleCount);
+
+      const sampledSuites = new Set(cgResult.selected);
+      const actualFailures = commit.testResults.filter((r) => r.status === "failed");
+      const detectedInSample = actualFailures.filter((f) => sampledSuites.has(f.suite));
+
+      totalFailures += actualFailures.length;
+      detectedFailures += detectedInSample.length;
+      totalSampled += cgResult.selected.length;
+      totalSampledFailures += cgResult.selected.filter((suite) =>
+        commit.testResults.some((r) => r.suite === suite && r.status === "failed"),
+      ).length;
+    }
+
+    const recall = totalFailures > 0 ? detectedFailures / totalFailures : 1;
+    const precision = totalSampled > 0 ? totalSampledFailures / totalSampled : 0;
+    const f1 = recall + precision > 0 ? (2 * recall * precision) / (recall + precision) : 0;
+    const sampleRatio = fixture.tests.length > 0 ? sampleCount / fixture.tests.length : 0;
+    const efficiency = sampleRatio > 0 ? recall / sampleRatio : 0;
+
+    results.push({
+      strategy: "coverage-guided",
       recall: Math.round(recall * 1000) / 1000,
       precision: Math.round(precision * 1000) / 1000,
       f1: Math.round(f1 * 1000) / 1000,
