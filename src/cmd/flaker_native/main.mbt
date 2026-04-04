@@ -8,6 +8,8 @@ async fn main {
   match args[1] {
     "collect" => cmd_collect(args)
     "calibrate" => cmd_calibrate(args)
+    "flaky" => cmd_flaky(args)
+    "sample" => cmd_sample(args)
     _ => print_help()
   }
 }
@@ -16,12 +18,12 @@ async fn main {
 fn print_help() -> Unit {
   println("flaker-native — MoonBit native CLI for flaker")
   println("")
-  println("Getting started:")
-  println("  flaker-native collect              Fetch CI data from GitHub")
-  println("  flaker-native calibrate            Analyze and show project profile")
-  println("")
-  println("Options:")
-  println("  collect --last <days>              Days of history (default: 30)")
+  println("Commands:")
+  println("  collect [--last <days>]      Fetch CI data from GitHub")
+  println("  calibrate                    Analyze project and recommend config")
+  println("  flaky [--top <n>]            Show flaky test rankings")
+  println("  sample [--count <n>]         Select tests to run")
+  println("                               [--strategy random|weighted|hybrid]")
 }
 
 ///|

@@ -4,7 +4,10 @@ import {
   "mizchi/github/actions" @github_actions,
   "f4ah6o/duckdb" @duckdb,
   "mizchi/zlib" @zlib,
+  "mizchi/flaker/contracts" @types,
+  "mizchi/flaker/sampling" @sampler,
   "moonbitlang/async",
+  "moonbitlang/core/strconv",
   "moonbitlang/async/fs" @fs,
   "moonbitlang/core/env" @env,
 }
