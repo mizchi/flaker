@@ -2,6 +2,7 @@ import {
   "bobzhang/toml" @toml,
   "mizchi/github/client" @github_client,
   "mizchi/github/actions" @github_actions,
+  "f4ah6o/duckdb" @duckdb,
   "moonbitlang/async",
   "moonbitlang/async/fs" @fs,
   "moonbitlang/core/env" @env,
