@@ -1,0 +1,14 @@
+import {
+  "bobzhang/toml" @toml,
+  "mizchi/github/client" @github_client,
+  "mizchi/github/actions" @github_actions,
+  "moonbitlang/async",
+  "moonbitlang/async/fs" @fs,
+  "moonbitlang/core/env" @env,
+}
+
+supported_targets = "+native"
+
+options(
+  "is-main": true,
+)
