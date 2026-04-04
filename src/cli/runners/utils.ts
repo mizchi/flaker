@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 
 export function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -10,6 +10,30 @@ export interface CommandResult {
   stderr: string;
 }
 
+/**
+ * Run a command safely using spawnSync with argument array.
+ * Avoids shell interpretation of metacharacters.
+ */
+export function runCommandSafe(
+  cmd: string,
+  args: string[],
+  opts?: { cwd?: string; timeout?: number; env?: Record<string, string> },
+): CommandResult {
+  const result = spawnSync(cmd, args, {
+    encoding: "utf-8",
+    cwd: opts?.cwd,
+    timeout: opts?.timeout,
+    env: opts?.env ? { ...process.env, ...opts.env } : undefined,
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  return {
+    exitCode: result.status ?? 1,
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? "",
+  };
+}
+
+/** @deprecated Use runCommandSafe with argument arrays to prevent command injection */
 export function runCommand(
   cmd: string,
   opts?: { cwd?: string; timeout?: number; env?: Record<string, string> },

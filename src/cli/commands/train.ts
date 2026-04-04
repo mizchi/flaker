@@ -50,7 +50,7 @@ export async function trainModel(opts: TrainOpts): Promise<TrainResult> {
       COALESCE(wr.source, 'ci') AS source
     FROM test_results tr
     LEFT JOIN workflow_runs wr ON tr.workflow_run_id = wr.id
-    WHERE tr.created_at > CURRENT_TIMESTAMP - INTERVAL '${windowDays} days'
+    WHERE tr.created_at > CURRENT_TIMESTAMP - INTERVAL (${Number(windowDays)} || ' days')
   `);
 
   // Build per-test aggregates, split by source

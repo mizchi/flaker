@@ -29,7 +29,7 @@ export async function analyzeProject(
     SELECT COUNT(DISTINCT tr.suite || '::' || tr.test_name) AS cnt
     FROM test_results tr
     JOIN workflow_runs wr ON tr.workflow_run_id = wr.id
-    WHERE tr.created_at > CURRENT_TIMESTAMP - INTERVAL '${window} days'
+    WHERE tr.created_at > CURRENT_TIMESTAMP - INTERVAL (${Number(window)} || ' days')
       AND COALESCE(wr.source, 'ci') = 'ci'
   `);
   const testCount = Number(testCountRows[0]?.cnt ?? 0);
@@ -45,7 +45,7 @@ export async function analyzeProject(
         SUM(CASE WHEN tr.status IN ('failed', 'flaky') THEN 1 ELSE 0 END) AS fail_count
       FROM test_results tr
       JOIN workflow_runs wr ON tr.workflow_run_id = wr.id
-      WHERE tr.created_at > CURRENT_TIMESTAMP - INTERVAL '${window} days'
+      WHERE tr.created_at > CURRENT_TIMESTAMP - INTERVAL (${Number(window)} || ' days')
         AND COALESCE(wr.source, 'ci') = 'ci'
       GROUP BY tr.suite, tr.test_name
     ) sub
@@ -76,7 +76,7 @@ export async function analyzeProject(
               ELSE 0 END AS co_fail_rate
           FROM commit_changes cc
           JOIN test_results tr ON cc.commit_sha = tr.commit_sha
-          WHERE tr.created_at > CURRENT_TIMESTAMP - INTERVAL '${window} days'
+          WHERE tr.created_at > CURRENT_TIMESTAMP - INTERVAL (${Number(window)} || ' days')
           GROUP BY cc.file_path, test_key
           HAVING co_runs >= 3 AND co_fails > 0
         ) sub
@@ -91,7 +91,7 @@ export async function analyzeProject(
   const commitRows = await store.raw<{ cnt: number }>(`
     SELECT COUNT(DISTINCT commit_sha) AS cnt
     FROM test_results
-    WHERE created_at > CURRENT_TIMESTAMP - INTERVAL '${window} days'
+    WHERE created_at > CURRENT_TIMESTAMP - INTERVAL (${Number(window)} || ' days')
       AND commit_sha IS NOT NULL
   `);
   const commitCount = Number(commitRows[0]?.cnt ?? 0);

@@ -57,7 +57,7 @@ export async function runInsights(opts: InsightsOpts): Promise<InsightsResult> {
         AND tr.status IN ('failed', 'flaky'))::INTEGER AS local_fails
     FROM test_results tr
     LEFT JOIN workflow_runs wr ON tr.workflow_run_id = wr.id
-    WHERE tr.created_at > CURRENT_TIMESTAMP - INTERVAL '${window} days'
+    WHERE tr.created_at > CURRENT_TIMESTAMP - INTERVAL (${Number(window)} || ' days')
     GROUP BY tr.suite, tr.test_name
     HAVING ci_runs + local_runs >= 2
   `);

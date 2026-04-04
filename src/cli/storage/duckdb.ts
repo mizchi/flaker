@@ -325,7 +325,7 @@ export class DuckDBStore implements MetricStore {
       GROUP BY test_id, suite, test_name
       HAVING flaky_commits > 0
       ORDER BY true_flaky_rate DESC`;
-    if (opts?.top) sql += ` LIMIT ${opts.top}`;
+    if (opts?.top) sql += ` LIMIT ${Number(opts.top)}`;
     const rows = await this.all(sql);
     return rows.map((r: any) => ({
       testId: r.test_id || createStableTestId({ suite: r.suite, testName: r.test_name }),
@@ -381,7 +381,7 @@ export class DuckDBStore implements MetricStore {
       ${where}
       GROUP BY test_id, task_id, suite, test_name, filter_text, variant
       ORDER BY flaky_rate DESC`;
-    if (opts?.top) sql += ` LIMIT ${opts.top}`;
+    if (opts?.top) sql += ` LIMIT ${Number(opts.top)}`;
     const rows = await this.all(sql, params);
     return rows.map((r: any) => {
       const resolved = resolveTestIdentity({
@@ -513,6 +513,11 @@ export class DuckDBStore implements MetricStore {
     return boosts;
   }
 
+  /** Escape a string for safe use in DuckDB SQL literals (single-quote context) */
+  private sanitizeSqlLiteral(s: string): string {
+    return s.replace(/'/g, "''");
+  }
+
   async exportRunToParquet(workflowRunId: number, outputDir: string): Promise<ExportResult> {
     mkdirSync(outputDir, { recursive: true });
 
@@ -528,9 +533,15 @@ export class DuckDBStore implements MetricStore {
     if (!run) throw new Error(`Workflow run ${workflowRunId} not found`);
     const commitSha = run.commit_sha;
 
+    const safeWrPath = this.sanitizeSqlLiteral(wrPath);
+    const safeTrPath = this.sanitizeSqlLiteral(trPath);
+    const safeCcPath = this.sanitizeSqlLiteral(ccPath);
+    const safeSha = this.sanitizeSqlLiteral(commitSha);
+    const safeRunId = Number(workflowRunId);
+
     // Export workflow_runs
     await this.run(
-      `COPY (SELECT * FROM workflow_runs WHERE id = ${workflowRunId}) TO '${wrPath}' (FORMAT PARQUET)`,
+      `COPY (SELECT * FROM workflow_runs WHERE id = ${safeRunId}) TO '${safeWrPath}' (FORMAT PARQUET)`,
     );
 
     // Export test_results for this run
@@ -539,7 +550,7 @@ export class DuckDBStore implements MetricStore {
       [workflowRunId],
     );
     await this.run(
-      `COPY (SELECT * FROM test_results WHERE workflow_run_id = ${workflowRunId}) TO '${trPath}' (FORMAT PARQUET)`,
+      `COPY (SELECT * FROM test_results WHERE workflow_run_id = ${safeRunId}) TO '${safeTrPath}' (FORMAT PARQUET)`,
     );
 
     // Export commit_changes for this commit
@@ -548,7 +559,7 @@ export class DuckDBStore implements MetricStore {
       [commitSha],
     );
     await this.run(
-      `COPY (SELECT * FROM commit_changes WHERE commit_sha = '${commitSha}') TO '${ccPath}' (FORMAT PARQUET)`,
+      `COPY (SELECT * FROM commit_changes WHERE commit_sha = '${safeSha}') TO '${safeCcPath}' (FORMAT PARQUET)`,
     );
 
     return {
@@ -579,25 +590,30 @@ export class DuckDBStore implements MetricStore {
     let commitChangesImported = 0;
 
     for (const file of files) {
+      // Validate filename to prevent path traversal/SQL injection
+      if (file.includes("'") || file.includes("..") || file.includes("/") || file.includes("\\")) {
+        continue;
+      }
       const filePath = join(inputDir, file);
+      const safePath = this.sanitizeSqlLiteral(filePath);
       if (file.startsWith("workflow_run_")) {
         const [before] = await this.all("SELECT COUNT(*)::INTEGER AS cnt FROM workflow_runs");
         await this.exec(
-          `INSERT OR IGNORE INTO workflow_runs SELECT * FROM read_parquet('${filePath}')`,
+          `INSERT OR IGNORE INTO workflow_runs SELECT * FROM read_parquet('${safePath}')`,
         );
         const [after] = await this.all("SELECT COUNT(*)::INTEGER AS cnt FROM workflow_runs");
         workflowRunsImported += after.cnt - before.cnt;
       } else if (file.startsWith("test_results_")) {
         const [before] = await this.all("SELECT COUNT(*)::INTEGER AS cnt FROM test_results");
         await this.exec(
-          `INSERT OR IGNORE INTO test_results SELECT * FROM read_parquet('${filePath}')`,
+          `INSERT OR IGNORE INTO test_results SELECT * FROM read_parquet('${safePath}')`,
         );
         const [after] = await this.all("SELECT COUNT(*)::INTEGER AS cnt FROM test_results");
         testResultsImported += after.cnt - before.cnt;
       } else if (file.startsWith("commit_changes_")) {
         const [before] = await this.all("SELECT COUNT(*)::INTEGER AS cnt FROM commit_changes");
         await this.exec(
-          `INSERT OR IGNORE INTO commit_changes SELECT * FROM read_parquet('${filePath}')`,
+          `INSERT OR IGNORE INTO commit_changes SELECT * FROM read_parquet('${safePath}')`,
         );
         const [after] = await this.all("SELECT COUNT(*)::INTEGER AS cnt FROM commit_changes");
         commitChangesImported += after.cnt - before.cnt;
