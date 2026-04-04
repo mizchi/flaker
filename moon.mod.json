@@ -2,8 +2,9 @@
   "name": "mizchi/flaker",
   "version": "0.0.1",
   "deps": {
-    "mizchi/bitflow": "0.3.1",
-    "mizchi/parquet": "0.2.0"
+    "mizchi/bitflow": "0.4.1",
+    "mizchi/parquet": "0.2.0",
+    "mizchi/github": "0.1.0"
   },
   "readme": "README.md",
   "repository": "https://github.com/mizchi/flaker",
