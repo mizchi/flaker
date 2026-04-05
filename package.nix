@@ -18,7 +18,7 @@ let
 in
 stdenv.mkDerivation {
   pname = "flaker";
-  version = "0.0.2";
+  version = "0.0.3";
   src = ./.;
 
   nativeBuildInputs = [

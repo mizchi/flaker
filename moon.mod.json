@@ -1,6 +1,6 @@
 {
   "name": "mizchi/flaker",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "deps": {
     "mizchi/bitflow": "0.4.1",
     "mizchi/parquet": "0.2.0",
