@@ -68,12 +68,20 @@ export async function computeKpi(
         AND sr.created_at > CURRENT_TIMESTAMP - INTERVAL (${Number(window)} || ' days')
     ),
     sampled_tests AS (
-      SELECT sr.commit_sha, srt.suite, srt.test_name, srt.is_holdout
+      SELECT sr.commit_sha, srt.suite, srt.test_name
       FROM sampling_run_tests srt
       JOIN sampling_runs sr ON srt.sampling_run_id = sr.id
       WHERE sr.command_kind = 'run'
         AND sr.created_at > CURRENT_TIMESTAMP - INTERVAL (${Number(window)} || ' days')
         AND srt.is_holdout = FALSE
+    ),
+    holdout_tests AS (
+      SELECT sr.commit_sha, srt.suite, srt.test_name
+      FROM sampling_run_tests srt
+      JOIN sampling_runs sr ON srt.sampling_run_id = sr.id
+      WHERE sr.command_kind = 'run'
+        AND sr.created_at > CURRENT_TIMESTAMP - INTERVAL (${Number(window)} || ' days')
+        AND srt.is_holdout = TRUE
     ),
     ci_results AS (
       SELECT tr.commit_sha, tr.suite, tr.test_name, tr.status, tr.duration_ms
@@ -99,6 +107,11 @@ export async function computeKpi(
       INNER JOIN matched_commits mc ON cr.commit_sha = mc.commit_sha
       LEFT JOIN sampled_tests st ON cr.commit_sha = st.commit_sha
         AND cr.suite = st.suite AND cr.test_name = st.test_name
+      WHERE NOT EXISTS (
+        SELECT 1 FROM holdout_tests ht
+        WHERE ht.commit_sha = cr.commit_sha
+          AND ht.suite = cr.suite AND ht.test_name = cr.test_name
+      )
     )
     SELECT
       (SELECT COUNT(DISTINCT commit_sha)::INTEGER FROM matched_commits) AS matched,
@@ -269,7 +282,7 @@ export function formatKpi(kpi: FlakerKpi): string {
     lines.push(`  False negative:   ${s.falseNegativeRate != null ? s.falseNegativeRate + "%" : "N/A"} (skipped but CI failed)`);
     lines.push(`  Pass correlation: ${s.passCorrelation != null ? s.passCorrelation + "%" : "N/A"} (skipped tests that CI passed)`);
     lines.push(`  Sample ratio:     ${s.sampleRatio != null ? s.sampleRatio + "%" : "N/A"}`);
-    lines.push(`  Skipped time:     ${s.skippedMinutes != null ? s.skippedMinutes + " min saved" : "N/A"}`);
+    lines.push(`  Skipped time:     ${s.skippedMinutes != null ? "~" + s.skippedMinutes + " min saved (estimated from CI durations)" : "N/A"}`);
     lines.push(`  Holdout FNR:      ${s.holdoutFNR != null ? s.holdoutFNR + "%" : "N/A"}`);
     if (s.confusionMatrix) {
       const cm = s.confusionMatrix;
