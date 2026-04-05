@@ -296,9 +296,10 @@ appendHelpText(
   "  flaker collect-local         Import local actrun history\n" +
   "\n" +
   "Analysis:\n" +
+  "  flaker kpi                   KPI dashboard (sampling, flaky, data quality)\n" +
   "  flaker flaky                 Show flaky test rankings\n" +
   "  flaker insights              Compare CI vs local failure patterns\n" +
-  "  flaker eval                  Measure sampling accuracy against CI\n" +
+  "  flaker eval                  Detailed evaluation report\n" +
   "\n" +
   "Advanced:\n" +
   "  flaker train                 Train GBDT model for ML-based selection\n" +
@@ -1451,6 +1452,29 @@ program
       }
     },
   );
+
+// --- kpi ---
+program
+  .command("kpi")
+  .description("Show KPI dashboard — sampling effectiveness, flaky tracking, data quality")
+  .option("--window-days <days>", "Analysis window in days", "30")
+  .option("--json", "Output as JSON")
+  .action(async (opts: { windowDays: string; json?: boolean }) => {
+    const config = loadConfig(process.cwd());
+    const store = new DuckDBStore(resolve(config.storage.path));
+    await store.initialize();
+    try {
+      const { computeKpi, formatKpi } = await import("./commands/kpi.js");
+      const kpi = await computeKpi(store, { windowDays: parseInt(opts.windowDays, 10) });
+      if (opts.json) {
+        console.log(JSON.stringify(kpi, null, 2));
+      } else {
+        console.log(formatKpi(kpi));
+      }
+    } finally {
+      await store.close();
+    }
+  });
 
 // --- insights ---
 program
