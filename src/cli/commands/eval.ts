@@ -15,6 +15,7 @@ export interface EvalReport {
     trueFlakyTests: number;
     quarantinedTests: number;
     distribution: { range: string; count: number }[];
+    flakyTestDetails?: { flakyRate: number; totalRuns: number }[];
   };
   resolution: {
     resolvedFlaky: number;
@@ -202,8 +203,15 @@ function buildEvalRecommendations(report: EvalReport): string[] {
   if (d.avgRunsPerTest < 5) {
     recommendations.push("Collect more data: run `flaker collect` regularly to build history");
   }
-  if (det.flakyTests > 0 && det.quarantinedTests === 0) {
-    recommendations.push("Quarantine flaky tests: run `flaker quarantine --auto`");
+  const brokenInEval = det.flakyTestDetails?.filter(
+    (t) => t.flakyRate >= 100 && t.totalRuns >= 5,
+  ).length ?? 0;
+  if (brokenInEval > 0) {
+    recommendations.push(`Fix or quarantine ${brokenInEval} broken test(s) (100% fail rate): run \`flaker flaky\``);
+  }
+  const intermittentInEval = det.flakyTests - brokenInEval;
+  if (intermittentInEval > 0 && det.quarantinedTests === 0) {
+    recommendations.push(`Quarantine ${intermittentInEval} flaky test(s): run \`flaker quarantine --auto\``);
   }
   if (res.newFlaky > 0) {
     recommendations.push(`Investigate ${res.newFlaky} newly flaky test(s): run \`flaker flaky\``);
@@ -657,6 +665,10 @@ export async function runEval(opts: { store: MetricStore; windowDays?: number })
       trueFlakyTests: trueFlakyTests.length,
       quarantinedTests: quarantined.length,
       distribution,
+      flakyTestDetails: flakyTests.map((t) => ({
+        flakyRate: t.flakyRate,
+        totalRuns: t.totalRuns,
+      })),
     },
     resolution: {
       resolvedFlaky: resolutionRow?.resolved_flaky ?? 0,
@@ -693,10 +705,17 @@ function formatEvalTextReport(report: EvalReport): string {
   }
   lines.push("");
 
-  // Detection
+  // Detection — distinguish broken (100% fail) from intermittent flaky
   lines.push("## Detection");
   const det = report.detection;
-  lines.push(`  Flaky tests:      ${det.flakyTests}`);
+  const brokenCount = det.flakyTestDetails?.filter(
+    (t: { flakyRate: number; totalRuns: number }) => t.flakyRate >= 100 && t.totalRuns >= 5,
+  ).length ?? 0;
+  const intermittentCount = det.flakyTests - brokenCount;
+  if (brokenCount > 0) {
+    lines.push(`  Broken tests:     ${brokenCount} (100% fail — fix or quarantine)`);
+  }
+  lines.push(`  Flaky tests:      ${intermittentCount} (intermittent failures)`);
   lines.push(`  True flaky:       ${det.trueFlakyTests}`);
   lines.push(`  Quarantined:      ${det.quarantinedTests}`);
   lines.push(`  Distribution:`);
@@ -763,7 +782,8 @@ function formatEvalMarkdownReport(
     "| Metric | Value |",
     "| --- | --- |",
     `| Health score | ${report.healthScore}/100 (${healthScoreLabel(report.healthScore)}) |`,
-    `| Flaky tests | ${det.flakyTests} |`,
+    `| Broken tests (100% fail) | ${det.flakyTestDetails?.filter((t) => t.flakyRate >= 100 && t.totalRuns >= 5).length ?? 0} |`,
+    `| Flaky tests (intermittent) | ${det.flakyTests - (det.flakyTestDetails?.filter((t) => t.flakyRate >= 100 && t.totalRuns >= 5).length ?? 0)} |`,
     `| Matched commits | ${kpi.matchedCommits} |`,
     `| Avg sample ratio | ${kpi.avgSampleRatio != null ? `${kpi.avgSampleRatio}% of CI` : "N/A"} |`,
     `| Avg saved minutes | ${kpi.avgSavedMinutes != null ? `${kpi.avgSavedMinutes} min` : "N/A"} |`,
