@@ -1,29 +1,42 @@
 import type { MetricStore } from "../storage/types.js";
 
 export interface FlakerKpi {
-  /** ISO timestamp of when this KPI was computed */
   timestamp: string;
-  /** Analysis window in days */
   windowDays: number;
   sampling: {
-    recall: number | null;
-    sampleRatio: number | null;
-    timeSavedMinutes: number | null;
-    holdoutFNR: number | null;
+    /** Matched commits (both local sampling + CI full run on same SHA) */
     matchedCommits: number;
+    /** CI failures caught by sampling / total CI failures */
+    recall: number | null;
+    /** Sampling selected but CI passed (noise) */
+    falsePositiveRate: number | null;
+    /** CI failed but sampling skipped (missed bugs) */
+    falseNegativeRate: number | null;
+    /** Fraction of tests selected vs total */
+    sampleRatio: number | null;
+    /** Local pass → CI pass correlation */
+    passCorrelation: number | null;
+    /** Holdout false negative rate */
+    holdoutFNR: number | null;
+    /** Estimated time saved by skipping (minutes) */
+    skippedMinutes: number | null;
+    /** Confusion matrix */
+    confusionMatrix: {
+      truePositive: number;
+      falsePositive: number;
+      falseNegative: number;
+      trueNegative: number;
+    } | null;
   };
   flaky: {
     brokenTests: number;
     intermittentFlaky: number;
-    /** Percentage of tests with intermittent failures (excluding broken) */
     trueFlakyRate: number;
-    /** Change in unique failing test count vs previous window */
     flakyTrend: number;
   };
   data: {
     commitCount: number;
     commitsWithChanges: number;
-    /** Percentage of commits that have commit_changes data */
     coFailureCoverage: number;
     coFailureReady: boolean;
     confidence: "insufficient" | "low" | "moderate" | "high";
@@ -36,28 +49,97 @@ export async function computeKpi(
 ): Promise<FlakerKpi> {
   const window = opts?.windowDays ?? 30;
 
-  // --- Sampling ---
-  const [samplingRow] = await store.raw<{
+  // --- Sampling: confusion matrix from matched commits ---
+  // A "matched commit" has both a sampling_run (local) and CI test_results
+  const [cmRow] = await store.raw<{
     matched: number;
+    tp: number;
+    fp: number;
+    fn_count: number;
+    tn: number;
     sample_ratio: number | null;
-    saved_minutes: number | null;
+    skipped_minutes: number | null;
   }>(`
-    WITH local_runs AS (
-      SELECT DISTINCT sr.commit_sha, sr.selected_count, sr.candidate_count, sr.duration_ms
+    WITH local_sampling AS (
+      SELECT sr.commit_sha,
+        sr.selected_count, sr.candidate_count, sr.duration_ms
       FROM sampling_runs sr
       WHERE sr.command_kind = 'run'
         AND sr.created_at > CURRENT_TIMESTAMP - INTERVAL (${Number(window)} || ' days')
+    ),
+    sampled_tests AS (
+      SELECT sr.commit_sha, srt.suite, srt.test_name, srt.is_holdout
+      FROM sampling_run_tests srt
+      JOIN sampling_runs sr ON srt.sampling_run_id = sr.id
+      WHERE sr.command_kind = 'run'
+        AND sr.created_at > CURRENT_TIMESTAMP - INTERVAL (${Number(window)} || ' days')
+        AND srt.is_holdout = FALSE
+    ),
+    ci_results AS (
+      SELECT tr.commit_sha, tr.suite, tr.test_name, tr.status, tr.duration_ms
+      FROM test_results tr
+      JOIN workflow_runs wr ON tr.workflow_run_id = wr.id
+      WHERE COALESCE(wr.source, 'ci') = 'ci'
+        AND tr.created_at > CURRENT_TIMESTAMP - INTERVAL (${Number(window)} || ' days')
+    ),
+    matched_commits AS (
+      SELECT DISTINCT ls.commit_sha
+      FROM local_sampling ls
+      WHERE EXISTS (SELECT 1 FROM ci_results cr WHERE cr.commit_sha = ls.commit_sha)
+    ),
+    per_test AS (
+      SELECT
+        cr.commit_sha,
+        cr.suite,
+        cr.test_name,
+        cr.status AS ci_status,
+        cr.duration_ms,
+        CASE WHEN st.suite IS NOT NULL THEN TRUE ELSE FALSE END AS was_sampled
+      FROM ci_results cr
+      INNER JOIN matched_commits mc ON cr.commit_sha = mc.commit_sha
+      LEFT JOIN sampled_tests st ON cr.commit_sha = st.commit_sha
+        AND cr.suite = st.suite AND cr.test_name = st.test_name
     )
     SELECT
-      0::INTEGER AS matched,
-      CASE WHEN (SELECT COUNT(*) FROM local_runs) > 0
-        THEN ROUND(AVG(selected_count * 100.0 / NULLIF(candidate_count, 0)), 1)
+      (SELECT COUNT(DISTINCT commit_sha)::INTEGER FROM matched_commits) AS matched,
+      COALESCE(SUM(CASE WHEN was_sampled AND ci_status IN ('failed', 'flaky') THEN 1 ELSE 0 END), 0)::INTEGER AS tp,
+      COALESCE(SUM(CASE WHEN was_sampled AND ci_status = 'passed' THEN 1 ELSE 0 END), 0)::INTEGER AS fp,
+      COALESCE(SUM(CASE WHEN NOT was_sampled AND ci_status IN ('failed', 'flaky') THEN 1 ELSE 0 END), 0)::INTEGER AS fn_count,
+      COALESCE(SUM(CASE WHEN NOT was_sampled AND ci_status = 'passed' THEN 1 ELSE 0 END), 0)::INTEGER AS tn,
+      CASE WHEN (SELECT COUNT(*) FROM local_sampling) > 0
+        THEN (SELECT ROUND(AVG(selected_count * 100.0 / NULLIF(candidate_count, 0)), 1) FROM local_sampling)
         ELSE NULL END AS sample_ratio,
-      CASE WHEN (SELECT COUNT(*) FROM local_runs) > 0
-        THEN ROUND(SUM((candidate_count - selected_count) * COALESCE(duration_ms, 0) / NULLIF(candidate_count, 1)) / 60000.0, 1)
-        ELSE NULL END AS saved_minutes
-    FROM local_runs
+      COALESCE(
+        (SELECT ROUND(SUM(
+          CASE WHEN NOT was_sampled THEN duration_ms ELSE 0 END
+        ) / 60000.0, 1) FROM per_test),
+        NULL
+      ) AS skipped_minutes
+    FROM per_test
   `);
+
+  const matched = cmRow?.matched ?? 0;
+  const tp = cmRow?.tp ?? 0;
+  const fp = cmRow?.fp ?? 0;
+  const fn = cmRow?.fn_count ?? 0;
+  const tn = cmRow?.tn ?? 0;
+
+  const totalCiFailures = tp + fn;
+  const totalSampled = tp + fp;
+  const totalSkipped = fn + tn;
+
+  let recall: number | null = null;
+  let falsePositiveRate: number | null = null;
+  let falseNegativeRate: number | null = null;
+  let passCorrelation: number | null = null;
+
+  if (matched > 0) {
+    recall = totalCiFailures > 0 ? Math.round((tp / totalCiFailures) * 1000) / 10 : 100;
+    falsePositiveRate = totalSampled > 0 ? Math.round((fp / totalSampled) * 1000) / 10 : 0;
+    falseNegativeRate = totalSkipped > 0 ? Math.round((fn / totalSkipped) * 1000) / 10 : 0;
+    // Pass correlation: what fraction of skipped tests actually passed in CI
+    passCorrelation = totalSkipped > 0 ? Math.round((tn / totalSkipped) * 1000) / 10 : 100;
+  }
 
   // Holdout FNR
   const [holdoutRow] = await store.raw<{ fnr: number | null }>(`
@@ -75,7 +157,7 @@ export async function computeKpi(
     ) sub
   `);
 
-  // --- Flaky (same classification as calibrate: >= 5 runs) ---
+  // --- Flaky ---
   const [flakyRow] = await store.raw<{
     broken: number;
     intermittent: number;
@@ -96,7 +178,6 @@ export async function computeKpi(
     ) sub
   `);
 
-  // Trend: unique failing tests this window vs previous window (same >= 5 threshold)
   const [trendRow] = await store.raw<{ current_count: number; previous_count: number }>(`
     SELECT
       (SELECT COUNT(DISTINCT suite || '::' || test_name)::INTEGER FROM (
@@ -104,8 +185,7 @@ export async function computeKpi(
           COUNT(*) FILTER (WHERE status IN ('failed', 'flaky')) AS fails
         FROM test_results
         WHERE created_at > CURRENT_TIMESTAMP - INTERVAL (${Number(window)} || ' days')
-        GROUP BY suite, test_name
-        HAVING runs >= 5 AND fails > 0
+        GROUP BY suite, test_name HAVING runs >= 5 AND fails > 0
       ) sub) AS current_count,
       (SELECT COUNT(DISTINCT suite || '::' || test_name)::INTEGER FROM (
         SELECT suite, test_name, COUNT(*) AS runs,
@@ -113,11 +193,9 @@ export async function computeKpi(
         FROM test_results
         WHERE created_at > CURRENT_TIMESTAMP - INTERVAL (${Number(window * 2)} || ' days')
           AND created_at <= CURRENT_TIMESTAMP - INTERVAL (${Number(window)} || ' days')
-        GROUP BY suite, test_name
-        HAVING runs >= 5 AND fails > 0
+        GROUP BY suite, test_name HAVING runs >= 5 AND fails > 0
       ) sub) AS previous_count
   `);
-  const flakyTrend = (trendRow?.current_count ?? 0) - (trendRow?.previous_count ?? 0);
 
   const totalClassified = flakyRow?.total_classified ?? 1;
   const intermittent = flakyRow?.intermittent ?? 0;
@@ -152,17 +230,21 @@ export async function computeKpi(
     timestamp: new Date().toISOString(),
     windowDays: window,
     sampling: {
-      recall: null,
-      sampleRatio: samplingRow?.sample_ratio ?? null,
-      timeSavedMinutes: samplingRow?.saved_minutes ?? null,
+      matchedCommits: matched,
+      recall,
+      falsePositiveRate,
+      falseNegativeRate,
+      sampleRatio: cmRow?.sample_ratio ?? null,
+      passCorrelation,
       holdoutFNR: holdoutRow?.fnr ?? null,
-      matchedCommits: samplingRow?.matched ?? 0,
+      skippedMinutes: cmRow?.skipped_minutes ?? null,
+      confusionMatrix: matched > 0 ? { truePositive: tp, falsePositive: fp, falseNegative: fn, trueNegative: tn } : null,
     },
     flaky: {
       brokenTests: flakyRow?.broken ?? 0,
       intermittentFlaky: intermittent,
       trueFlakyRate: Math.round((intermittent / totalClassified) * 1000) / 10,
-      flakyTrend,
+      flakyTrend: (trendRow?.current_count ?? 0) - (trendRow?.previous_count ?? 0),
     },
     data: {
       commitCount,
@@ -178,12 +260,26 @@ export function formatKpi(kpi: FlakerKpi): string {
   const lines: string[] = ["# flaker KPI Dashboard", ""];
 
   // Sampling
-  if (kpi.sampling.matchedCommits > 0 || kpi.sampling.sampleRatio != null) {
+  const s = kpi.sampling;
+  if (s.matchedCommits > 0) {
     lines.push("## Sampling Effectiveness");
-    lines.push(`  Recall:           ${kpi.sampling.recall != null ? kpi.sampling.recall + "%" : "N/A (need CI+local overlap)"}`);
-    lines.push(`  Sample ratio:     ${kpi.sampling.sampleRatio != null ? kpi.sampling.sampleRatio + "%" : "N/A"}`);
-    lines.push(`  Time saved:       ${kpi.sampling.timeSavedMinutes != null ? kpi.sampling.timeSavedMinutes + " min" : "N/A"}`);
-    lines.push(`  Holdout FNR:      ${kpi.sampling.holdoutFNR != null ? kpi.sampling.holdoutFNR + "%" : "N/A"}`);
+    lines.push(`  Matched commits:  ${s.matchedCommits} (local+CI on same SHA)`);
+    lines.push(`  Recall:           ${s.recall != null ? s.recall + "%" : "N/A"} (CI failures caught)`);
+    lines.push(`  False positive:   ${s.falsePositiveRate != null ? s.falsePositiveRate + "%" : "N/A"} (sampled but CI passed)`);
+    lines.push(`  False negative:   ${s.falseNegativeRate != null ? s.falseNegativeRate + "%" : "N/A"} (skipped but CI failed)`);
+    lines.push(`  Pass correlation: ${s.passCorrelation != null ? s.passCorrelation + "%" : "N/A"} (skipped tests that CI passed)`);
+    lines.push(`  Sample ratio:     ${s.sampleRatio != null ? s.sampleRatio + "%" : "N/A"}`);
+    lines.push(`  Skipped time:     ${s.skippedMinutes != null ? s.skippedMinutes + " min saved" : "N/A"}`);
+    lines.push(`  Holdout FNR:      ${s.holdoutFNR != null ? s.holdoutFNR + "%" : "N/A"}`);
+    if (s.confusionMatrix) {
+      const cm = s.confusionMatrix;
+      lines.push(`  Confusion matrix: TP=${cm.truePositive} FP=${cm.falsePositive} FN=${cm.falseNegative} TN=${cm.trueNegative}`);
+    }
+    lines.push("");
+  } else if (s.sampleRatio != null) {
+    lines.push("## Sampling");
+    lines.push(`  Sample ratio:     ${s.sampleRatio}%`);
+    lines.push(`  (No CI overlap yet — run \`flaker collect\` after \`flaker run\` to validate)`);
     lines.push("");
   }
 
@@ -193,12 +289,7 @@ export function formatKpi(kpi: FlakerKpi): string {
   lines.push(`  Flaky tests:      ${kpi.flaky.intermittentFlaky} (intermittent, >= 5 runs)`);
   lines.push(`  True flaky rate:  ${kpi.flaky.trueFlakyRate}%`);
   const trend = kpi.flaky.flakyTrend;
-  const trendLabel = trend > 0
-    ? `+${trend} tests (worsening vs prev ${kpi.windowDays} days)`
-    : trend < 0
-      ? `${trend} tests (improving vs prev ${kpi.windowDays} days)`
-      : "stable";
-  lines.push(`  Trend:            ${trendLabel}`);
+  lines.push(`  Trend:            ${trend > 0 ? `+${trend} tests (worsening vs prev ${kpi.windowDays} days)` : trend < 0 ? `${trend} tests (improving)` : "stable"}`);
 
   // Data
   lines.push("");
@@ -213,18 +304,22 @@ export function formatKpi(kpi: FlakerKpi): string {
   const steps: string[] = [];
   if (kpi.flaky.brokenTests > 0) {
     issues.push(`${kpi.flaky.brokenTests} broken test(s)`);
-    steps.push(`Fix or quarantine broken tests: \`flaker flaky --top 20\``);
+    steps.push(`Fix or quarantine: \`flaker flaky --top 20\``);
+  }
+  if (s.matchedCommits > 0 && s.falseNegativeRate != null && s.falseNegativeRate > 5) {
+    issues.push(`high false negative rate (${s.falseNegativeRate}%)`);
+    steps.push("Increase sample percentage or switch to hybrid strategy");
   }
   if (kpi.data.confidence === "insufficient" || kpi.data.confidence === "low") {
     issues.push(`${kpi.data.confidence} data (${kpi.data.commitCount} commits)`);
-    steps.push(`Collect more history: \`flaker collect --last 30\``);
+    steps.push(`Collect more: \`flaker collect --last 30\``);
   }
   if (!kpi.data.coFailureReady) {
     issues.push("co-failure data incomplete");
-    steps.push(`Ensure \`flaker collect\` runs with GITHUB_TOKEN set`);
+    steps.push("Ensure `flaker collect` runs with GITHUB_TOKEN");
   }
-  if (kpi.sampling.matchedCommits === 0 && kpi.sampling.sampleRatio == null) {
-    steps.push(`Start using sampling: \`flaker run\``);
+  if (s.matchedCommits === 0 && s.sampleRatio == null) {
+    steps.push(`Start sampling: \`flaker run\``);
   }
 
   if (issues.length === 0) {
