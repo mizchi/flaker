@@ -1,4 +1,4 @@
-import type { ProfileConfig, SamplingConfig } from "./config.ts";
+import type { ProfileConfig, SamplingConfig } from "./config.js";
 
 export interface ResolvedProfile {
   name: string;
@@ -49,7 +49,7 @@ export function resolveProfile(
 
   // Base from sampling config
   const base = {
-    strategy: sampling?.strategy ?? "random",
+    strategy: sampling?.strategy ?? "weighted",
     percentage: sampling?.percentage,
     holdout_ratio: sampling?.holdout_ratio,
     co_failure_days: sampling?.co_failure_days,

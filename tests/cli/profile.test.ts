@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { loadConfig } from "../../src/cli/config.ts";
-import { detectProfileName, resolveProfile } from "../../src/cli/profile.ts";
+import { loadConfig } from "../../src/cli/config.js";
+import { detectProfileName, resolveProfile } from "../../src/cli/profile.js";
 
 // --- Task 1: ProfileConfig type and TOML parsing ---
 
@@ -246,8 +246,8 @@ describe("resolveProfile", () => {
     expect(result.fallback_strategy).toBe("random");
   });
 
-  it("uses 'random' as default strategy when no profile or sampling", () => {
+  it("uses 'weighted' as default strategy when no profile or sampling", () => {
     const result = resolveProfile("nonexistent", undefined, undefined);
-    expect(result.strategy).toBe("random");
+    expect(result.strategy).toBe("weighted");
   });
 });
