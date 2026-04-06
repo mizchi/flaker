@@ -91,6 +91,7 @@ import {
 } from "./quarantine-manifest.js";
 import { detectProfileName, resolveProfile, computeAdaptivePercentage, type ResolvedProfile } from "./profile.js";
 import { computeKpi } from "./commands/kpi.js";
+import { runInsights } from "./commands/insights.js";
 
 function formatHelpExamples(
   title: string,
@@ -635,8 +636,15 @@ addSamplingOptions(
         const profile = opts.resolvedProfile;
         if (profile.adaptive && opts.percentage != null) {
           const kpiData = await computeKpi(store);
+          const insightsData = await runInsights({ store });
+          const divergenceRate = insightsData.summary.totalTests > 0
+            ? insightsData.summary.ciOnlyCount / insightsData.summary.totalTests
+            : null;
           const adaptive = computeAdaptivePercentage(
-            kpiData.sampling.falseNegativeRate,
+            {
+              falseNegativeRate: kpiData.sampling.falseNegativeRate,
+              divergenceRate,
+            },
             {
               basePercentage: opts.percentage,
               fnrLow: profile.adaptive_fnr_low,
