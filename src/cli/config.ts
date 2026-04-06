@@ -15,6 +15,22 @@ export interface SamplingConfig {
   detected_test_count?: number;
 }
 
+export interface ProfileConfig {
+  strategy: string;
+  percentage?: number;
+  holdout_ratio?: number;
+  co_failure_days?: number;
+  model_path?: string;
+  skip_quarantined?: boolean;
+  adaptive?: boolean;
+  adaptive_fnr_low?: number;
+  adaptive_fnr_high?: number;
+  adaptive_min_percentage?: number;
+  adaptive_step?: number;
+  max_duration_seconds?: number;
+  fallback_strategy?: string;
+}
+
 export interface FlakerConfig {
   repo: { owner: string; name: string };
   storage: { path: string };
@@ -30,6 +46,7 @@ export interface FlakerConfig {
   quarantine: { auto: boolean; flaky_rate_threshold: number; min_runs: number };
   flaky: { window_days: number; detection_threshold: number };
   sampling?: SamplingConfig;
+  profile?: Record<string, ProfileConfig>;
 }
 
 const DEFAULT_CONFIG: FlakerConfig = {
