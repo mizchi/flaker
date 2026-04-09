@@ -178,6 +178,9 @@ export class DuckDBStore implements MetricStore {
         run.createdAt ?? new Date(),
       ],
     );
+    if (run.id != null) {
+      await this.syncSequenceWithTable("sampling_runs_id_seq", "sampling_runs", "id");
+    }
     return id;
   }
 
@@ -661,6 +664,9 @@ export class DuckDBStore implements MetricStore {
       }
     }
 
+    await this.syncSequenceWithTable("test_results_id_seq", "test_results", "id");
+    await this.syncSequenceWithTable("sampling_runs_id_seq", "sampling_runs", "id");
+
     return {
       workflowRunsImported,
       testResultsImported,
@@ -725,6 +731,19 @@ export class DuckDBStore implements MetricStore {
         ],
       );
     }
+  }
+
+  private async syncSequenceWithTable(
+    sequenceName: "test_results_id_seq" | "sampling_runs_id_seq",
+    tableName: "test_results" | "sampling_runs",
+    columnName: "id",
+  ): Promise<void> {
+    const [row] = await this.all(
+      `SELECT COALESCE(MAX(${columnName}), 0)::BIGINT AS max_id FROM ${tableName}`,
+    );
+    const nextId = Math.max(1, Number(row?.max_id ?? 0) + 1);
+    await this.exec(`DROP SEQUENCE IF EXISTS ${sequenceName}`);
+    await this.exec(`CREATE SEQUENCE ${sequenceName} START ${nextId}`);
   }
 }
 

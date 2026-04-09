@@ -120,4 +120,54 @@ describe("recordSamplingRunFromSummary", () => {
       },
     ]);
   });
+
+  it("advances the sampling sequence after explicit ids", async () => {
+    const summary: SamplingSummary = {
+      strategy: "full",
+      requestedCount: null,
+      requestedPercentage: 100,
+      seed: null,
+      changedFiles: ["src/example.ts"],
+      candidateCount: 2,
+      selectedCount: 2,
+      sampleRatio: 100,
+      estimatedSavedTests: 0,
+      estimatedSavedMinutes: 0,
+      fallbackReason: null,
+    };
+
+    await recordSamplingRunFromSummary(store, {
+      id: 10,
+      commitSha: "abc123",
+      commandKind: "run",
+      summary,
+      tests: [
+        {
+          suite: "tests/home.spec.ts",
+          testName: "home works",
+          testId: "home-id",
+        },
+      ],
+    });
+
+    await recordSamplingRunFromSummary(store, {
+      commitSha: "def456",
+      commandKind: "sample",
+      summary,
+      tests: [
+        {
+          suite: "tests/auth.spec.ts",
+          testName: "auth works",
+          testId: "auth-id",
+        },
+      ],
+    });
+
+    const ids = await store.raw<Array<{ id: number }>[number]>(`
+      SELECT id::INTEGER AS id
+      FROM sampling_runs
+      ORDER BY id
+    `);
+    expect(ids).toEqual([{ id: 10 }, { id: 11 }]);
+  });
 });
