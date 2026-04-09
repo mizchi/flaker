@@ -303,6 +303,23 @@ flaker quarantine --auto --create-issues
 
 This creates a GitHub Issue per quarantined test via `gh` CLI, with flaky rate, run count, and fix instructions. Requires `gh` to be installed and authenticated.
 
+### Self-Host Rollout
+
+The repo now ships two GitHub-native self-host lanes:
+
+- [ci.yml](https://github.com/mizchi/flaker/blob/main/.github/workflows/ci.yml): a `self-host-advisory` job runs on pull requests, executes `flaker run --profile ci`, snapshots `kpi` / `eval`, and updates a sticky PR comment.
+- [nightly-self-host.yml](https://github.com/mizchi/flaker/blob/main/.github/workflows/nightly-self-host.yml): a scheduled job rebuilds recent CI history with `flaker collect`, runs `flaker run --profile scheduled`, and updates a rolling issue labeled `flaker-self-host`.
+
+Both lanes render the same promotion-readiness summary from `scripts/self-host-review.mjs`. The current default is still advisory: the PR job is non-blocking, and the nightly workflow carries the long-form trend.
+
+Promote `flaker run --profile ci` to a required check only after the nightly issue shows:
+
+- `matched commits >= 20`
+- `false negative rate <= 5%`
+- `pass correlation >= 95%`
+- `holdout FNR <= 10%`
+- `data confidence` reaches `moderate` or `high`
+
 ## Recommended Usage Model
 
 Start with advisory mode, not CI gating.

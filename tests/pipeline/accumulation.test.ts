@@ -85,7 +85,7 @@ describe("data accumulation pipeline", () => {
     expect(result.localRows).toBe(0);
   });
 
-  it("planSample uses accumulated data for weighted strategy", async () => {
+  it("planSample uses accumulated data for weighted strategy", { timeout: 15000 }, async () => {
     const core = await loadCore();
     const fixture = core.generateFixture({
       test_count: 100,

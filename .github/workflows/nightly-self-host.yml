@@ -1,0 +1,151 @@
+name: nightly-self-host
+
+on:
+  schedule:
+    - cron: "17 18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+jobs:
+  self-host:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Setup MoonBit
+        uses: hustcer/setup-moonbit@v1
+
+      - name: MoonBit deps
+        run: moon update
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Prepare artifacts dir
+        run: mkdir -p .artifacts
+
+      - name: Collect CI history
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node dist/cli/main.js collect --last 30 --output .artifacts/collect.txt
+
+      - name: Run flaker scheduled profile
+        id: flaker_run
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          node dist/cli/main.js run --profile scheduled > .artifacts/run.txt 2>&1
+          exit_code=$?
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          exit $exit_code
+
+      - name: Snapshot KPI
+        if: always()
+        run: node dist/cli/main.js kpi --window-days 30 --json > .artifacts/kpi.json
+
+      - name: Snapshot eval
+        if: always()
+        run: node dist/cli/main.js eval --json --window 30 --output .artifacts/eval.json > /dev/null
+
+      - name: Render nightly review
+        if: always()
+        env:
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: >
+          node scripts/self-host-review.mjs
+          --mode issue
+          --kpi .artifacts/kpi.json
+          --eval .artifacts/eval.json
+          --collect .artifacts/collect.txt
+          --run .artifacts/run.txt
+          --run-outcome ${{ steps.flaker_run.outcome }}
+          --workflow-url "${WORKFLOW_URL}"
+          --ref-name "${{ github.ref_name }}"
+          --sha "${{ github.sha }}"
+          --title-out .artifacts/self-host-title.txt
+          --body-out .artifacts/self-host-review.md
+
+      - name: Create or update nightly issue
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const marker = "<!-- flaker-self-host:nightly -->";
+            const title = fs.readFileSync(".artifacts/self-host-title.txt", "utf8").trim();
+            const body = `${marker}\n${fs.readFileSync(".artifacts/self-host-review.md", "utf8")}`;
+            for (const name of ["flaker-self-host"]) {
+              try {
+                await github.rest.issues.createLabel({
+                  owner,
+                  repo,
+                  name,
+                  color: "0e8a16",
+                });
+              } catch (error) {
+                if (error.status !== 422) {
+                  throw error;
+                }
+              }
+            }
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner,
+              repo,
+              state: "open",
+              labels: "flaker-self-host",
+              per_page: 100,
+            });
+            const existing = issues.find((issue) =>
+              !issue.pull_request && typeof issue.body === "string" && issue.body.includes(marker),
+            );
+            if (existing) {
+              await github.rest.issues.update({
+                owner,
+                repo,
+                issue_number: existing.number,
+                title,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner,
+                repo,
+                title,
+                body,
+                labels: ["flaker-self-host"],
+              });
+            }
+
+      - name: Upload nightly artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flaker-self-host-nightly
+          path: .artifacts
+          if-no-files-found: warn
+
+      - name: Fail when scheduled run fails
+        if: steps.flaker_run.outcome == 'failure'
+        run: exit 1
