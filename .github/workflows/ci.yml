@@ -7,6 +7,9 @@ on:
       - "codex/**"
   pull_request:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -151,6 +154,11 @@ jobs:
       - name: Import historical self-host metrics
         run: node dist/cli/main.js import-parquet .artifacts/self-host-metrics
 
+      - name: Reset self-host parquet export dir
+        run: |
+          rm -rf .flaker/artifacts
+          mkdir -p .flaker/artifacts
+
       - name: Run flaker PR advisory
         id: flaker_run
         continue-on-error: true
@@ -244,6 +252,7 @@ jobs:
           name: flaker-self-host-pr-advisory
           path: .artifacts
           if-no-files-found: warn
+          include-hidden-files: true
 
       - name: Upload self-host metrics parquet
         if: always()
@@ -252,3 +261,4 @@ jobs:
           name: flaker-self-host-metrics
           path: .flaker/artifacts
           if-no-files-found: warn
+          include-hidden-files: true

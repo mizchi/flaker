@@ -5,6 +5,9 @@ on:
     - cron: "17 18 * * *"
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 permissions:
   contents: read
   actions: read
@@ -59,6 +62,11 @@ jobs:
 
       - name: Import historical self-host metrics
         run: node dist/cli/main.js import-parquet .artifacts/self-host-metrics
+
+      - name: Reset self-host parquet export dir
+        run: |
+          rm -rf .flaker/artifacts
+          mkdir -p .flaker/artifacts
 
       - name: Run flaker scheduled profile
         id: flaker_run
@@ -157,6 +165,7 @@ jobs:
           name: flaker-self-host-nightly
           path: .artifacts
           if-no-files-found: warn
+          include-hidden-files: true
 
       - name: Upload self-host metrics parquet
         if: always()
@@ -165,6 +174,7 @@ jobs:
           name: flaker-self-host-metrics
           path: .flaker/artifacts
           if-no-files-found: warn
+          include-hidden-files: true
 
       - name: Fail when scheduled run fails
         if: steps.flaker_run.outcome == 'failure'
