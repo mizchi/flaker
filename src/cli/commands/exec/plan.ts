@@ -1,6 +1,6 @@
-import type { MetricStore } from "../storage/types.js";
-import type { DependencyResolver } from "../resolvers/types.js";
-import type { TestId } from "../runners/types.js";
+import type { MetricStore } from "../../storage/types.js";
+import type { DependencyResolver } from "../../resolvers/types.js";
+import type { TestId } from "../../runners/types.js";
 import type { SamplingMode } from "./sampling-options.js";
 import {
   loadCore,
@@ -9,19 +9,19 @@ import {
   type SamplingListedTestInput,
   type StableVariantEntryInput,
   type TestMeta,
-} from "../core/loader.js";
+} from "../../core/loader.js";
 import {
   isManifestQuarantined,
   type QuarantineManifestEntry,
-} from "../quarantine-manifest.js";
-import { extractFeatures, type GBDTModel } from "../eval/gbdt.js";
+} from "../../quarantine-manifest.js";
+import { extractFeatures, type GBDTModel } from "../../eval/gbdt.js";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   createListedTestKey,
   createMetaKey,
   buildListedTestIndex,
-} from "./dev/test-key.js";
+} from "../dev/test-key.js";
 
 export interface SampleOpts {
   store: MetricStore;
@@ -55,6 +55,16 @@ export interface SamplingSummary {
   estimatedSavedTests: number;
   estimatedSavedMinutes: number | null;
   fallbackReason: string | null;
+  // Optional per-test selection metadata (minimal: filled with placeholder values)
+  // TODO: populate with real tier/score/reason from planner internals
+  reasons?: Array<{
+    suite: string;
+    test_name: string;
+    task_id?: string | null;
+    tier: string;
+    score: number;
+    reason: string;
+  }>;
 }
 
 export interface SamplingConfidenceEstimate {
@@ -397,6 +407,16 @@ function buildSamplingSummary(opts: BuildSamplingSummaryOpts): SamplingSummary {
     estimatedSavedTests: Math.max(candidateCount - selectedCount, 0),
     estimatedSavedMinutes,
     fallbackReason: opts.fallbackReason,
+    // Minimal: populate reasons with placeholder tier/score/reason
+    // TODO: populate with real tier/score/reason from planner internals
+    reasons: opts.sampled.map((t) => ({
+      suite: t.suite,
+      test_name: t.test_name,
+      task_id: t.task_id ?? null,
+      tier: "selected",
+      score: 0,
+      reason: "",
+    })),
   };
 }
 

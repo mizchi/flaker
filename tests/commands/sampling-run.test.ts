@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
 import { recordSamplingRunFromSummary } from "../../src/cli/commands/sampling-run.js";
-import type { SamplingSummary } from "../../src/cli/commands/sample.js";
+import type { SamplingSummary } from "../../src/cli/commands/exec/plan.js";
 
 describe("recordSamplingRunFromSummary", () => {
   let store: DuckDBStore;

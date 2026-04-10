@@ -7,9 +7,9 @@ import {
 } from "../config.js";
 import {
   formatSamplingSummary,
-} from "../commands/sample.js";
+} from "../commands/exec/plan.js";
 import { recordSamplingRunFromSummary } from "../commands/sampling-run.js";
-import { runTests } from "../commands/exec/run.js";
+import { runTests, formatExplainTable } from "../commands/exec/run.js";
 import {
   runAffected,
   formatAffectedReport,
@@ -152,9 +152,11 @@ export function registerExecCommands(program: Command): void {
       .command("run")
       .description("Select and run tests (auto-detects changed files and strategy from config)")
       .option("--runner <runner>", "Runner type: direct or actrun", "direct")
-      .option("--retry", "Retry failed tests (actrun only)"),
+      .option("--retry", "Retry failed tests (actrun only)")
+      .option("--dry-run", "Select tests but do not execute them")
+      .option("--explain", "Print per-test selection tier, score, and reason"),
   ).action(
-    async (rawOpts: SamplingCliOpts & { runner: string; retry?: boolean }) => {
+    async (rawOpts: SamplingCliOpts & { runner: string; retry?: boolean; dryRun?: boolean; explain?: boolean }) => {
       const cwd = process.cwd();
       const config = loadConfig(cwd);
       const resolved = resolveSamplingOpts(rawOpts, config);
@@ -278,10 +280,19 @@ export function registerExecCommands(program: Command): void {
           cwd,
           coFailureDays: opts.coFailureDays,
           holdoutRatio: opts.holdoutRatio,
+          dryRun: rawOpts.dryRun,
+          explain: rawOpts.explain,
         });
         console.log(formatSamplingSummary(runResult.samplingSummary, {
           ciPassWhenLocalPassRate: kpi.passSignal.rate,
         }));
+        if (rawOpts.explain) {
+          console.log(formatExplainTable(runResult.sampledTests, runResult.samplingSummary));
+        }
+        if (rawOpts.dryRun) {
+          // runTests already branched on dryRun and returned without executing
+          return;
+        }
         const workflowRunId = Date.now();
         const createdAt = new Date();
         await store.insertWorkflowRun({

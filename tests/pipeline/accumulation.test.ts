@@ -4,7 +4,7 @@ import { loadCore } from "../../src/cli/core/loader.js";
 import { loadFixtureIntoStore } from "../../src/cli/eval/fixture-loader.js";
 import { analyzeProject, recommendSampling } from "../../src/cli/commands/collect/calibrate.js";
 import { trainModel } from "../../src/cli/commands/dev/train.js";
-import { planSample } from "../../src/cli/commands/sample.js";
+import { planSample } from "../../src/cli/commands/exec/plan.js";
 import { runInsights } from "../../src/cli/commands/analyze/insights.js";
 import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";

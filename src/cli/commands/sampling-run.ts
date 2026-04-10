@@ -1,4 +1,4 @@
-import type { SamplingSummary } from "./sample.js";
+import type { SamplingSummary } from "./exec/plan.js";
 import type { MetricStore } from "../storage/types.js";
 
 export interface SamplingRunTestInput {

@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import type { MetricStore } from "../storage/types.js";
-import { planSample } from "../commands/sample.js";
+import { planSample } from "../commands/exec/plan.js";
 import type { DependencyResolver } from "../resolvers/types.js";
 
 export interface TuningConfig {
