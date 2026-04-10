@@ -22,9 +22,9 @@ pnpm --dir ../flaker install
 
 # from your project root
 node ../flaker/scripts/dev-cli.mjs affected --changed src/foo.ts
-node ../flaker/scripts/dev-cli.mjs sample --profile local --changed src/foo.ts
+node ../flaker/scripts/dev-cli.mjs run --dry-run --profile local --changed src/foo.ts
 node ../flaker/scripts/dev-cli.mjs run --profile local --changed src/foo.ts
-node ../flaker/scripts/dev-cli.mjs eval --markdown --window 7 --output .artifacts/flaker-review.md
+node ../flaker/scripts/dev-cli.mjs analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
 
 # optional: force rebuild after editing flaker itself
 node ../flaker/scripts/dev-cli.mjs --rebuild run --profile local --changed src/foo.ts
@@ -50,7 +50,7 @@ Fetch test results from GitHub Actions:
 
 ```bash
 export GITHUB_TOKEN=$(gh auth token)
-flaker collect --last 30
+flaker collect --days 30
 ```
 
 Or import local test reports directly:
@@ -84,13 +84,13 @@ flaker import ../vrt-harness/test-results/migration/migration-report.json \
 
 ```bash
 # List flaky tests
-flaker flaky
+flaker analyze flaky
 
 # AI-powered analysis with recommended actions
-flaker reason
+flaker analyze reason
 
 # Test suite health score
-flaker eval
+flaker analyze eval
 ```
 
 ### 4. Select & Run Tests
@@ -136,13 +136,13 @@ resolver = "workspace"  # "simple" | "workspace" | "moon" | "bitflow"
 # Auto-quarantine flaky tests
 [quarantine]
 auto = true
-flaky_rate_threshold = 30.0   # Quarantine candidate above this %
-min_runs = 10                  # Minimum runs before making judgments
+flaky_rate_threshold_percentage = 30   # Quarantine candidate above this %
+min_runs = 10                           # Minimum runs before making judgments
 
 # Flaky detection parameters
 [flaky]
-window_days = 14              # Analysis window
-detection_threshold = 2.0     # Mark as flaky above this %
+window_days = 14                       # Analysis window
+detection_threshold_ratio = 0.02       # Mark as flaky above this ratio
 ```
 
 ---
@@ -153,7 +153,7 @@ detection_threshold = 2.0     # Mark as flaky above this %
 
 ```bash
 flaker collect                                           # Last 30 days
-flaker collect --last 90                                 # Last 90 days
+flaker collect --days 90                                 # Last 90 days
 flaker collect --branch main                             # main branch only
 flaker collect --json --output .artifacts/collect.json   # Machine-readable summary
 flaker collect --json --output .artifacts/collect.json --fail-on-errors
@@ -180,24 +180,24 @@ Import locally-generated test reports directly into the database.
 
 With `--adapter custom`, you provide an arbitrary command that receives the file contents on stdin and returns `TestCaseResult[]` JSON on stdout. This is the bridge for importing non-Playwright / non-JUnit report formats.
 
-### `flaker collect-local` — Import actrun History
+### `flaker collect local` — Import actrun History
 
 ```bash
-flaker collect-local              # Import all actrun run history
-flaker collect-local --last 10    # Last 10 runs only
+flaker collect local              # Import all actrun run history
+flaker collect local --last 10    # Last 10 runs only
 ```
 
 Imports results from [actrun](https://github.com/mizchi/actrun) (GitHub Actions-compatible local runner). Automatically detects and parses Playwright/JUnit reports in artifact directories.
 
-### `flaker flaky` — Detect Flaky Tests
+### `flaker analyze flaky` — Detect Flaky Tests
 
 ```bash
-flaker flaky                      # Top flaky tests
-flaker flaky --top 50             # Top 50
-flaker flaky --test "login"       # Filter by name
-flaker flaky --true-flaky         # DeFlaker mode: same commit, inconsistent results
-flaker flaky --trend --test "should redirect"  # Weekly trend
-flaker flaky --by-variant         # Per OS/browser breakdown
+flaker analyze flaky                      # Top flaky tests
+flaker analyze flaky --top 50             # Top 50
+flaker analyze flaky --test "login"       # Filter by name
+flaker analyze flaky --true-flaky         # DeFlaker mode: same commit, inconsistent results
+flaker analyze flaky --trend --test "should redirect"  # Weekly trend
+flaker analyze flaky --by-variant         # Per OS/browser breakdown
 ```
 
 #### Detection Modes
@@ -208,12 +208,12 @@ flaker flaky --by-variant         # Per OS/browser breakdown
 | True flaky | `--true-flaky` | Same commit_sha has both pass and fail (DeFlaker method) |
 | By variant | `--by-variant` | Flaky rate per execution environment (OS, browser, etc.) |
 
-### `flaker reason` — AI-Powered Analysis
+### `flaker analyze reason` — AI-Powered Analysis
 
 ```bash
-flaker reason                     # Report with recommended actions
-flaker reason --json              # Machine-readable JSON
-flaker reason --window 7          # Analyze last 7 days
+flaker analyze reason                     # Report with recommended actions
+flaker analyze reason --json              # Machine-readable JSON
+flaker analyze reason --window 7          # Analyze last 7 days
 ```
 
 Classifies each flaky test and recommends actions:
@@ -232,16 +232,16 @@ Pattern detection:
 Risk prediction:
 - Currently stable tests showing early warning signs (recent failures, high duration variance)
 
-### `flaker sample` — Test Sampling
+### `flaker run --dry-run` — Test Sampling (dry run)
 
 ```bash
-flaker sample --strategy random --count 20        # Uniform random
-flaker sample --strategy weighted --count 20      # Flaky-weighted
-flaker sample --strategy affected                 # Change-affected only
-flaker sample --strategy hybrid --count 50        # Hybrid (recommended)
-flaker sample --profile local --changed src/foo.ts
-flaker sample --percentage 30                     # 30% of all tests
-flaker sample --skip-quarantined                  # Exclude quarantined
+flaker run --dry-run --strategy random --count 20        # Uniform random
+flaker run --dry-run --strategy weighted --count 20      # Flaky-weighted
+flaker run --dry-run --strategy affected                 # Change-affected only
+flaker run --dry-run --strategy hybrid --count 50        # Hybrid (recommended)
+flaker run --dry-run --profile local --changed src/foo.ts
+flaker run --dry-run --percentage 30                     # 30% of all tests
+flaker run --dry-run --skip-quarantined                  # Exclude quarantined
 ```
 
 #### Sampling Strategies
@@ -282,7 +282,7 @@ Results are automatically stored in the database.
 
 ### Execution Profiles
 
-`flaker run` and `flaker sample` can inherit settings from execution profiles:
+`flaker run` can inherit settings from execution profiles (use `--dry-run` for sampling without execution):
 
 ```toml
 [profile.scheduled]
@@ -290,7 +290,7 @@ strategy = "full"
 
 [profile.ci]
 strategy = "hybrid"
-percentage = 30
+sample_percentage = 30
 adaptive = true
 
 [profile.local]
@@ -302,58 +302,74 @@ fallback_strategy = "weighted"
 The practical local loop is:
 
 ```bash
-flaker affected --changed src/foo.ts
-flaker sample --profile local --changed src/foo.ts
+flaker exec affected --changed src/foo.ts
+flaker run --dry-run --profile local --changed src/foo.ts
 flaker run --profile local --changed src/foo.ts
 ```
 
 `profile.local` is where `affected` selection, fallback to `weighted`, and time-budget control come together for dogfooding and day-to-day development.
 
-### `flaker collect-coverage` — Import Coverage Edges
+### Flag precedence
+
+```
+Resolution order (highest to lowest):
+  1. Explicit CLI flag          (--strategy, --percentage, --count)
+  2. [profile.<name>] in flaker.toml   (via --profile or auto-detection)
+  3. [sampling] in flaker.toml         (project default)
+  4. Built-in defaults
+
+Notes:
+  --count overrides --percentage when both are given
+  --changed overrides git auto-detection
+  --dry-run suppresses execution, still records selection telemetry
+  --explain can be combined with --dry-run or a real run
+```
+
+### `flaker collect coverage` — Import Coverage Edges
 
 ```bash
-flaker collect-coverage --format istanbul --input coverage/coverage-final.json
-flaker collect-coverage --format playwright --input .artifacts/coverage
+flaker collect coverage --format istanbul --input coverage/coverage-final.json
+flaker collect coverage --format playwright --input .artifacts/coverage
 ```
 
 Imports per-test coverage edges into DuckDB for `coverage-guided` sampling. Directory input is supported and duplicate edges are deduped before insertion.
 
-### `flaker train` — Train the GBDT Model
+### `flaker dev train` — Train the GBDT Model
 
 ```bash
-flaker train
-flaker train --window-days 30 --num-trees 10 --learning-rate 0.3
+flaker dev train
+flaker dev train --window-days 30 --num-trees 10 --learning-rate 0.3
 ```
 
 Builds `.flaker/models/gbdt.json` from accumulated CI and local history. The local rows are included with reduced weight, and the saved model includes the feature names used by `gbdt` sampling.
 
-### `flaker quarantine` — Isolate Flaky Tests
+### `flaker policy quarantine` — Isolate Flaky Tests
 
 ```bash
-flaker quarantine                                 # List quarantined
-flaker quarantine --auto                          # Auto-quarantine above threshold
-flaker quarantine --add "suite>testName"          # Manual add
-flaker quarantine --remove "suite>testName"       # Remove
+flaker policy quarantine                                 # List quarantined
+flaker policy quarantine --auto                          # Auto-quarantine above threshold
+flaker policy quarantine --add "suite>testName"          # Manual add
+flaker policy quarantine --remove "suite>testName"       # Remove
 ```
 
 Quarantined tests can be excluded from runs with `--skip-quarantined`.
 
-### `flaker bisect` — Find Culprit Commit
+### `flaker debug bisect` — Find Culprit Commit
 
 ```bash
-flaker bisect --test "should redirect"
-flaker bisect --test "should redirect" --suite "tests/login.spec.ts"
+flaker debug bisect --test "should redirect"
+flaker debug bisect --test "should redirect" --suite "tests/login.spec.ts"
 ```
 
 Identifies the commit range where a test became flaky.
 
-### `flaker eval` — Health Assessment
+### `flaker analyze eval` — Health Assessment
 
 ```bash
-flaker eval
-flaker eval --json
-flaker eval --markdown --window 7
-flaker eval --markdown --window 7 --output .artifacts/flaker-review.md
+flaker analyze eval
+flaker analyze eval --json
+flaker analyze eval --markdown --window 7
+flaker analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
 ```
 
 Rates overall test suite health on a 0-100 scale:
@@ -364,10 +380,10 @@ Rates overall test suite health on a 0-100 scale:
 
 Use `--markdown --window 7` to generate a weekly KPI summary that can be pasted directly into review notes.
 
-### `flaker query` — Direct SQL Analysis
+### `flaker analyze query` — Direct SQL Analysis
 
 ```bash
-flaker query "SELECT suite, test_name, status, COUNT(*) as cnt
+flaker analyze query "SELECT suite, test_name, status, COUNT(*) as cnt
               FROM test_results
               GROUP BY suite, test_name, status
               ORDER BY cnt DESC
@@ -490,7 +506,7 @@ flaker run --runner actrun
 flaker run --runner actrun --retry
 
 # Bulk import past actrun history
-flaker collect-local
+flaker collect local
 ```
 
 Set `[runner.actrun].workflow` to a repo-relative workflow path such as `.github/workflows/ci.yml`. Use `local = true` when the repository is not available as a git worktree to `actrun`.
@@ -506,28 +522,28 @@ Set `[runner.actrun].workflow` to a repo-relative workflow path such as `.github
 flaker collect
 
 # After code changes: inspect, sample, then run with the local profile
-flaker affected --changed src/foo.ts
-flaker sample --profile local --changed src/foo.ts
+flaker exec affected --changed src/foo.ts
+flaker run --dry-run --profile local --changed src/foo.ts
 flaker run --profile local --changed src/foo.ts
 
 # Check overall status
-flaker eval
+flaker analyze eval
 ```
 
 ### Flaky Test Triage
 
 ```bash
 # Identify problematic tests
-flaker reason
+flaker analyze reason
 
 # Quarantine severe cases
-flaker quarantine --auto
+flaker policy quarantine --auto
 
 # Find culprit commit
-flaker bisect --test "problematic test name"
+flaker debug bisect --test "problematic test name"
 
 # After fixing, remove quarantine
-flaker quarantine --remove "suite>testName"
+flaker policy quarantine --remove "suite>testName"
 ```
 
 ### CI Integration
@@ -536,9 +552,9 @@ flaker quarantine --remove "suite>testName"
 # .github/workflows/flaker.yml
 - name: Collect & Analyze
   run: |
-    flaker collect --last 7
-    flaker eval --json --output flaker-report.json
-    flaker reason --json > flaker-reason.json
+    flaker collect --days 7
+    flaker analyze eval --json --output flaker-report.json
+    flaker analyze reason --json > flaker-reason.json
 
 - name: Upload analysis
   uses: actions/upload-artifact@v6
@@ -559,10 +575,10 @@ flaker quarantine --remove "suite>testName"
 
 ```bash
 # Collect coverage data
-flaker collect-coverage --format istanbul --input coverage/coverage-final.json
+flaker collect coverage --format istanbul --input coverage/coverage-final.json
 
 # Sample using coverage data
-flaker sample --strategy coverage-guided --changed src/auth.ts --percentage 20
+flaker run --dry-run --strategy coverage-guided --changed src/auth.ts --percentage 20
 ```
 
 詳細は [Coverage-Guided Test Sampling](coverage-guided-sampling.md) を参照。
@@ -571,7 +587,7 @@ flaker sample --strategy coverage-guided --changed src/auth.ts --percentage 20
 
 ```bash
 # Diagnose flaky test causes
-flaker diagnose --suite "tests/auth.test.ts" --test "login flow" --runs 5
+flaker debug diagnose --suite "tests/auth.test.ts" --test "login flow" --runs 5
 ```
 
 ミューテーションベースでフレーキー原因を特定する（順序依存、環境依存、非決定性）。
@@ -581,11 +597,34 @@ flaker diagnose --suite "tests/auth.test.ts" --test "login flow" --runs 5
 
 ```bash
 # Analyze optimal co-failure time window
-flaker eval-co-failure-window
+flaker dev eval-co-failure
 
 # JSON output
-flaker eval-co-failure-window --json
+flaker dev eval-co-failure --json
 ```
 
 co-failure データの最適な時間窓（7/14/30/60/90/180 日）を探索する。
 出力の ★ 付きの窓サイズを `--co-failure-days` に指定する。
+
+## Config migration
+
+`flaker 0.2.0` renames config keys to follow a suffix-per-unit convention: `*_ratio` (0.0–1.0), `*_percentage` (0–100), `*_days`, `*_seconds`, `*_count`. Values without a unit suffix are gone. The CLI refuses to start on a legacy `flaker.toml` and points here.
+
+Rename the keys in your `flaker.toml` per the table below:
+
+| Section | Old key | New key | Unit |
+|---|---|---|---|
+| `[sampling]` | `percentage` | `sample_percentage` | 0–100 |
+| `[sampling]` | `co_failure_days` | `co_failure_window_days` | days (int) |
+| `[sampling]` | `detected_flaky_rate` | `detected_flaky_rate_ratio` | 0.0–1.0 |
+| `[sampling]` | `detected_co_failure_strength` | `detected_co_failure_strength_ratio` | 0.0–1.0 |
+| `[flaky]` | `detection_threshold` | `detection_threshold_ratio` | 0.0–1.0 |
+| `[quarantine]` | `flaky_rate_threshold` | `flaky_rate_threshold_percentage` | 0–100 |
+| `[profile.*]` | `percentage` | `sample_percentage` | 0–100 |
+| `[profile.*]` | `co_failure_days` | `co_failure_window_days` | days (int) |
+| `[profile.*]` | `adaptive_fnr_low` | `adaptive_fnr_low_ratio` | 0.0–1.0 |
+| `[profile.*]` | `adaptive_fnr_high` | `adaptive_fnr_high_ratio` | 0.0–1.0 |
+
+The unit interpretation of `flaky_rate_threshold` also changed. Previously a bare `30.0` was treated as 30% and a bare `0.3` was silently auto-normalized. Now the value is taken literally as a percentage. If your old config had `flaky_rate_threshold = 0.3`, rename to `flaky_rate_threshold_percentage = 30`.
+
+Range validation is enforced by `flaker debug doctor` and `flaker policy check`: `*_ratio` must be in [0.0, 1.0]; `*_percentage` must be in [0, 100]; `*_days` / `*_seconds` / `*_count` must be non-negative integers.
