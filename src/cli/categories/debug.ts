@@ -2,7 +2,7 @@ import type { Command } from "commander";
 import { runDoctor, formatDoctorReport } from "../commands/debug/doctor.js";
 import { runBisect } from "../commands/debug/bisect.js";
 import { runRetry, formatRetryReport } from "../commands/debug/retry.js";
-import { parseConfirmTarget, formatConfirmResult } from "../commands/debug/confirm.js";
+import { parseConfirmTarget, formatConfirmResult, confirmExitCode, type ConfirmVerdict } from "../commands/debug/confirm.js";
 import { runConfirmLocal } from "../commands/debug/confirm-local.js";
 import { runConfirmRemote } from "../commands/debug/confirm-remote.js";
 import { loadConfig } from "../config.js";
@@ -91,10 +91,11 @@ export function registerDebugCommands(program: Command): void {
     .option("--repeat <n>", "Number of repetitions", "5")
     .option("--runner <mode>", "Execution mode: remote or local", "remote")
     .option("--workflow <name>", "Workflow filename for remote mode", "flaker-confirm.yml")
+    .option("--json", "Machine-readable JSON output")
     .action(
       async (
         target: string,
-        opts: { repeat: string; runner: string; workflow: string },
+        opts: { repeat: string; runner: string; workflow: string; json?: boolean },
       ) => {
         const { suite, testName } = parseConfirmTarget(target);
         const repeat = parseInt(opts.repeat, 10);
@@ -104,8 +105,10 @@ export function registerDebugCommands(program: Command): void {
         }
 
         const config = loadConfig(process.cwd());
-        console.log(`# Confirm: ${suite} > ${testName} (${repeat}x, ${opts.runner})`);
-        console.log("");
+        if (!opts.json) {
+          console.log(`# Confirm: ${suite} > ${testName} (${repeat}x, ${opts.runner})`);
+          console.log("");
+        }
 
         let result;
         if (opts.runner === "local") {
@@ -129,14 +132,25 @@ export function registerDebugCommands(program: Command): void {
           });
         }
 
-        console.log("");
-        console.log(formatConfirmResult(result));
-
-        if (result.verdict === "broken") {
-          process.exit(1);
-        }
+        const output = formatConfirmResult(result, { json: opts.json });
+        process.stdout.write(output + (output.endsWith("\n") ? "" : "\n"));
+        const verdict = result.verdict.toUpperCase() as ConfirmVerdict;
+        process.exit(confirmExitCode(verdict));
       },
     );
+
+  const confirmCmd = debug.commands.find((c) => c.name() === "confirm");
+  if (confirmCmd) {
+    confirmCmd.addHelpText("after", `
+Exit codes:
+  0  TRANSIENT  Not reproducible
+  1  FLAKY      Intermittent (pass and fail both observed)
+  2  BROKEN     Regression reproduced
+  3  ERROR      Runner or config failure
+
+With --json, prints: {"verdict": "BROKEN|FLAKY|TRANSIENT", "runs": {...}}
+`);
+  }
 
   debug
     .command("retry")
