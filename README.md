@@ -20,6 +20,8 @@ It is designed for repositories where:
 - Which tests are actually flaky?
 - How well does local sampled execution predict CI outcomes?
 
+> **Upgrading from 0.0.x / 0.1.x?** See [docs/how-to-use.md#config-migration](docs/how-to-use.md#config-migration) for the full key rename map. The CLI now refuses to start on legacy configs and points to the migration guide.
+
 ## Install as a CLI
 
 ```bash
@@ -133,7 +135,12 @@ target-specific `_js.mbt` / `_native.mbt` modules.
 
 ## Quick Start
 
-### 1. Initialize
+1. **Initialize**: `flaker init` — creates `flaker.toml`, auto-detects repo from git remote
+2. **Calibrate**: `flaker collect calibrate` — analyzes history and writes optimal sampling config
+3. **Check environment**: `flaker debug doctor` — verifies DuckDB, MoonBit, and config
+4. **Run**: `flaker run` — selects and executes tests (auto-detected profile)
+
+### Initialize
 
 ```bash
 flaker init --owner your-org --name your-repo
@@ -141,25 +148,25 @@ flaker init --owner your-org --name your-repo
 
 This creates `flaker.toml`.
 
-### 2. Collect test history
+### Collect test history
 
 From GitHub Actions:
 
 ```bash
 export GITHUB_TOKEN=$(gh auth token)
-flaker collect --last 30
+flaker collect --days 30
 ```
 
 From a local report file:
 
 ```bash
-flaker import report.json --adapter playwright --commit "$(git rev-parse HEAD)"
+flaker import report <file> --adapter playwright --commit "$(git rev-parse HEAD)"
 ```
 
 From actrun local history:
 
 ```bash
-flaker collect-local --last 20
+flaker collect local --last 20
 ```
 
 To execute through `actrun`, configure the workflow path explicitly:
@@ -176,20 +183,20 @@ trust = true
 # job = "e2e"
 ```
 
-### 3. Inspect flakiness
+### Inspect flakiness
 
 ```bash
-flaker flaky
-flaker reason
-flaker eval
+flaker analyze flaky
+flaker analyze reason
+flaker analyze eval
 ```
 
 Useful evaluation outputs:
 
 ```bash
-flaker eval --json
-flaker eval --markdown --window 7
-flaker eval --markdown --window 7 --output .artifacts/flaker-review.md
+flaker analyze eval --json
+flaker analyze eval --markdown --window 7
+flaker analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
 ```
 
 The markdown mode is meant for weekly review notes. It summarizes:
@@ -201,15 +208,15 @@ The markdown mode is meant for weekly review notes. It summarizes:
 - average saved minutes
 - fallback rate
 
-### 4. Sample tests before pushing
+### Sample tests before pushing
 
 ```bash
-flaker sample --strategy hybrid --count 25
-flaker sample --strategy affected --changed src/foo.ts
-flaker sample --profile local --changed src/foo.ts
+flaker run --dry-run --strategy hybrid --count 25
+flaker run --dry-run --strategy affected --changed src/foo.ts
+flaker run --dry-run --profile local --changed src/foo.ts
 ```
 
-### 5. Sample and execute
+### Sample and execute
 
 ```bash
 flaker run --strategy hybrid --count 25
@@ -255,7 +262,7 @@ strategy = "full"
 
 [profile.ci]
 strategy = "hybrid"
-percentage = 30
+sample_percentage = 30
 adaptive = true        # auto-adjust based on false negative rate
 
 [profile.local]
@@ -269,8 +276,8 @@ Data flows downstream: daily accumulates history → CI uses it for smarter samp
 For local dogfooding, the practical loop is:
 
 ```bash
-flaker affected --changed src/foo.ts
-flaker sample --profile local --changed src/foo.ts
+flaker exec affected --changed src/foo.ts
+flaker run --dry-run --profile local --changed src/foo.ts
 flaker run --profile local --changed src/foo.ts
 ```
 
@@ -287,7 +294,7 @@ Post test results directly on pull requests:
 - name: Post PR comment
   if: github.event_name == 'pull_request'
   run: |
-    flaker report summarize --adapter vitest --input report.json --pr-comment \
+    flaker report summary --adapter vitest --input report.json --pr-comment \
       | gh pr comment ${{ github.event.pull_request.number }} --body-file -
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -298,7 +305,7 @@ Post test results directly on pull requests:
 When flaky tests are auto-quarantined, create tracking issues:
 
 ```bash
-flaker quarantine --auto --create-issues
+flaker policy quarantine --auto --create-issues
 ```
 
 This creates a GitHub Issue per quarantined test via `gh` CLI, with flaky rate, run count, and fix instructions. Requires `gh` to be installed and authenticated.
@@ -329,7 +336,7 @@ The most practical rollout looks like this:
 1. `flaker run --profile scheduled` in a nightly scheduled workflow (full test + data accumulation)
 2. `flaker run --profile ci` on PR push (selective execution, posts PR comment)
 3. `flaker run --profile local` during development (fast feedback)
-4. Review `flaker eval` weekly
+4. Review `flaker analyze eval` weekly
 5. Only tighten the workflow after local-to-CI correlation looks strong
 
 This works best in repositories with:
@@ -344,42 +351,58 @@ This works best in repositories with:
 
 ```bash
 flaker collect
-flaker collect-local
-flaker import report.json --adapter playwright
-flaker collect-coverage --format istanbul --input coverage/coverage-final.json
+flaker collect local
+flaker import report <file> --adapter playwright
+flaker collect coverage --format istanbul --input coverage/coverage-final.json
 ```
 
 ### Sampling and execution
 
 ```bash
-flaker sample --strategy random --count 20
-flaker sample --strategy weighted --count 20
-flaker sample --strategy affected
-flaker sample --strategy hybrid --count 50
+flaker run --dry-run --strategy random --count 20
+flaker run --dry-run --strategy weighted --count 20
+flaker run --dry-run --strategy affected
+flaker run --dry-run --strategy hybrid --count 50
 
 flaker run --strategy hybrid --count 50
 flaker run --strategy affected --changed src/foo.ts
 ```
 
+### Flag precedence
+
+```
+Resolution order (highest to lowest):
+  1. Explicit CLI flag          (--strategy, --percentage, --count)
+  2. [profile.<name>] in flaker.toml   (via --profile or auto-detection)
+  3. [sampling] in flaker.toml         (project default)
+  4. Built-in defaults
+
+Notes:
+  --count overrides --percentage when both are given
+  --changed overrides git auto-detection
+  --dry-run suppresses execution, still records selection telemetry
+  --explain can be combined with --dry-run or a real run
+```
+
 ### Analysis
 
 ```bash
-flaker flaky
-flaker reason
-flaker eval
-flaker train
-flaker query "SELECT * FROM test_results LIMIT 20"
+flaker analyze flaky
+flaker analyze reason
+flaker analyze eval
+flaker dev train
+flaker analyze query "SELECT * FROM test_results LIMIT 20"
 ```
 
 ### Confirm suspected failures
 
 ```bash
 # Remote: triggers workflow_dispatch, waits for result
-flaker confirm "tests/api.test.ts:handles timeout"
-flaker confirm "tests/api.test.ts:handles timeout" --repeat 10
+flaker debug confirm "tests/api.test.ts:handles timeout"
+flaker debug confirm "tests/api.test.ts:handles timeout" --repeat 10
 
 # Local: runs via test runner directly
-flaker confirm "tests/api.test.ts:handles timeout" --runner local
+flaker debug confirm "tests/api.test.ts:handles timeout" --runner local
 ```
 
 Output: `BROKEN` (regression), `FLAKY` (intermittent), or `TRANSIENT` (not reproducible).
@@ -390,10 +413,10 @@ Requires `.github/workflows/flaker-confirm.yml` for remote mode — generated by
 
 ```bash
 # Re-run failed tests from most recent CI failure
-flaker retry
+flaker debug retry
 
 # From a specific workflow run
-flaker retry --run 12345678
+flaker debug retry --run 12345678
 ```
 
 Fetches the test result artifact from the failed CI run, identifies failed tests, and re-runs them locally. Reports which failures reproduce (real regressions) vs which don't (CI-specific or flaky).
@@ -401,17 +424,17 @@ Fetches the test result artifact from the failed CI run, identifies failed tests
 ### Policy and ownership
 
 ```bash
-flaker quarantine
-flaker quarantine --auto --create-issues
-flaker check
-flaker affected --changed src/foo.ts
+flaker policy quarantine
+flaker policy quarantine --auto --create-issues
+flaker policy check
+flaker exec affected --changed src/foo.ts
 ```
 
 ### Reporting
 
 ```bash
-flaker report summarize --adapter vitest --input report.json --markdown
-flaker report summarize --adapter vitest --input report.json --pr-comment
+flaker report summary --adapter vitest --input report.json --markdown
+flaker report summary --adapter vitest --input report.json --pr-comment
 flaker report diff --base base.json --head head.json
 ```
 
@@ -437,19 +460,25 @@ resolver = "workspace"
 
 [flaky]
 window_days = 14
-detection_threshold = 2.0
+detection_threshold_ratio = 0.02
 
 [quarantine]
 auto = true
-flaky_rate_threshold = 30.0
+flaky_rate_threshold_percentage = 30
 min_runs = 10
+
+[sampling]
+strategy = "hybrid"
+sample_percentage = 30
+holdout_ratio = 0.1
+co_failure_window_days = 90
 
 [profile.scheduled]
 strategy = "full"
 
 [profile.ci]
 strategy = "hybrid"
-percentage = 30
+sample_percentage = 30
 adaptive = true
 
 [profile.local]
@@ -464,27 +493,7 @@ fallback_strategy = "weighted"
 - [Why flaker](https://github.com/mizchi/flaker/blob/main/docs/why-flaker.md)
 - [Design Partner Rollout](https://github.com/mizchi/flaker/blob/main/docs/design-partner-rollout.ja.md)
 
-## Sibling Checkout
-
-For dogfooding from a sibling repo such as `../sample-webapp-2026`, use the official dev CLI wrapper:
-
-```bash
-# one-time setup in the flaker repo
-pnpm --dir ../flaker install
-
-# from the sibling project root
-node ../flaker/scripts/dev-cli.mjs affected --changed src/foo.ts
-node ../flaker/scripts/dev-cli.mjs sample --profile local --changed src/foo.ts
-node ../flaker/scripts/dev-cli.mjs run --profile local --changed src/foo.ts
-node ../flaker/scripts/dev-cli.mjs eval --markdown --window 7 --output .artifacts/flaker-review.md
-
-# or via pnpm, preserving the caller cwd through INIT_CWD
-pnpm --dir ../flaker run dev:cli -- run --profile local --changed src/foo.ts
-```
-
-`scripts/dev-cli.mjs` reuses `dist/cli/main.js` when it is current, auto-builds when `dist/cli/main.js` / `dist/moonbit/flaker.js` are missing, and also rebuilds when source files are newer than `dist`. Use `--rebuild` only when you want to force a fresh build regardless of timestamps.
-
-If multiple local commands share the same `.flaker/data.duckdb`, run them sequentially. DuckDB is single-writer, so parallel dogfood runs can conflict on the DB lock.
+For contributing and dogfood workflows, see [docs/contributing.md](docs/contributing.md).
 
 ## Release
 
