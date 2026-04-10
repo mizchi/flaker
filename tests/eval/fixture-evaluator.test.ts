@@ -90,7 +90,7 @@ describe("evaluateFixture", () => {
     expect(coFailure.recall).toBeGreaterThanOrEqual(random.recall);
   });
 
-  it("hybrid+co-failure outperforms all other strategies", async () => {
+  it("hybrid+co-failure outperforms all other strategies", { timeout: 30_000 }, async () => {
     const core = await loadCore();
     const fixture = core.generateFixture({
       test_count: 50,

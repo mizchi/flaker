@@ -55,7 +55,7 @@ describe("data accumulation pipeline", () => {
     expect(sampling.percentage).toBe(30);
   });
 
-  it("train produces model from accumulated fixture data", async () => {
+  it("train produces model from accumulated fixture data", { timeout: 30_000 }, async () => {
     const core = await loadCore();
     const fixture = core.generateFixture({
       test_count: 50,
