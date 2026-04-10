@@ -172,12 +172,12 @@ export function recommendSampling(profile: ProjectProfile): SamplingConfig {
 
   return {
     strategy,
-    percentage,
+    sample_percentage: percentage,
     holdout_ratio: holdoutRatio,
-    co_failure_days: coFailureDays,
+    co_failure_window_days: coFailureDays,
     calibrated_at: now,
-    detected_flaky_rate: profile.trueFlakyRate,
-    detected_co_failure_strength: profile.coFailureStrength,
+    detected_flaky_rate_ratio: profile.trueFlakyRate,
+    detected_co_failure_strength_ratio: profile.coFailureStrength,
     detected_test_count: profile.testCount,
   };
 }
@@ -224,10 +224,10 @@ export function formatCalibrationReport(result: CalibrationResult): string {
 
   lines.push("");
   lines.push("## Recommended [sampling] config");
-  lines.push(`  strategy          = "${s.strategy}"    # ${strategyExplanation(s.strategy)}`);
-  lines.push(`  percentage        = ${s.percentage}              # run ${s.percentage}% of tests`);
-  lines.push(`  holdout_ratio     = ${s.holdout_ratio}           # randomly verify ${(s.holdout_ratio! * 100).toFixed(0)}% of skipped tests`);
-  lines.push(`  co_failure_days   = ${s.co_failure_days}`);
+  lines.push(`  strategy              = "${s.strategy}"    # ${strategyExplanation(s.strategy)}`);
+  lines.push(`  sample_percentage     = ${s.sample_percentage}              # run ${s.sample_percentage}% of tests`);
+  lines.push(`  holdout_ratio         = ${s.holdout_ratio}           # randomly verify ${(s.holdout_ratio! * 100).toFixed(0)}% of skipped tests`);
+  lines.push(`  co_failure_window_days = ${s.co_failure_window_days}`);
 
   // Priority actions
   lines.push("");
@@ -284,9 +284,9 @@ export function buildExplainContext(
     recommendation: {
       strategy: s.strategy,
       strategyReason: strategyExplanation(s.strategy),
-      percentage: s.percentage,
+      samplePercentage: s.sample_percentage,
       holdoutRatio: s.holdout_ratio,
-      coFailureDays: s.co_failure_days,
+      coFailureWindowDays: s.co_failure_window_days,
     },
     topTests: topTests ?? { broken: [], flaky: [] },
     warnings: [

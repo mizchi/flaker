@@ -44,12 +44,12 @@ config = ""
 
 [quarantine]
 auto = true
-flaky_rate_threshold = 30
+flaky_rate_threshold_percentage = 30
 min_runs = 5
 
 [flaky]
 window_days = 14
-detection_threshold = 10
+detection_threshold_ratio = 0.1
 `.trim(),
     );
 
@@ -84,12 +84,12 @@ config = ""
 
 [quarantine]
 auto = true
-flaky_rate_threshold = 30
+flaky_rate_threshold_percentage = 30
 min_runs = 5
 
 [flaky]
 window_days = 14
-detection_threshold = 10
+detection_threshold_ratio = 0.1
 `.trim(),
     );
 
@@ -121,12 +121,12 @@ config = ""
 
 [quarantine]
 auto = true
-flaky_rate_threshold = 30
+flaky_rate_threshold_percentage = 30
 min_runs = 5
 
 [flaky]
 window_days = 14
-detection_threshold = 10
+detection_threshold_ratio = 0.1
 `.trim(),
     );
 

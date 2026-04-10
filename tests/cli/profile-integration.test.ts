@@ -22,14 +22,14 @@ describe("profile integration", () => {
 
   const sampling: SamplingConfig = {
     strategy: "hybrid",
-    percentage: 30,
+    sample_percentage: 30,
     holdout_ratio: 0.1,
-    co_failure_days: 90,
+    co_failure_window_days: 90,
   };
 
   const profiles: Record<string, ProfileConfig> = {
     scheduled: { strategy: "full" },
-    ci: { strategy: "hybrid", percentage: 25, adaptive: true },
+    ci: { strategy: "hybrid", sample_percentage: 25, adaptive: true },
     local: {
       strategy: "affected",
       max_duration_seconds: 60,
@@ -40,14 +40,14 @@ describe("profile integration", () => {
   it("scheduled profile runs all tests", () => {
     const p = resolveProfile("scheduled", profiles, sampling);
     expect(p.strategy).toBe("full");
-    expect(p.percentage).toBe(100);
+    expect(p.sample_percentage).toBe(100);
     expect(p.holdout_ratio).toBe(0);
   });
 
   it("ci profile uses adaptive with hybrid", () => {
     const p = resolveProfile("ci", profiles, sampling);
     expect(p.strategy).toBe("hybrid");
-    expect(p.percentage).toBe(25);
+    expect(p.sample_percentage).toBe(25);
     expect(p.adaptive).toBe(true);
     expect(p.holdout_ratio).toBe(0.1); // inherited from sampling
   });
@@ -63,7 +63,7 @@ describe("profile integration", () => {
   it("unknown profile falls back to sampling config", () => {
     const p = resolveProfile("staging", profiles, sampling);
     expect(p.strategy).toBe("hybrid");
-    expect(p.percentage).toBe(30);
+    expect(p.sample_percentage).toBe(30);
   });
 
   it("end-to-end: auto-detect in non-CI env resolves to local", () => {

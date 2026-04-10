@@ -43,16 +43,16 @@ config = ""
 
 [quarantine]
 auto = true
-flaky_rate_threshold = 30
+flaky_rate_threshold_percentage = 30
 min_runs = 5
 
 [flaky]
 window_days = 14
-detection_threshold = 2
+detection_threshold_ratio = 0.02
 
 [profile.scheduled]
 strategy = "random"
-percentage = 30
+sample_percentage = 30
 
 [profile.ci]
 strategy = "full"
@@ -60,10 +60,10 @@ max_duration_seconds = 300
 
 [profile.local]
 strategy = "random"
-percentage = 10
+sample_percentage = 10
 adaptive = true
-adaptive_fnr_low = 0.01
-adaptive_fnr_high = 0.04
+adaptive_fnr_low_ratio = 0.01
+adaptive_fnr_high_ratio = 0.04
 `.trim(),
     );
 
@@ -72,7 +72,7 @@ adaptive_fnr_high = 0.04
     expect(config.profile).toBeDefined();
     expect(config.profile?.["scheduled"]).toEqual({
       strategy: "random",
-      percentage: 30,
+      sample_percentage: 30,
     });
     expect(config.profile?.["ci"]).toEqual({
       strategy: "full",
@@ -80,10 +80,10 @@ adaptive_fnr_high = 0.04
     });
     expect(config.profile?.["local"]).toMatchObject({
       strategy: "random",
-      percentage: 10,
+      sample_percentage: 10,
       adaptive: true,
-      adaptive_fnr_low: 0.01,
-      adaptive_fnr_high: 0.04,
+      adaptive_fnr_low_ratio: 0.01,
+      adaptive_fnr_high_ratio: 0.04,
     });
   });
 
@@ -111,12 +111,12 @@ config = ""
 
 [quarantine]
 auto = true
-flaky_rate_threshold = 30
+flaky_rate_threshold_percentage = 30
 min_runs = 5
 
 [flaky]
 window_days = 14
-detection_threshold = 2
+detection_threshold_ratio = 0.02
 `.trim(),
     );
 
@@ -183,34 +183,34 @@ describe("resolveProfile", () => {
     expect(result.strategy).toBe("full");
   });
 
-  it("forces percentage=100 and holdout_ratio=0 when strategy is 'full'", () => {
+  it("forces sample_percentage=100 and holdout_ratio=0 when strategy is 'full'", () => {
     const result = resolveProfile("ci", { ci: { strategy: "full" } }, undefined);
-    expect(result.percentage).toBe(100);
+    expect(result.sample_percentage).toBe(100);
     expect(result.holdout_ratio).toBe(0);
   });
 
   it("merges profile over sampling defaults", () => {
     const result = resolveProfile(
       "scheduled",
-      { scheduled: { strategy: "random", percentage: 30 } },
-      { strategy: "random", percentage: 50, holdout_ratio: 0.1 },
+      { scheduled: { strategy: "random", sample_percentage: 30 } },
+      { strategy: "random", sample_percentage: 50, holdout_ratio: 0.1 },
     );
     expect(result.strategy).toBe("random");
-    expect(result.percentage).toBe(30); // profile wins
+    expect(result.sample_percentage).toBe(30); // profile wins
     expect(result.holdout_ratio).toBe(0.1); // from sampling
   });
 
   it("falls back to sampling strategy when profile not found", () => {
-    const result = resolveProfile("unknown", {}, { strategy: "random", percentage: 20 });
+    const result = resolveProfile("unknown", {}, { strategy: "random", sample_percentage: 20 });
     expect(result.strategy).toBe("random");
-    expect(result.percentage).toBe(20);
+    expect(result.sample_percentage).toBe(20);
   });
 
   it("provides adaptive field defaults", () => {
     const result = resolveProfile("local", { local: { strategy: "random" } }, undefined);
     expect(result.adaptive).toBe(false);
-    expect(result.adaptive_fnr_low).toBe(0.02);
-    expect(result.adaptive_fnr_high).toBe(0.05);
+    expect(result.adaptive_fnr_low_ratio).toBe(0.02);
+    expect(result.adaptive_fnr_high_ratio).toBe(0.05);
     expect(result.adaptive_min_percentage).toBe(10);
     expect(result.adaptive_step).toBe(5);
   });
@@ -222,8 +222,8 @@ describe("resolveProfile", () => {
         local: {
           strategy: "random",
           adaptive: true,
-          adaptive_fnr_low: 0.01,
-          adaptive_fnr_high: 0.04,
+          adaptive_fnr_low_ratio: 0.01,
+          adaptive_fnr_high_ratio: 0.04,
           adaptive_min_percentage: 5,
           adaptive_step: 2,
         },
@@ -231,8 +231,8 @@ describe("resolveProfile", () => {
       undefined,
     );
     expect(result.adaptive).toBe(true);
-    expect(result.adaptive_fnr_low).toBe(0.01);
-    expect(result.adaptive_fnr_high).toBe(0.04);
+    expect(result.adaptive_fnr_low_ratio).toBe(0.01);
+    expect(result.adaptive_fnr_high_ratio).toBe(0.04);
     expect(result.adaptive_min_percentage).toBe(5);
     expect(result.adaptive_step).toBe(2);
   });

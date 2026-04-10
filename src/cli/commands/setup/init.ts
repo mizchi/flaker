@@ -44,12 +44,12 @@ config = ""
 
 [quarantine]
 auto = true
-flaky_rate_threshold = 30  # percent
+flaky_rate_threshold_percentage = 30
 min_runs = 5
 
 [flaky]
 window_days = 14
-detection_threshold = 2    # percent
+detection_threshold_ratio = 0.02
 `;
 }
 

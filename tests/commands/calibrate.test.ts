@@ -40,7 +40,7 @@ describe("recommendSampling", () => {
     };
     const result = recommendSampling(profile);
     expect(result.strategy).toBe("hybrid");
-    expect(result.percentage).toBe(30);
+    expect(result.sample_percentage).toBe(30);
     expect(result.holdout_ratio).toBe(0.1);
   });
 
@@ -60,8 +60,8 @@ describe("recommendSampling", () => {
     };
     const result = recommendSampling(profile);
     expect(result.strategy).toBe("gbdt");
-    expect(result.percentage).toBe(20);
-    expect(result.co_failure_days).toBe(60); // shorter window for high flaky
+    expect(result.sample_percentage).toBe(20);
+    expect(result.co_failure_window_days).toBe(60); // shorter window for high flaky
   });
 
   it("recommends weighted when no resolver or model", () => {
@@ -133,14 +133,14 @@ describe("writeSamplingConfig", () => {
     const d = setup(`[repo]\nowner = "test"\nname = "repo"\n`);
     const sampling: SamplingConfig = {
       strategy: "hybrid",
-      percentage: 20,
+      sample_percentage: 20,
       holdout_ratio: 0.1,
     };
     writeSamplingConfig(d, sampling);
     const content = readFileSync(join(d, "flaker.toml"), "utf-8");
     expect(content).toContain('[sampling]');
     expect(content).toContain('strategy = "hybrid"');
-    expect(content).toContain('percentage = 20');
+    expect(content).toContain('sample_percentage = 20');
     expect(content).toContain('holdout_ratio = 0.1');
     // Original content preserved
     expect(content).toContain('[repo]');
@@ -154,14 +154,14 @@ describe("writeSamplingConfig", () => {
     );
     const sampling: SamplingConfig = {
       strategy: "gbdt",
-      percentage: 30,
+      sample_percentage: 30,
     };
     writeSamplingConfig(d, sampling);
     const content = readFileSync(join(d, "flaker.toml"), "utf-8");
     expect(content).toContain('strategy = "gbdt"');
-    expect(content).toContain('percentage = 30');
+    expect(content).toContain('sample_percentage = 30');
     expect(content).not.toContain('strategy = "random"');
-    expect(content).not.toContain('percentage = 50');
+    expect(content).not.toContain('sample_percentage = 50');
     // Other sections preserved
     expect(content).toContain('[repo]');
     expect(content).toContain('[runner]');
@@ -175,15 +175,15 @@ describe("resolveSamplingOpts integration", () => {
     mkdirSync(dir, { recursive: true });
     writeFileSync(
       join(dir, "flaker.toml"),
-      `[repo]\nowner = "test"\nname = "repo"\n\n[sampling]\nstrategy = "hybrid"\npercentage = 25\nholdout_ratio = 0.05\nco_failure_days = 60\n`,
+      `[repo]\nowner = "test"\nname = "repo"\n\n[sampling]\nstrategy = "hybrid"\nsample_percentage = 25\nholdout_ratio = 0.05\nco_failure_window_days = 60\n`,
       "utf-8",
     );
     const config = loadConfig(dir);
     expect(config.sampling).toBeDefined();
     expect(config.sampling!.strategy).toBe("hybrid");
-    expect(config.sampling!.percentage).toBe(25);
+    expect(config.sampling!.sample_percentage).toBe(25);
     expect(config.sampling!.holdout_ratio).toBe(0.05);
-    expect(config.sampling!.co_failure_days).toBe(60);
+    expect(config.sampling!.co_failure_window_days).toBe(60);
     rmSync(dir, { recursive: true, force: true });
   });
 });

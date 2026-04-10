@@ -52,7 +52,7 @@ describe("data accumulation pipeline", () => {
 
     const sampling = recommendSampling(profile);
     expect(sampling.strategy).toBe("hybrid");
-    expect(sampling.percentage).toBe(30);
+    expect(sampling.sample_percentage).toBe(30);
   });
 
   it("train produces model from accumulated fixture data", { timeout: 30_000 }, async () => {
@@ -257,7 +257,7 @@ describe("data accumulation pipeline", () => {
     expect(profile.commitCount).toBe(30);
     const sampling = recommendSampling(profile);
     expect(sampling.strategy).toBe("hybrid");
-    expect(sampling.percentage).toBe(50);
+    expect(sampling.sample_percentage).toBe(50);
 
     const modelPath = join(tmpDir, "gbdt.json");
     const trainResult = await trainModel({

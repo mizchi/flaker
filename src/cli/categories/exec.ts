@@ -86,10 +86,10 @@ function resolveSamplingOpts(
     resolvedProfile: profile,
     strategy: opts.strategy ?? profile.strategy,
     count: parseSampleCount(opts.count),
-    percentage: parseSamplePercentage(opts.percentage) ?? profile.percentage,
+    percentage: parseSamplePercentage(opts.percentage) ?? profile.sample_percentage,
     skipQuarantined: opts.skipQuarantined ?? profile.skip_quarantined,
     changed: opts.changed,
-    coFailureDays: opts.coFailureDays ? parseInt(opts.coFailureDays, 10) : profile.co_failure_days,
+    coFailureDays: opts.coFailureDays ? parseInt(opts.coFailureDays, 10) : profile.co_failure_window_days,
     holdoutRatio: opts.holdoutRatio ? parseFloat(opts.holdoutRatio) : profile.holdout_ratio,
     modelPath: opts.modelPath ?? profile.model_path,
   };
@@ -238,8 +238,8 @@ export async function execRunAction(rawOpts: SamplingCliOpts & { runner: string;
         },
         {
           basePercentage: opts.percentage,
-          fnrLow: profile.adaptive_fnr_low,
-          fnrHigh: profile.adaptive_fnr_high,
+          fnrLow: profile.adaptive_fnr_low_ratio,
+          fnrHigh: profile.adaptive_fnr_high_ratio,
           minPercentage: profile.adaptive_min_percentage,
           step: profile.adaptive_step,
         },

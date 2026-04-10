@@ -3,7 +3,7 @@ import { loadConfig } from "../../src/cli/config.js";
 
 // These tests are intentionally skipped until Task 18 rewrites the config loader.
 // Remove the `.skip` in Task 18 when the loader throws on legacy keys.
-describe.skip("config migration error (enabled in Task 18)", () => {
+describe("config migration error", () => {
   it("rejects legacy [sampling] percentage key", () => {
     expect(() => loadConfig("tests/fixtures/legacy-config")).toThrow(
       /deprecated key `percentage` in \[sampling\]/

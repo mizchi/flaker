@@ -130,7 +130,7 @@ export function registerPolicyCommands(program: Command): void {
             await runQuarantine({
               store,
               action: "auto",
-              flakyRateThreshold: config.quarantine.flaky_rate_threshold,
+              flakyRateThreshold: config.quarantine.flaky_rate_threshold_percentage,
               minRuns: config.quarantine.min_runs,
             });
             const quarantined = await store.queryQuarantined();
