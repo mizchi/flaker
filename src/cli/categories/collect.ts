@@ -21,12 +21,12 @@ export function registerCollectCommands(program: Command): void {
   collectCmd
     .command("ci")
     .description("Collect workflow runs from GitHub")
-    .option("--last <days>", "Number of days to look back", "30")
+    .option("--days <n>", "Number of days to look back", "30")
     .option("--branch <branch>", "Filter by branch")
     .option("--json", "Output JSON summary")
     .option("--output <file>", "Write collect summary to a file")
     .option("--fail-on-errors", "Exit with status 1 when any workflow run fails to collect")
-    .action(async (opts: { last: string; branch?: string; json?: boolean; output?: string; failOnErrors?: boolean }) => {
+    .action(async (opts: { days: string; branch?: string; json?: boolean; output?: string; failOnErrors?: boolean }) => {
       const config = loadConfig(process.cwd());
       const store = new DuckDBStore(resolve(config.storage.path));
       await store.initialize();
@@ -44,7 +44,7 @@ export function registerCollectCommands(program: Command): void {
       const github: GitHubClient = {
         async listWorkflowRuns() {
           const created = new Date();
-          created.setDate(created.getDate() - Number(opts.last));
+          created.setDate(created.getDate() - Number(opts.days));
           const response = await octokit.actions.listWorkflowRunsForRepo({
             owner,
             repo,
