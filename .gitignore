@@ -12,3 +12,4 @@ dist/flaker
 result
 .artifacts/
 .direnv
+.worktrees/
