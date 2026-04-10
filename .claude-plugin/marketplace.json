@@ -1,0 +1,21 @@
+{
+  "name": "flaker",
+  "description": "flaker — test-intelligence CLI and Claude Code skill",
+  "owner": {
+    "name": "mizchi",
+    "url": "https://github.com/mizchi"
+  },
+  "plugins": [
+    {
+      "name": "flaker",
+      "description": "Set up @mizchi/flaker on a new repository. Includes the flaker-setup skill which encodes the Day 0 → Week 4 onboarding flow.",
+      "version": "0.3.0",
+      "source": "./",
+      "author": {
+        "name": "mizchi"
+      },
+      "homepage": "https://github.com/mizchi/flaker",
+      "license": "MIT"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "flaker",
+  "version": "0.3.0",
+  "description": "Claude Code skill for setting up @mizchi/flaker on a new repository — encodes the Day 0 → Week 4 onboarding flow with decision points, copy-paste commands, and pitfalls.",
+  "author": {
+    "name": "mizchi",
+    "url": "https://github.com/mizchi"
+  },
+  "homepage": "https://github.com/mizchi/flaker",
+  "repository": "https://github.com/mizchi/flaker",
+  "license": "MIT",
+  "keywords": [
+    "flaker",
+    "test-sampling",
+    "flaky-tests",
+    "ci",
+    "test-intelligence"
+  ]
+}

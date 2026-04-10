@@ -39,6 +39,20 @@ Requirements:
 - Node.js 24+
 - pnpm 10+
 
+## Install as a Claude Code plugin
+
+This repo also ships a Claude Code plugin (`flaker-setup` skill) that walks an LLM agent through introducing flaker on a fresh repository. Day 0 → Week 4 onboarding flow, decision points, copy-paste commands, and pitfalls — all encoded as a skill so the agent picks the right order automatically.
+
+```bash
+# In Claude Code
+/plugin marketplace add mizchi/flaker
+/plugin install flaker@flaker
+```
+
+Then ask the agent something like "新しいプロジェクトに flaker をセットアップしたい" and it will invoke the `flaker-setup` skill.
+
+The full reference checklist (used by the skill) lives at [docs/new-project-checklist.ja.md](docs/new-project-checklist.ja.md).
+
 ## Use as a MoonBit Library
 
 `flaker` also publishes a MoonBit library surface at `mizchi/flaker`.
