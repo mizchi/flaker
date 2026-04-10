@@ -80,28 +80,37 @@ export function createProgram(): Command {
     .option("--json", "Output as JSON")
     .action(analyzeKpiAction);
 
-  appendHelpText(
-    program,
-    "\nGetting started (3 commands):\n" +
-    "  flaker init                  Set up flaker.toml (auto-detects repo from git)\n" +
-    "  flaker calibrate             Analyze history, write optimal sampling config\n" +
-    "  flaker run                   Select and execute tests (uses calibrated config)\n" +
-    "\n" +
-    "Building history:\n" +
-    "  flaker collect --days 30     Import CI runs from GitHub Actions\n" +
-    "  flaker collect local         Import local actrun history\n" +
-    "\n" +
-    "Analysis:\n" +
-    "  flaker kpi                   KPI dashboard (sampling, flaky, data quality)\n" +
-    "  flaker analyze flaky         Show flaky test rankings\n" +
-    "  flaker analyze insights      Compare CI vs local failure patterns\n" +
-    "  flaker analyze eval          Detailed evaluation report\n" +
-    "\n" +
-    "Advanced:\n" +
-    "  flaker dev train             Train GBDT model for ML-based selection\n" +
-    "  flaker dev eval-fixture      Benchmark strategies with synthetic data\n" +
-    "  flaker debug doctor          Check runtime requirements\n",
-  );
+  const originalHelpInformation = program.helpInformation.bind(program);
+  program.helpInformation = () => {
+    const base = originalHelpInformation();
+    const extras = `
+Getting started:
+  flaker init                       Create flaker.toml (auto-detects repo)
+  flaker collect calibrate          Analyze history, write optimal sampling config
+  flaker debug doctor               Check runtime requirements
+  flaker run                        Select and execute tests
+
+Daily workflow:
+  flaker run                        Execute with auto-selected profile
+  flaker run --dry-run --explain    Preview selection with reasons
+  flaker analyze kpi                KPI dashboard (sampling, flaky, data quality)
+
+Commands (by category):
+  setup      Project scaffolding            (init)
+  exec       Test selection and execution   (run, affected)
+  collect    Import history and calibration (ci, local, coverage, commit-changes, calibrate)
+  import     Ingest external reports        (report, parquet)
+  report     Normalize and diff reports     (summary, diff, aggregate)
+  analyze    Read-only inspection           (kpi, flaky, reason, insights, eval, context, query)
+  debug      Active investigation           (diagnose, bisect, confirm, retry, doctor)
+  policy     Enforcement and ownership      (quarantine, check)
+  dev        Model training and benchmarks  (train, tune, self-eval, eval-fixture, eval-co-failure, test-key)
+
+Run \`flaker <category> --help\` for the full list under each category.
+Run \`flaker <category> <command> --help\` for per-command options.
+`;
+    return base + extras;
+  };
 
   return program;
 }

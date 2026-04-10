@@ -10,8 +10,8 @@ describe("CLI help", () => {
     expect(help).toContain("Intelligent test selection");
     expect(help).toContain("Getting started");
     expect(help).toContain("flaker init");
-    expect(help).toContain("flaker calibrate");
-    expect(help).toContain("flaker exec run");
+    expect(help).toContain("flaker collect calibrate");
+    expect(help).toContain("Commands (by category)");
   });
 
   it("shows exec run help with --dry-run and --explain flags", () => {

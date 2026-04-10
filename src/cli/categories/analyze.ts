@@ -188,10 +188,18 @@ export function registerAnalyzeCommands(program: Command): void {
       }
     });
 
-  analyze
+  const queryCmd = analyze
     .command("query <sql>")
-    .description("Execute a read-only SQL query against the metrics database")
-    .action(async (sql: string) => {
+    .description("Execute a read-only SQL query against the metrics database");
+
+  queryCmd.addHelpText("after", `
+Examples:
+  flaker analyze query "SELECT test_name, COUNT(*) AS fails FROM test_results WHERE status='failed' GROUP BY 1 ORDER BY fails DESC LIMIT 10"
+  flaker analyze query "SELECT commit_sha, AVG(CASE WHEN status='failed' THEN 1.0 ELSE 0 END) AS fail_rate FROM test_results GROUP BY 1 ORDER BY fail_rate DESC LIMIT 20"
+  flaker analyze query "SELECT * FROM test_results ORDER BY created_at DESC LIMIT 20"
+`);
+
+  queryCmd.action(async (sql: string) => {
       // Reject write operations and dangerous DuckDB functions
       const stripped = sql.replace(/--[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "").trim();
       const normalized = stripped.toUpperCase();
