@@ -576,7 +576,7 @@ flaker policy quarantine --remove "suite>testName"
 
 ## 設定の移行
 
-`flaker 0.2.0` は設定キーの命名規則を「サフィックスで単位を明示する」方式に変更しました: `*_ratio` (0.0–1.0)、`*_percentage` (0–100)、`*_days`、`*_seconds`、`*_count`。単位サフィックスが付かないキーは廃止されました。レガシーな `flaker.toml` を検出するとCLIは起動を拒否し、このセクションへ誘導します。
+`flaker 0.2.0` 以降、設定キーの命名規則を「サフィックスで単位を明示する」方式に変更しました: `*_ratio` (0.0–1.0)、`*_percentage` (0–100)、`*_days`、`*_seconds`、`*_count`。単位サフィックスが付かないキーは廃止されました。レガシーな `flaker.toml` を検出するとCLIは起動を拒否し、このセクションへ誘導します。
 
 下表にしたがって `flaker.toml` のキーをリネームしてください:
 

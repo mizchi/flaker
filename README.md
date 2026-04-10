@@ -20,7 +20,7 @@ It is designed for repositories where:
 - Which tests are actually flaky?
 - How well does local sampled execution predict CI outcomes?
 
-> **Upgrading from 0.0.x / 0.1.x?** See [docs/how-to-use.md#config-migration](docs/how-to-use.md#config-migration) for the full key rename map. The CLI now refuses to start on legacy configs and points to the migration guide.
+> **Upgrading from 0.0.x / 0.1.x?** See [docs/how-to-use.md#config-migration](docs/how-to-use.md#config-migration) for the full key rename map. Starting with `0.2.0`, the CLI refuses to start on legacy configs and points to the migration guide.
 
 ## Install as a CLI
 

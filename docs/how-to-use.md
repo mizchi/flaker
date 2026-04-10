@@ -608,7 +608,7 @@ co-failure データの最適な時間窓（7/14/30/60/90/180 日）を探索す
 
 ## Config migration
 
-`flaker 0.2.0` renames config keys to follow a suffix-per-unit convention: `*_ratio` (0.0–1.0), `*_percentage` (0–100), `*_days`, `*_seconds`, `*_count`. Values without a unit suffix are gone. The CLI refuses to start on a legacy `flaker.toml` and points here.
+`flaker 0.2.0` (and later) renames config keys to follow a suffix-per-unit convention: `*_ratio` (0.0–1.0), `*_percentage` (0–100), `*_days`, `*_seconds`, `*_count`. Values without a unit suffix are gone. The CLI refuses to start on a legacy `flaker.toml` and points here.
 
 Rename the keys in your `flaker.toml` per the table below:
 

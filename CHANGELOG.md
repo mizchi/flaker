@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0 — 2026-04-10
+
+Republishes the 0.2.0 CLI redesign under a new minor version so that downstream releases (npm `@mizchi/flaker`, mooncakes `mizchi/flaker`) track the same semver. No functional changes relative to 0.2.0; see the 0.2.0 entry below for the full breaking-change list.
+
 ## 0.2.0 — 2026-04-10
 
 ### Breaking changes
