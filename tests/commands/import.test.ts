@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
-import { runImport } from "../../src/cli/commands/import.js";
+import { runImport } from "../../src/cli/commands/import/report.js";
 import { tmpdir } from "node:os";
 
 describe("import command", () => {

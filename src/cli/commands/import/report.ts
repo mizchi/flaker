@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
-import { createTestResultAdapter } from "../adapters/index.js";
-import type { MetricStore, WorkflowRun, TestResult } from "../storage/types.js";
-import { toStoredTestResult } from "../storage/test-result-mapper.js";
+import { createTestResultAdapter } from "../../adapters/index.js";
+import type { MetricStore, WorkflowRun, TestResult } from "../../storage/types.js";
+import { toStoredTestResult } from "../../storage/test-result-mapper.js";
 
 interface ImportOpts {
   store: MetricStore;

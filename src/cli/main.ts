@@ -20,7 +20,6 @@ import {
   parseSamplingMode,
 } from "./commands/exec/sampling-options.js";
 import { runBisect } from "./commands/bisect.js";
-import { runImport } from "./commands/import.js";
 import { loadTuningConfig, type TuningConfig } from "./eval/alpha-tuner.js";
 
 function loadTuningConfigSafe(storagePath: string): TuningConfig {
@@ -140,12 +139,13 @@ export function createProgram(): Command {
   registerSetupCommands(program);
   registerExecCommands(program);
   registerCollectCommands(program);
+  registerImportCommands(program);
   registerAnalyzeCommands(program);
   registerDebugCommands(program);
   registerPolicyCommands(program);
   registerDevCommands(program);
-  // registerImportCommands, registerReportCommands deferred:
-  // existing flat commands with those names must be removed first (Tasks 5, 6)
+  // registerReportCommands deferred:
+  // existing flat command with that name must be removed first (Task 6)
 
 async function collectKnownQuarantineTaskIds(
   cwd: string,
@@ -909,51 +909,6 @@ program
     }
   });
 
-// --- import ---
-program
-  .command("import <file>")
-  .description("Import a local test report file")
-  .option("--adapter <type>", "Adapter type (vitest, playwright, junit, vrt-migration, vrt-bench, custom)", "playwright")
-  .option("--custom-command <cmd>", "Custom adapter command (required with --adapter custom)")
-  .option("--commit <sha>", "Commit SHA")
-  .option("--branch <branch>", "Branch name")
-  .action(async (file: string, opts: { adapter: string; customCommand?: string; commit?: string; branch?: string }) => {
-    const config = loadConfig(process.cwd());
-    const store = new DuckDBStore(resolve(config.storage.path));
-    await store.initialize();
-    try {
-      const result = await runImport({
-        store,
-        filePath: resolve(file),
-        adapterType: opts.adapter,
-        customCommand: opts.customCommand,
-        commitSha: opts.commit,
-        branch: opts.branch,
-        repo: `${config.repo.owner}/${config.repo.name}`,
-      });
-      console.log(`Imported ${result.testsImported} test results`);
-    } finally {
-      await store.close();
-    }
-  });
-
-program
-  .command("import-parquet <dir>")
-  .description("Import flaker parquet artifacts from a directory")
-  .action(async (dir: string) => {
-    const config = loadConfig(process.cwd());
-    const store = new DuckDBStore(resolve(config.storage.path));
-    await store.initialize();
-    try {
-      const result = await store.importFromParquetDir(resolve(dir));
-      console.log(
-        `Imported ${result.workflowRunsImported} workflow runs, ${result.testResultsImported} test results, ${result.commitChangesImported} commit changes, ${result.samplingRunsImported} sampling runs, ${result.samplingRunTestsImported} sampling run tests`,
-      );
-    } finally {
-      await store.close();
-    }
-  });
-
 // --- bisect ---
 program
   .command("bisect")
@@ -1502,12 +1457,7 @@ program
     "flaker reason --window 7",
     "flaker reason --json",
   ]);
-  appendExamplesToCommand(program.commands.find((command) => command.name() === "import"), [
-    "flaker import report.json --adapter playwright --commit $(git rev-parse HEAD)",
-    "flaker import results.xml --adapter junit",
-    "flaker import report.json --adapter custom --custom-command \"node ./adapter.js\"",
-  ]);
-  appendExamplesToCommand(program.commands.find((command) => command.name() === "bisect"), [
+appendExamplesToCommand(program.commands.find((command) => command.name() === "bisect"), [
     "flaker bisect --test \"should redirect\"",
     "flaker bisect --test \"should redirect\" --suite tests/login.spec.ts",
   ]);
