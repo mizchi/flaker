@@ -192,7 +192,7 @@ export function formatCalibrationReport(result: CalibrationResult): string {
   // Data sufficiency warning
   if (p.confidence === "insufficient") {
     lines.push("⚠ Insufficient data (< 5 commits). Recommendations are unreliable.");
-    lines.push("  Run `flaker collect --last 30` to gather more history.");
+    lines.push("  Run `flaker collect --days 30` to gather more history.");
     lines.push("");
   } else if (p.confidence === "low") {
     lines.push("⚠ Low confidence (" + p.commitCount + " commits). Collect 50+ for reliable calibration.");
@@ -236,10 +236,10 @@ export function formatCalibrationReport(result: CalibrationResult): string {
     lines.push(`  1. Fix or quarantine ${p.brokenTestCount} broken test(s) — they inflate flaky metrics`);
   }
   if (p.confidence === "insufficient" || p.confidence === "low") {
-    lines.push(`  ${p.brokenTestCount > 0 ? "2" : "1"}. Collect more CI data: \`flaker collect --last 30\``);
-    lines.push(`     Then re-run: \`flaker calibrate\``);
+    lines.push(`  ${p.brokenTestCount > 0 ? "2" : "1"}. Collect more CI data: \`flaker collect --days 30\``);
+    lines.push(`     Then re-run: \`flaker collect calibrate\``);
   } else {
-    lines.push(`  ${p.brokenTestCount > 0 ? "2" : "1"}. Apply config: \`flaker calibrate\` (without --dry-run)`);
+    lines.push(`  ${p.brokenTestCount > 0 ? "2" : "1"}. Apply config: \`flaker collect calibrate\` (without --dry-run)`);
     lines.push(`  ${p.brokenTestCount > 0 ? "3" : "2"}. Run tests: \`flaker run\``);
   }
   lines.push("");

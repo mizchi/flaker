@@ -132,7 +132,7 @@ if (isDirectCliExecution()) {
       }
       if (err.message.includes("DuckDB") || err.message.includes("duckdb")) {
         console.error(`Error: ${err.message}`);
-        console.error(`Run 'flaker doctor' to check your setup.`);
+        console.error(`Run 'flaker debug doctor' to check your setup.`);
         process.exit(1);
       }
     }

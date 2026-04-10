@@ -214,14 +214,14 @@ function buildEvalRecommendations(report: EvalReport): string[] {
     (t) => t.flakyRate >= 100 && t.totalRuns >= 5,
   ).length ?? 0;
   if (brokenInEval > 0) {
-    recommendations.push(`Fix or quarantine ${brokenInEval} broken test(s) (100% fail rate): run \`flaker flaky\``);
+    recommendations.push(`Fix or quarantine ${brokenInEval} broken test(s) (100% fail rate): run \`flaker analyze flaky\``);
   }
   const intermittentInEval = det.flakyTests - brokenInEval;
   if (intermittentInEval > 0 && det.quarantinedTests === 0) {
-    recommendations.push(`Quarantine ${intermittentInEval} flaky test(s): run \`flaker quarantine --auto\``);
+    recommendations.push(`Quarantine ${intermittentInEval} flaky test(s): run \`flaker policy quarantine --auto\``);
   }
   if (res.newFlaky > 0) {
-    recommendations.push(`Investigate ${res.newFlaky} newly flaky test(s): run \`flaker flaky\``);
+    recommendations.push(`Investigate ${res.newFlaky} newly flaky test(s): run \`flaker analyze flaky\``);
   }
   if (det.flakyTests === 0 && d.totalResults > 0) {
     recommendations.push("No flaky tests detected. Suite is healthy!");

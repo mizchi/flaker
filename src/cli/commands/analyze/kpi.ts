@@ -335,7 +335,7 @@ export function formatKpi(kpi: FlakerKpi): string {
   const steps: string[] = [];
   if (kpi.flaky.brokenTests > 0) {
     issues.push(`${kpi.flaky.brokenTests} broken test(s)`);
-    steps.push(`Fix or quarantine: \`flaker flaky --top 20\``);
+    steps.push(`Fix or quarantine: \`flaker analyze flaky --top 20\``);
   }
   if (s.matchedCommits > 0 && s.falseNegativeRate != null && s.falseNegativeRate > 5) {
     issues.push(`high false negative rate (${s.falseNegativeRate}%)`);
@@ -343,7 +343,7 @@ export function formatKpi(kpi: FlakerKpi): string {
   }
   if (kpi.data.confidence === "insufficient" || kpi.data.confidence === "low") {
     issues.push(`${kpi.data.confidence} data (${kpi.data.commitCount} commits)`);
-    steps.push(`Collect more: \`flaker collect --last 30\``);
+    steps.push(`Collect more: \`flaker collect --days 30\``);
   }
   if (!kpi.data.coFailureReady) {
     issues.push("co-failure data incomplete");
@@ -351,7 +351,7 @@ export function formatKpi(kpi: FlakerKpi): string {
   }
   if (kpi.data.staleDays != null && kpi.data.staleDays > 7) {
     issues.push(`data is ${kpi.data.staleDays} days old`);
-    steps.push(`Refresh: \`flaker collect --last 7\``);
+    steps.push(`Refresh: \`flaker collect --days 7\``);
   }
   if (s.matchedCommits === 0 && s.sampleRatio == null) {
     steps.push(`Start sampling: \`flaker run\``);

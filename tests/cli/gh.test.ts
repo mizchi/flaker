@@ -15,7 +15,7 @@ describe("formatIssueBody", () => {
     expect(body).toContain("handles timeout");
     expect(body).toContain("35.5%");
     expect(body).toContain("20");
-    expect(body).toContain("flaker quarantine --remove");
+    expect(body).toContain("flaker policy quarantine --remove");
   });
 });
 

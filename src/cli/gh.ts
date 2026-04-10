@@ -27,9 +27,9 @@ export function formatIssueBody(opts: IssueBodyOpts): string {
     "",
     "### To fix",
     "",
-    `1. Investigate the root cause using \`flaker reason "${opts.suite}:${opts.testName}"\``,
+    `1. Investigate the root cause using \`flaker analyze reason "${opts.suite}:${opts.testName}"\``,
     "2. Fix the test",
-    `3. Remove from quarantine: \`flaker quarantine --remove "${opts.suite}:${opts.testName}"\``,
+    `3. Remove from quarantine: \`flaker policy quarantine --remove "${opts.suite}:${opts.testName}"\``,
   ].join("\n");
 }
 

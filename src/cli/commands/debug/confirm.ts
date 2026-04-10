@@ -73,7 +73,7 @@ export function formatConfirmResult(result: ConfirmResult, opts: { json?: boolea
     `  ${result.message}`,
   ];
   if (result.verdict === "flaky") {
-    lines.push(`  Consider quarantining: flaker quarantine --add "${result.suite}:${result.testName}"`);
+    lines.push(`  Consider quarantining: flaker policy quarantine --add "${result.suite}:${result.testName}"`);
   }
   if (result.verdict === "broken") {
     lines.push("  Investigate the regression starting from the commit that introduced it.");
