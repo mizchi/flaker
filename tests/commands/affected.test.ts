@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runAffected, formatAffectedReport } from "../../src/cli/commands/affected.js";
+import { runAffected, formatAffectedReport } from "../../src/cli/commands/exec/affected.js";
 import { SimpleResolver } from "../../src/cli/resolvers/simple.js";
 
 describe("affected command", () => {

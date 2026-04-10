@@ -25,13 +25,11 @@ import {
   planSample,
 } from "./commands/sample.js";
 import { recordSamplingRunFromSummary } from "./commands/sampling-run.js";
-import { runTests } from "./commands/run.js";
 import {
   parseSampleCount,
   parseSamplePercentage,
   parseSamplingMode,
-} from "./commands/sampling-options.js";
-import { ActrunRunner } from "./runners/actrun.js";
+} from "./commands/exec/sampling-options.js";
 import { runBisect } from "./commands/bisect.js";
 import { runImport } from "./commands/import.js";
 import { loadTuningConfig, type TuningConfig } from "./eval/alpha-tuner.js";
@@ -64,10 +62,6 @@ import { loadFixtureIntoStore } from "./eval/fixture-loader.js";
 import { evaluateFixture } from "./eval/fixture-evaluator.js";
 import { formatEvalFixtureReport, formatSweepReport, formatMultiSweepReport } from "./eval/fixture-report.js";
 import { runDoctor, formatDoctorReport } from "./commands/doctor.js";
-import {
-  runAffected,
-  formatAffectedReport,
-} from "./commands/affected.js";
 import {
   appendConfigWarnings,
   discoverTestSpecsForCheck,
@@ -569,258 +563,6 @@ addSamplingOptions(
       } finally {
         await store.close();
       }
-    },
-  );
-
-// --- run ---
-addSamplingOptions(
-  program
-    .command("run")
-    .description("Select and run tests (auto-detects changed files and strategy from config)")
-    .option("--runner <runner>", "Runner type: direct or actrun", "direct")
-    .option("--retry", "Retry failed tests (actrun only)"),
-).action(
-    async (rawOpts: SamplingCliOpts & { runner: string; retry?: boolean }) => {
-      const cwd = process.cwd();
-      const config = loadConfig(cwd);
-      const resolved = resolveSamplingOpts(rawOpts, config);
-      console.log(`# Profile: ${resolved.resolvedProfile.name}`);
-      const opts = { ...resolved, runner: rawOpts.runner, retry: rawOpts.retry };
-      const store = new DuckDBStore(resolve(config.storage.path));
-      await store.initialize();
-
-      try {
-        const changedFiles = resolveChangedFiles(cwd, opts.changed);
-        const mode = parseSamplingMode(opts.strategy);
-        const manifest = opts.skipQuarantined
-          ? loadQuarantineManifestIfExists({ cwd })
-          : null;
-        const resolver =
-          (mode === "affected" || mode === "hybrid") && changedFiles?.length
-            ? await createConfiguredResolver(cwd, config.affected)
-            : undefined;
-        if (opts.runner === "actrun") {
-          const actRunner = new ActrunRunner({
-            workflow: resolveActrunWorkflowPath(config),
-            job: config.runner.actrun?.job,
-            local: config.runner.actrun?.local,
-            trust: config.runner.actrun?.trust,
-          });
-          if (opts.retry) {
-            actRunner.retry();
-          } else {
-            const result = actRunner.runWithResult();
-            // Auto-import results
-            const { actrunAdapter } = await import("./adapters/actrun.js");
-            const testCases = actrunAdapter.parse(JSON.stringify({
-              run_id: result.runId,
-              conclusion: result.conclusion,
-              headSha: result.headSha,
-              headBranch: result.headBranch,
-              startedAt: result.startedAt,
-              completedAt: result.completedAt,
-              status: "completed",
-              tasks: result.tasks.map((t) => ({
-                id: t.id, kind: "run", status: t.status, code: t.code, shell: "bash",
-                stdout_path: t.stdoutPath, stderr_path: t.stderrPath,
-              })),
-              steps: [],
-            }));
-            if (testCases.length > 0) {
-              const runId = Date.now();
-              await store.insertWorkflowRun({
-                id: runId,
-                repo: `${config.repo.owner}/${config.repo.name}`,
-                branch: result.headBranch,
-                commitSha: result.headSha,
-                event: "actrun-run",
-                source: "local",
-                status: result.conclusion,
-                createdAt: new Date(result.startedAt),
-                durationMs: result.durationMs,
-              });
-              await store.insertTestResults(
-                testCases.map((tc) =>
-                  toStoredTestResult(tc, {
-                    workflowRunId: runId,
-                    commitSha: result.headSha,
-                    createdAt: new Date(result.startedAt),
-                  }),
-                ),
-              );
-              console.log(`Imported ${testCases.length} test results from actrun run ${result.runId}`);
-            }
-            // Run eval mini-report
-            const { runEval, formatEvalReport } = await import("./commands/eval.js");
-            const evalReport = await runEval({ store });
-            console.log(formatEvalReport(evalReport));
-          }
-          return;
-        }
-        const commitSha = resolveCurrentCommitSha(cwd) ?? `local-${Date.now()}`;
-        const kpi = await runSamplingKpi({ store });
-        const fallbackMode = resolveFallbackSamplingMode(opts.resolvedProfile);
-
-        // Adaptive percentage adjustment
-        const profile = opts.resolvedProfile;
-        if (profile.adaptive && opts.percentage != null) {
-          const kpiData = await computeKpi(store);
-          const insightsData = await runInsights({ store });
-          const divergenceRate = insightsData.summary.totalTests > 0
-            ? insightsData.summary.ciOnlyCount / insightsData.summary.totalTests
-            : null;
-          const adaptive = computeAdaptivePercentage(
-            {
-              falseNegativeRate: kpiData.sampling.falseNegativeRate,
-              divergenceRate,
-            },
-            {
-              basePercentage: opts.percentage,
-              fnrLow: profile.adaptive_fnr_low,
-              fnrHigh: profile.adaptive_fnr_high,
-              minPercentage: profile.adaptive_min_percentage,
-              step: profile.adaptive_step,
-            },
-          );
-          opts.percentage = adaptive.percentage;
-          console.log(`# Adaptive: ${adaptive.reason}`);
-        }
-
-        if (profile.max_duration_seconds != null) {
-          console.log(`# Time budget: ${profile.max_duration_seconds}s`);
-        }
-
-        const runResult = await runTests({
-          store,
-          runner: createRunner(config.runner),
-          mode,
-          fallbackMode,
-          count: opts.count,
-          percentage: opts.percentage,
-          resolver,
-          changedFiles,
-          skipQuarantined: opts.skipQuarantined,
-          quarantineManifestEntries: manifest?.entries,
-          cwd,
-          coFailureDays: opts.coFailureDays,
-          holdoutRatio: opts.holdoutRatio,
-        });
-        console.log(formatSamplingSummary(runResult.samplingSummary, {
-          ciPassWhenLocalPassRate: kpi.passSignal.rate,
-        }));
-        const workflowRunId = Date.now();
-        const createdAt = new Date();
-        await store.insertWorkflowRun({
-          id: workflowRunId,
-          repo: `${config.repo.owner}/${config.repo.name}`,
-          branch: "local",
-          commitSha,
-          event: "flaker-local-run",
-          source: "local",
-          status: runResult.exitCode === 0 ? "success" : "failure",
-          createdAt,
-          durationMs: runResult.durationMs,
-        });
-        await store.insertTestResults(
-          runResult.results.map((tc) =>
-            toStoredTestResult(tc, {
-              workflowRunId,
-              commitSha,
-              createdAt,
-            }),
-          ),
-        );
-        // Collect commit_changes for co-failure learning
-        if (commitSha && !commitSha.startsWith("local-")) {
-          const { collectCommitChanges } = await import("./commands/collect-commit-changes.js");
-          await collectCommitChanges(store, cwd, commitSha);
-        }
-        // Store holdout test results with is_holdout marker
-        if (runResult.holdoutResult) {
-          await store.insertTestResults(
-            runResult.holdoutResult.results.map((tc) =>
-              toStoredTestResult(tc, {
-                workflowRunId,
-                commitSha,
-                createdAt,
-              }),
-            ),
-          );
-          const holdoutFailures = runResult.holdoutResult.results.filter(
-            (r) => r.status === "failed",
-          );
-          if (holdoutFailures.length > 0) {
-            console.log(`\n# Holdout: ${holdoutFailures.length}/${runResult.holdoutTests.length} failures detected (missed by sampling)`);
-          }
-        }
-        await recordSamplingRunFromSummary(store, {
-          id: workflowRunId,
-          commitSha,
-          commandKind: "run",
-          summary: runResult.samplingSummary,
-          tests: runResult.sampledTests,
-          holdoutTests: runResult.holdoutTests,
-          durationMs: runResult.durationMs,
-        });
-        if (config.storage.path) {
-          const { exportRunParquet } = await import("./commands/export-parquet.js");
-          await exportRunParquet(store, workflowRunId, config.storage.path);
-        }
-        if (runResult.exitCode !== 0) {
-          process.exit(1);
-        }
-      } finally {
-        await store.close();
-      }
-    },
-  );
-
-// --- affected ---
-program
-  .command("affected [paths...]")
-  .description("Explain affected test selection for changed files")
-  .option("--changed <files>", "Comma-separated list of changed files")
-  .option("--json", "Output JSON report")
-  .option("--markdown", "Output Markdown report")
-  .action(
-    async (
-      paths: string[],
-      opts: { changed?: string; json?: boolean; markdown?: boolean },
-    ) => {
-      if (opts.json && opts.markdown) {
-        console.error("Error: choose either --json or --markdown");
-        process.exit(1);
-      }
-
-      const changedFiles = [
-        ...paths,
-        ...(opts.changed
-          ? opts.changed
-              .split(",")
-              .map((value) => value.trim())
-              .filter(Boolean)
-          : []),
-      ];
-
-      if (changedFiles.length === 0) {
-        console.error("Error: at least one changed file is required");
-        process.exit(1);
-      }
-
-      const cwd = process.cwd();
-      const config = loadConfig(cwd);
-      const resolver = createResolver(config.affected, cwd);
-      const listedTests = await listRunnerTests(cwd, config.runner);
-      const report = await runAffected({
-        resolverName: config.affected.resolver,
-        resolver,
-        changedFiles,
-        listedTests,
-      });
-
-      console.log(
-        formatAffectedReport(report, opts.json ? "json" : "markdown"),
-      );
     },
   );
 
@@ -1961,22 +1703,6 @@ program
     "  hybrid    affected + co-failure + weighted fill (best with resolver)\n" +
     "  gbdt      ML model ranking (requires `flaker train` first)\n",
   );
-  appendExamplesToCommand(program.commands.find((command) => command.name() === "run"), [
-    "flaker run",
-    "flaker run --strategy hybrid",
-    "flaker run --runner actrun",
-  ]);
-  appendHelpText(
-    program.commands.find((command) => command.name() === "run") as Command,
-    "\nNo flags needed if flaker.toml has [sampling] config (set by `flaker calibrate`).\n" +
-    "Changed files are auto-detected from git diff.\n" +
-    "Results are saved to the database for learning.\n",
-  );
-  appendExamplesToCommand(program.commands.find((command) => command.name() === "affected"), [
-    "flaker affected src/foo.ts src/bar.ts",
-    "flaker affected --changed src/foo.ts,src/bar.ts",
-    "flaker affected --json --changed src/foo.ts",
-  ]);
   appendExamplesToCommand(program.commands.find((command) => command.name() === "check"), [
     "flaker check",
     "flaker check --json",

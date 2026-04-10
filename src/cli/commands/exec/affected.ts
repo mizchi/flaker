@@ -2,13 +2,13 @@ import {
   buildAffectedReport,
   createAffectedSelection,
   dedupeAffectedTargets,
-} from "../resolvers/affected-report.js";
+} from "../../resolvers/affected-report.js";
 import type {
   AffectedReport,
   AffectedSelection,
   DependencyResolver,
-} from "../resolvers/types.js";
-import type { TestId } from "../runners/types.js";
+} from "../../resolvers/types.js";
+import type { TestId } from "../../runners/types.js";
 
 export interface RunAffectedOpts {
   resolverName: string;

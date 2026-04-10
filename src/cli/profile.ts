@@ -1,5 +1,5 @@
 import type { ProfileConfig, SamplingConfig } from "./config.js";
-import { parseSamplingMode, type SamplingMode } from "./commands/sampling-options.js";
+import { parseSamplingMode, type SamplingMode } from "./commands/exec/sampling-options.js";
 
 export interface TimeBudgetResult<T> {
   selected: T[];
