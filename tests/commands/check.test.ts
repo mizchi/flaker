@@ -7,7 +7,7 @@ import {
   formatConfigCheckReport,
   loadTaskDefinitionsForCheck,
   runConfigCheck,
-} from "../../src/cli/commands/check.js";
+} from "../../src/cli/commands/policy/check.js";
 
 describe("check command", () => {
   it("detects duplicate ownership, allows filtered split ownership, and reports unmanaged specs", () => {

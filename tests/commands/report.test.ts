@@ -13,7 +13,7 @@ import {
   runReportDiff,
   runReportSummarize,
   summarizeResults,
-} from "../../src/cli/commands/report.js";
+} from "../../src/cli/commands/report/index.js";
 
 const playwrightFixture = readFileSync(
   join(import.meta.dirname, "../fixtures/playwright-report.json"),

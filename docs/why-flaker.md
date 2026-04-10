@@ -21,11 +21,11 @@
 ### Where flaker fits in the development lifecycle:
 
 ```
-Code change → flaker sample (select tests) → Run selected tests → flaker collect (store results)
-                                                                          ↓
-                                               flaker reason (analyze) ← flaker flaky (detect)
-                                                        ↓
-                                               quarantine / bisect / fix
+Code change → flaker run --dry-run (select tests) → Run selected tests → flaker collect (store results)
+                                                                                  ↓
+                                                   flaker analyze reason ← flaker analyze flaky (detect)
+                                                            ↓
+                                                   quarantine / bisect / fix
 ```
 
 ---
@@ -308,7 +308,7 @@ This is why `hybrid` is the recommended strategy: `affected` provides high-proba
 | For bisect | 5+ commits | 20+ commits |
 | For trend analysis | 2+ weeks | 4+ weeks |
 
-`flaker eval` reports data sufficiency and warns when you don't have enough.
+`flaker analyze eval` reports data sufficiency and warns when you don't have enough.
 
 ### Convergence behavior
 

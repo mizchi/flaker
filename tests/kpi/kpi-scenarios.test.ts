@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
-import { computeKpi } from "../../src/cli/commands/kpi.js";
-import { analyzeProject } from "../../src/cli/commands/calibrate.js";
+import { computeKpi } from "../../src/cli/commands/analyze/kpi.js";
+import { analyzeProject } from "../../src/cli/commands/collect/calibrate.js";
 
 describe("KPI scenarios", () => {
   let store: DuckDBStore;
@@ -234,7 +234,7 @@ describe("KPI scenarios", () => {
     expect(profile.hasCoFailureData).toBe(true);
     expect(profile.coFailureStrength).toBeGreaterThan(0);
     // Strategy should be hybrid (resolver available, low true flaky rate)
-    const { recommendSampling } = await import("../../src/cli/commands/calibrate.js");
+    const { recommendSampling } = await import("../../src/cli/commands/collect/calibrate.js");
     const sampling = recommendSampling(profile);
     expect(sampling.strategy).toBe("hybrid");
   });

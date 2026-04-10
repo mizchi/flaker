@@ -6,7 +6,7 @@ import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
 import {
   collectCoverage,
   formatCollectCoverageSummary,
-} from "../../src/cli/commands/collect-coverage.js";
+} from "../../src/cli/commands/collect/coverage.js";
 
 describe("collect coverage command", () => {
   let store: DuckDBStore;

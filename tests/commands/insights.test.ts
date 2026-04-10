@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
-import { runInsights, formatInsights } from "../../src/cli/commands/insights.js";
+import { runInsights, formatInsights } from "../../src/cli/commands/analyze/insights.js";
 
 describe("insights", () => {
   let store: DuckDBStore;

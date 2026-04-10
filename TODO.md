@@ -1,5 +1,9 @@
 # TODO
 
+## 0.2.0 CLI redesign (2026-04-10)
+
+- [x] See docs/superpowers/specs/2026-04-10-flaker-cli-redesign-design.md and docs/superpowers/plans/2026-04-10-flaker-cli-redesign.md
+
 ## 進行中
 - [x] DuckDB のネイティブバイナリが無い環境で CLI が即死しないよう、`duckdb` 初期化を遅延ロード + エラーメッセージ改善する
 - [x] `resolveAffectedFallback` のパーサを複数行 `task(...)` 定義に対応させる

@@ -80,7 +80,7 @@ jobs:
       - name: Native CLI smoke
         run: |
           LD_LIBRARY_PATH=/usr/local/lib dist/flaker --help
-          LD_LIBRARY_PATH=/usr/local/lib dist/flaker calibrate || echo "No data yet (expected)"
+          LD_LIBRARY_PATH=/usr/local/lib dist/flaker collect calibrate || echo "No data yet (expected)"
 
       - name: Full test with JSON report
         if: always()
@@ -137,7 +137,7 @@ jobs:
       - name: Collect CI history
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node dist/cli/main.js collect --last 30 --output .artifacts/collect.txt
+        run: node dist/cli/main.js collect --days 30 --output .artifacts/collect.txt
 
       - name: Download historical self-host metrics
         env:
@@ -149,7 +149,7 @@ jobs:
           --days 30
 
       - name: Import historical self-host metrics
-        run: node dist/cli/main.js import-parquet .artifacts/self-host-metrics
+        run: node dist/cli/main.js import parquet .artifacts/self-host-metrics
 
       - name: Reset self-host parquet export dir
         run: |
@@ -181,7 +181,7 @@ jobs:
       - name: Import current CI vitest report
         if: always()
         run: >
-          node dist/cli/main.js import .self-host/current-ci/vitest-report.json
+          node dist/cli/main.js import report .self-host/current-ci/vitest-report.json
           --adapter vitest
           --commit "${{ github.event.pull_request.head.sha }}"
           --branch "${{ github.head_ref }}"
@@ -192,7 +192,7 @@ jobs:
 
       - name: Snapshot eval
         if: always()
-        run: node dist/cli/main.js eval --json --window 30 --output .artifacts/eval.json > /dev/null
+        run: node dist/cli/main.js analyze eval --json --window 30 --output .artifacts/eval.json > /dev/null
 
       - name: Render advisory review
         if: always()

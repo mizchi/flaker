@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { mkdtempSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runInit } from "../../src/cli/commands/init.js";
+import { runInit } from "../../src/cli/commands/setup/init.js";
 import { loadConfig } from "../../src/cli/config.js";
 
 function makeTempDir(): string {
@@ -49,9 +49,9 @@ describe("loadConfig", () => {
     expect(config.adapter.artifact_name).toBe("playwright-report");
     expect(config.runner.type).toBe("vitest");
     expect(config.quarantine.auto).toBe(true);
-    expect(config.quarantine.flaky_rate_threshold).toBe(30);
+    expect(config.quarantine.flaky_rate_threshold_percentage).toBe(30);
     expect(config.flaky.window_days).toBe(14);
-    expect(config.flaky.detection_threshold).toBe(2);
+    expect(config.flaky.detection_threshold_ratio).toBe(0.02);
   });
 
   it("throws if flaker.toml not found", () => {

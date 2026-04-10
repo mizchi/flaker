@@ -20,7 +20,7 @@ When you run `flaker run`, it uses the **runner** to execute and parse tests —
 | `flaker collect` | GitHub Actions artifacts | `[adapter].type` + `[adapter].artifact_name` |
 | `flaker import FILE --adapter TYPE` | Local file / stdin | `--adapter` flag (ignores `[adapter]` config) |
 | `flaker run` | Live test execution | `[runner]` only |
-| `flaker collect-local` | actrun history | actrun adapter (automatic) |
+| `flaker collect local` | actrun history | actrun adapter (automatic) |
 
 ## Quick Start by Language
 

@@ -129,16 +129,16 @@ At scale (500 tests), hybrid's holdout FNR is 0.5% — meaning among the 10% of 
 
 ```bash
 # Standard benchmark
-flaker eval-fixture
+flaker dev eval-fixture
 
 # Co-failure strength sweep
-flaker eval-fixture --sweep
+flaker dev eval-fixture --sweep
 
 # Multi-parameter sweep (24 combinations, ~4 min)
 npx tsx scripts/eval-sweep.ts
 
 # Custom scenario
-flaker eval-fixture --tests 500 --commits 100 --flaky-rate 0.05 --co-failure-strength 0.8 --sample-percentage 20
+flaker dev eval-fixture --tests 500 --commits 100 --flaky-rate 0.05 --co-failure-strength 0.8 --sample-percentage 20
 ```
 
 All benchmarks run on synthetic data with no external dependencies and no configuration required.
@@ -151,8 +151,8 @@ The `findBestSplit` function was optimized from O(n²) to O(n log n) using sorte
 
 ### Implemented Features (as of 2026-04-04)
 
-- GBDT integrated into `planSample` via `flaker sample --strategy gbdt`
-- `flaker train` command for model training from DuckDB history
+- GBDT integrated into `planSample` via `flaker run --dry-run --strategy gbdt`
+- `flaker dev train` command for model training from DuckDB history
 - Holdout sampling in `flaker run` with `--holdout-ratio`
 - Holdout results stored in `sampling_run_tests` with `is_holdout` flag
 - Multi-parameter sweep via `--multi-sweep` flag

@@ -4,7 +4,7 @@ import {
   formatConfirmResult,
   parseConfirmTarget,
   type ConfirmResult,
-} from "../../src/cli/commands/confirm.js";
+} from "../../src/cli/commands/debug/confirm.js";
 
 describe("parseConfirmTarget", () => {
   it("splits suite:testName", () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
-import { planSample } from "../../src/cli/commands/sample.js";
+import { planSample } from "../../src/cli/commands/exec/plan.js";
 
 describe("sample with co-failure boost", () => {
   let store: DuckDBStore;

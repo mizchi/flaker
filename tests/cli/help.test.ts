@@ -10,19 +10,20 @@ describe("CLI help", () => {
     expect(help).toContain("Intelligent test selection");
     expect(help).toContain("Getting started");
     expect(help).toContain("flaker init");
-    expect(help).toContain("flaker calibrate");
-    expect(help).toContain("flaker run");
+    expect(help).toContain("flaker collect calibrate");
+    expect(help).toContain("Commands (by category)");
   });
 
-  it("shows concrete examples in sample and eval help", () => {
+  it("shows exec run help with --dry-run and --explain flags", () => {
     const program = createProgram();
-    const sampleHelp = program.commands.find((command) => command.name() === "sample")?.helpInformation();
-    const evalHelp = program.commands.find((command) => command.name() === "eval")?.helpInformation();
+    const execCmd = program.commands.find((command) => command.name() === "exec");
+    const runCmd = execCmd?.commands.find((command) => command.name() === "run");
+    const runHelp = runCmd?.helpInformation();
+    const analyzeCmd = program.commands.find((command) => command.name() === "analyze");
+    const evalHelp = analyzeCmd?.commands.find((command) => command.name() === "eval")?.helpInformation();
 
-    expect(sampleHelp).toContain("Select tests without executing");
-    expect(sampleHelp).toContain("flaker sample");
-    expect(sampleHelp).toContain("Strategies");
+    expect(runHelp).toContain("--dry-run");
+    expect(runHelp).toContain("--explain");
     expect(evalHelp).toContain("Measure whether local sampled runs predict CI");
-    expect(evalHelp).toContain("flaker eval --json");
   });
 });

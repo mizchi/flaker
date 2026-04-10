@@ -3,7 +3,7 @@ import {
   parseSampleCount,
   parseSamplePercentage,
   parseSamplingMode,
-} from "../../src/cli/commands/sampling-options.js";
+} from "../../src/cli/commands/exec/sampling-options.js";
 
 describe("sampling options", () => {
   it("accepts supported sampling modes", () => {

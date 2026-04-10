@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
-import { analyzeCoFailureWindows, formatCoFailureWindowReport } from "../../src/cli/commands/co-failure-window.js";
+import { analyzeCoFailureWindows, formatCoFailureWindowReport } from "../../src/cli/commands/dev/eval-co-failure.js";
 
 async function createStoreWithData() {
   const store = new DuckDBStore(":memory:");

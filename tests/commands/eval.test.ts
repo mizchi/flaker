@@ -9,7 +9,7 @@ import {
   formatEvalReport,
   renderEvalReport,
   writeEvalReport,
-} from "../../src/cli/commands/eval.js";
+} from "../../src/cli/commands/analyze/eval.js";
 
 function makeRun(
   id: number,

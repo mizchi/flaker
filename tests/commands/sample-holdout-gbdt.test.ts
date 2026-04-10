@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
 import type { TestResult, WorkflowRun } from "../../src/cli/storage/types.js";
-import { planSample } from "../../src/cli/commands/sample.js";
+import { planSample } from "../../src/cli/commands/exec/plan.js";
 import { writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { tmpdir } from "node:os";

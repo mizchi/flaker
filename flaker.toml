@@ -22,12 +22,12 @@ config = "flaker.affected.toml"
 
 [sampling]
 strategy = "hybrid"
-percentage = 30
+sample_percentage = 30
 holdout_ratio = 0.1
-co_failure_days = 90
+co_failure_window_days = 90
 calibrated_at = "2026-04-04"
-detected_flaky_rate = 0.005
-detected_co_failure_strength = 0.5
+detected_flaky_rate_ratio = 0.005
+detected_co_failure_strength_ratio = 0.5
 detected_test_count = 437
 
 [profile.scheduled]
@@ -35,11 +35,11 @@ strategy = "full"
 
 [profile.ci]
 strategy = "hybrid"
-percentage = 30
+sample_percentage = 30
 holdout_ratio = 0.1
 adaptive = true
-adaptive_fnr_low = 0.02
-adaptive_fnr_high = 0.05
+adaptive_fnr_low_ratio = 0.02
+adaptive_fnr_high_ratio = 0.05
 adaptive_min_percentage = 15
 
 [profile.local]

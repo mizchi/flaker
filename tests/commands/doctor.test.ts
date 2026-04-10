@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { runDoctor, formatDoctorReport } from "../../src/cli/commands/doctor.js";
+import { runDoctor, formatDoctorReport } from "../../src/cli/commands/debug/doctor.js";
 
 describe("runDoctor", () => {
   it("reports success when all checks pass", async () => {

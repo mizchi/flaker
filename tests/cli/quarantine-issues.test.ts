@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildQuarantineIssueOpts } from "../../src/cli/commands/quarantine.js";
+import { buildQuarantineIssueOpts } from "../../src/cli/commands/policy/quarantine.js";
 
 describe("buildQuarantineIssueOpts", () => {
   it("generates title and body from quarantine data", () => {

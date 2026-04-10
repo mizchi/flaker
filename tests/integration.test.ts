@@ -3,9 +3,9 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DuckDBStore } from "../src/cli/storage/duckdb.js";
 import { playwrightAdapter } from "../src/cli/adapters/playwright.js";
-import { runFlaky } from "../src/cli/commands/flaky.js";
-import { runSample } from "../src/cli/commands/sample.js";
-import { runQuery } from "../src/cli/commands/query.js";
+import { runFlaky } from "../src/cli/commands/analyze/flaky.js";
+import { runSample } from "../src/cli/commands/exec/plan.js";
+import { runQuery } from "../src/cli/commands/analyze/query.js";
 import type { WorkflowRun, TestResult } from "../src/cli/storage/types.js";
 import type { TestCaseResult } from "../src/cli/adapters/types.js";
 

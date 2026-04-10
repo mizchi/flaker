@@ -6,7 +6,7 @@ import {
   planSample,
   prepareSamplingMeta,
   runSample,
-} from "../../src/cli/commands/sample.js";
+} from "../../src/cli/commands/exec/plan.js";
 import type { DependencyResolver } from "../../src/cli/resolvers/types.js";
 import { loadCore } from "../../src/cli/core/loader.js";
 

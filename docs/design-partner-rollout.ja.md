@@ -206,13 +206,13 @@
 flaker run --strategy hybrid --count 25 --changed ...
 
 # commit / local / CI 相関の評価
-flaker eval --json
+flaker analyze eval --json
 
 # 週次レビュー用の markdown 出力
-flaker eval --markdown --window 7
+flaker analyze eval --markdown --window 7
 
 # collect の健全性確認
-flaker doctor
+flaker debug doctor
 ```
 
 必要なら repo 側で wrapper task を持つ。

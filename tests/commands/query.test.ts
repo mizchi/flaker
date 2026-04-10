@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
 import type { TestResult, WorkflowRun } from "../../src/cli/storage/types.js";
-import { runQuery, formatQueryResult } from "../../src/cli/commands/query.js";
+import { runQuery, formatQueryResult } from "../../src/cli/commands/analyze/query.js";
 
 describe("query command", () => {
   let store: DuckDBStore;

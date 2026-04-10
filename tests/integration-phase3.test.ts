@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DuckDBStore } from "../src/cli/storage/duckdb.js";
 import { junitAdapter } from "../src/cli/adapters/junit.js";
-import { runTrueFlaky } from "../src/cli/commands/flaky.js";
-import { runFlakyByVariant } from "../src/cli/commands/flaky.js";
+import { runTrueFlaky } from "../src/cli/commands/analyze/flaky.js";
+import { runFlakyByVariant } from "../src/cli/commands/analyze/flaky.js";
 
 const fixtureXml = readFileSync(
   join(import.meta.dirname, "fixtures/junit-report.xml"),

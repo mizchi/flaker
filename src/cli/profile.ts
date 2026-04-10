@@ -1,5 +1,5 @@
 import type { ProfileConfig, SamplingConfig } from "./config.js";
-import { parseSamplingMode, type SamplingMode } from "./commands/sampling-options.js";
+import { parseSamplingMode, type SamplingMode } from "./commands/exec/sampling-options.js";
 
 export interface TimeBudgetResult<T> {
   selected: T[];
@@ -122,14 +122,14 @@ export function computeAdaptivePercentage(
 export interface ResolvedProfile {
   name: string;
   strategy: string;
-  percentage?: number;
+  sample_percentage?: number;
   holdout_ratio?: number;
-  co_failure_days?: number;
+  co_failure_window_days?: number;
   model_path?: string;
   skip_quarantined?: boolean;
   adaptive: boolean;
-  adaptive_fnr_low: number;
-  adaptive_fnr_high: number;
+  adaptive_fnr_low_ratio: number;
+  adaptive_fnr_high_ratio: number;
   adaptive_min_percentage: number;
   adaptive_step: number;
   max_duration_seconds?: number;
@@ -146,8 +146,8 @@ export function resolveFallbackSamplingMode(
 
 const ADAPTIVE_DEFAULTS = {
   adaptive: false,
-  adaptive_fnr_low: 0.02,
-  adaptive_fnr_high: 0.05,
+  adaptive_fnr_low_ratio: 0.02,
+  adaptive_fnr_high_ratio: 0.05,
   adaptive_min_percentage: 10,
   adaptive_step: 5,
 } as const;
@@ -177,9 +177,9 @@ export function resolveProfile(
   // Base from sampling config
   const base = {
     strategy: sampling?.strategy ?? "weighted",
-    percentage: sampling?.percentage,
+    sample_percentage: sampling?.sample_percentage,
     holdout_ratio: sampling?.holdout_ratio,
-    co_failure_days: sampling?.co_failure_days,
+    co_failure_window_days: sampling?.co_failure_window_days,
     model_path: sampling?.model_path,
     skip_quarantined: sampling?.skip_quarantined,
   };
@@ -189,28 +189,28 @@ export function resolveProfile(
 
   // Force full strategy overrides
   if (merged.strategy === "full") {
-    merged.percentage = 100;
+    merged.sample_percentage = 100;
     merged.holdout_ratio = 0;
   }
 
   // Resolve adaptive fields with defaults
   const adaptive = profileConfig?.adaptive ?? ADAPTIVE_DEFAULTS.adaptive;
-  const adaptive_fnr_low = profileConfig?.adaptive_fnr_low ?? ADAPTIVE_DEFAULTS.adaptive_fnr_low;
-  const adaptive_fnr_high = profileConfig?.adaptive_fnr_high ?? ADAPTIVE_DEFAULTS.adaptive_fnr_high;
+  const adaptive_fnr_low_ratio = profileConfig?.adaptive_fnr_low_ratio ?? ADAPTIVE_DEFAULTS.adaptive_fnr_low_ratio;
+  const adaptive_fnr_high_ratio = profileConfig?.adaptive_fnr_high_ratio ?? ADAPTIVE_DEFAULTS.adaptive_fnr_high_ratio;
   const adaptive_min_percentage = profileConfig?.adaptive_min_percentage ?? ADAPTIVE_DEFAULTS.adaptive_min_percentage;
   const adaptive_step = profileConfig?.adaptive_step ?? ADAPTIVE_DEFAULTS.adaptive_step;
 
   return {
     name: profileName,
     strategy: merged.strategy,
-    percentage: merged.percentage,
+    sample_percentage: merged.sample_percentage,
     holdout_ratio: merged.holdout_ratio,
-    co_failure_days: merged.co_failure_days,
+    co_failure_window_days: merged.co_failure_window_days,
     model_path: merged.model_path,
     skip_quarantined: merged.skip_quarantined,
     adaptive,
-    adaptive_fnr_low,
-    adaptive_fnr_high,
+    adaptive_fnr_low_ratio,
+    adaptive_fnr_high_ratio,
     adaptive_min_percentage,
     adaptive_step,
     max_duration_seconds: profileConfig?.max_duration_seconds,

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
-import { runSample } from "../../src/cli/commands/sample.js";
+import { runSample } from "../../src/cli/commands/exec/plan.js";
 import { SimpleResolver } from "../../src/cli/resolvers/simple.js";
 
 describe("hybrid sampling", () => {

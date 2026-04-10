@@ -4,7 +4,7 @@
 
 ## 仕組み
 
-`flaker diagnose` はテストに対して複数のミューテーションを適用し、baseline（通常実行）との失敗率を比較する。
+`flaker debug diagnose` はテストに対して複数のミューテーションを適用し、baseline（通常実行）との失敗率を比較する。
 
 | ミューテーション | 検出対象 |
 |----------------|----------|
@@ -19,13 +19,13 @@
 
 ```bash
 # 全ミューテーションを適用（デフォルト 3 回実行）
-flaker diagnose --suite "tests/auth.test.ts" --test "login flow"
+flaker debug diagnose --suite "tests/auth.test.ts" --test "login flow"
 
 # 実行回数を指定
-flaker diagnose --suite "tests/auth.test.ts" --test "login flow" --runs 5
+flaker debug diagnose --suite "tests/auth.test.ts" --test "login flow" --runs 5
 
 # 特定のミューテーションのみ
-flaker diagnose --suite "tests/auth.test.ts" --test "login flow" --mutations order,env
+flaker debug diagnose --suite "tests/auth.test.ts" --test "login flow" --mutations order,env
 ```
 
 ### 出力例
@@ -54,7 +54,7 @@ flaker diagnose --suite "tests/auth.test.ts" --test "login flow" --mutations ord
 ### JSON 出力
 
 ```bash
-flaker diagnose --suite "auth.test.ts" --test "login" --json
+flaker debug diagnose --suite "auth.test.ts" --test "login" --json
 ```
 
 ## 解釈ガイド

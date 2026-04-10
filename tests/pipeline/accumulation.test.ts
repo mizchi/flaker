@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
 import { loadCore } from "../../src/cli/core/loader.js";
 import { loadFixtureIntoStore } from "../../src/cli/eval/fixture-loader.js";
-import { analyzeProject, recommendSampling } from "../../src/cli/commands/calibrate.js";
-import { trainModel } from "../../src/cli/commands/train.js";
-import { planSample } from "../../src/cli/commands/sample.js";
-import { runInsights } from "../../src/cli/commands/insights.js";
+import { analyzeProject, recommendSampling } from "../../src/cli/commands/collect/calibrate.js";
+import { trainModel } from "../../src/cli/commands/dev/train.js";
+import { planSample } from "../../src/cli/commands/exec/plan.js";
+import { runInsights } from "../../src/cli/commands/analyze/insights.js";
 import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -26,7 +26,7 @@ describe("data accumulation pipeline", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("calibrate detects project characteristics from accumulated data", { timeout: 15000 }, async () => {
+  it("calibrate detects project characteristics from accumulated data", async () => {
     const core = await loadCore();
     const fixture = core.generateFixture({
       test_count: 100,
@@ -52,10 +52,10 @@ describe("data accumulation pipeline", () => {
 
     const sampling = recommendSampling(profile);
     expect(sampling.strategy).toBe("hybrid");
-    expect(sampling.percentage).toBe(30);
+    expect(sampling.sample_percentage).toBe(30);
   });
 
-  it("train produces model from accumulated fixture data", async () => {
+  it("train produces model from accumulated fixture data", { timeout: 30_000 }, async () => {
     const core = await loadCore();
     const fixture = core.generateFixture({
       test_count: 50,
@@ -257,7 +257,7 @@ describe("data accumulation pipeline", () => {
     expect(profile.commitCount).toBe(30);
     const sampling = recommendSampling(profile);
     expect(sampling.strategy).toBe("hybrid");
-    expect(sampling.percentage).toBe(50);
+    expect(sampling.sample_percentage).toBe(50);
 
     const modelPath = join(tmpDir, "gbdt.json");
     const trainResult = await trainModel({

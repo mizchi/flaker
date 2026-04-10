@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
 import type { TestResult, WorkflowRun } from "../../src/cli/storage/types.js";
-import { runReason, formatReasoningReport } from "../../src/cli/commands/reason.js";
+import { runReason, formatReasoningReport } from "../../src/cli/commands/analyze/reason.js";
 
 function makeRun(id: number, commitSha: string, createdAt: Date, branch = "main"): WorkflowRun {
   return {

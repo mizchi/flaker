@@ -356,15 +356,15 @@ max_batch_size = 100         # 1回の execute の上限
 ## flaker との統合フロー
 
 ```
-flaker sample --strategy hybrid --count 20
+flaker run --dry-run --strategy hybrid --count 20
   → TestId[] を出力
 
 flaker run --strategy hybrid --count 20
-  → sample で TestId[] を選択
+  → run --dry-run で TestId[] を選択
   → orchestrate(runner, TestId[], opts) で実行戦略を決定
   → RunnerAdapter.execute() を適切にバッチ/並列実行
   → ExecuteResult.results を DB に自動格納
-  → flaker eval で健全性評価
+  → flaker analyze eval で健全性評価
 ```
 
 Runner Adapter の結果は自動的に flaker の DuckDB に格納されるため、実行するたびにデータが蓄積され、flaky 検出・トレンド分析・bisect の精度が向上します。

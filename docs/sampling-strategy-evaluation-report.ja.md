@@ -129,16 +129,16 @@ Precision 80%+ だが Recall は 11-18%。単独ではなく hybrid の priority
 
 ```bash
 # 標準ベンチマーク
-flaker eval-fixture
+flaker dev eval-fixture
 
 # Co-failure 強度の sweep
-flaker eval-fixture --sweep
+flaker dev eval-fixture --sweep
 
 # Multi-parameter sweep（24パターン、約4分）
 npx tsx scripts/eval-sweep.ts
 
 # カスタムシナリオ
-flaker eval-fixture --tests 500 --commits 100 --flaky-rate 0.05 --co-failure-strength 0.8 --sample-percentage 20
+flaker dev eval-fixture --tests 500 --commits 100 --flaky-rate 0.05 --co-failure-strength 0.8 --sample-percentage 20
 ```
 
 全ベンチマークは合成データで実行。外部依存なし・設定不要で再現可能。
@@ -151,8 +151,8 @@ flaker eval-fixture --tests 500 --commits 100 --flaky-rate 0.05 --co-failure-str
 
 ### 実装済み機能（2026-04-04時点）
 
-- GBDT を `planSample` に統合: `flaker sample --strategy gbdt`
-- `flaker train`: DuckDB 履歴からモデル学習
+- GBDT を `planSample` に統合: `flaker run --dry-run --strategy gbdt`
+- `flaker dev train`: DuckDB 履歴からモデル学習
 - Holdout サンプリング: `flaker run --holdout-ratio`
 - Holdout 結果を `sampling_run_tests` に `is_holdout` フラグで保存
 - Multi-parameter sweep: `--multi-sweep` フラグ

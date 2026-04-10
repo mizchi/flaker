@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { runConfirmLocal } from "../../src/cli/commands/confirm-local.js";
+import { runConfirmLocal } from "../../src/cli/commands/debug/confirm-local.js";
 import type { RunnerAdapter, ExecuteResult } from "../../src/cli/runners/types.js";
 
 function createMockRunner(results: Array<"pass" | "fail">): RunnerAdapter {

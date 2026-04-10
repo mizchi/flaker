@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { RunnerAdapter, TestId } from "../../src/cli/runners/types.js";
 import type { TestCaseResult } from "../../src/cli/adapters/types.js";
-import { runDiagnose, formatDiagnoseReport, type DiagnoseOpts } from "../../src/cli/commands/diagnose.js";
+import { runDiagnose, formatDiagnoseReport, type DiagnoseOpts } from "../../src/cli/commands/debug/diagnose.js";
 
 function createMockRunner(results: TestCaseResult[]): RunnerAdapter {
   return {

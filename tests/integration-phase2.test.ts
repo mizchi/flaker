@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DuckDBStore } from "../src/cli/storage/duckdb.js";
-import { runQuarantine } from "../src/cli/commands/quarantine.js";
-import { runBisect } from "../src/cli/commands/bisect.js";
-import { runSample } from "../src/cli/commands/sample.js";
+import { runQuarantine } from "../src/cli/commands/policy/quarantine.js";
+import { runBisect } from "../src/cli/commands/debug/bisect.js";
+import { runSample } from "../src/cli/commands/exec/plan.js";
 import { SimpleResolver } from "../src/cli/resolvers/simple.js";
 
 describe("Phase 2 integration", () => {

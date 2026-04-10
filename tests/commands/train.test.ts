@@ -6,7 +6,7 @@ import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
 import {
   trainModel,
   formatTrainResult,
-} from "../../src/cli/commands/train.js";
+} from "../../src/cli/commands/dev/train.js";
 import { FLAKER_FEATURE_NAMES } from "../../src/cli/eval/gbdt.js";
 
 describe("train command", () => {

@@ -10,27 +10,27 @@ export interface CoverageConfig {
 
 export interface SamplingConfig {
   strategy: string;
-  percentage?: number;
+  sample_percentage?: number;           // was `percentage`
   holdout_ratio?: number;
-  co_failure_days?: number;
+  co_failure_window_days?: number;      // was `co_failure_days`
   model_path?: string;
   skip_quarantined?: boolean;
   calibrated_at?: string;
-  detected_flaky_rate?: number;
-  detected_co_failure_strength?: number;
+  detected_flaky_rate_ratio?: number;   // was `detected_flaky_rate`
+  detected_co_failure_strength_ratio?: number;  // was `detected_co_failure_strength`
   detected_test_count?: number;
 }
 
 export interface ProfileConfig {
   strategy: string;
-  percentage?: number;
+  sample_percentage?: number;           // was `percentage`
   holdout_ratio?: number;
-  co_failure_days?: number;
+  co_failure_window_days?: number;      // was `co_failure_days`
   model_path?: string;
   skip_quarantined?: boolean;
   adaptive?: boolean;
-  adaptive_fnr_low?: number;
-  adaptive_fnr_high?: number;
+  adaptive_fnr_low_ratio?: number;      // was `adaptive_fnr_low`
+  adaptive_fnr_high_ratio?: number;     // was `adaptive_fnr_high`
   adaptive_min_percentage?: number;
   adaptive_step?: number;
   max_duration_seconds?: number;
@@ -50,8 +50,8 @@ export interface FlakerConfig {
     actrun?: { workflow?: string; job?: string; local?: boolean; trust?: boolean };
   };
   affected: { resolver: string; config: string };
-  quarantine: { auto: boolean; flaky_rate_threshold: number; min_runs: number };
-  flaky: { window_days: number; detection_threshold: number };
+  quarantine: { auto: boolean; flaky_rate_threshold_percentage: number; min_runs: number };
+  flaky: { window_days: number; detection_threshold_ratio: number };
   coverage?: CoverageConfig;
   sampling?: SamplingConfig;
   profile?: Record<string, ProfileConfig>;
@@ -63,7 +63,7 @@ export type ConfigWarningCode =
 
 export interface ConfigWarning {
   code: ConfigWarningCode;
-  path: "quarantine.flaky_rate_threshold" | "flaky.detection_threshold";
+  path: string;
   value: number;
   normalizedValue?: number;
 }
@@ -80,8 +80,8 @@ const DEFAULT_CONFIG: FlakerConfig = {
   adapter: { type: "playwright" },
   runner: { type: "vitest", command: "pnpm test" },
   affected: { resolver: "git", config: "" },
-  quarantine: { auto: true, flaky_rate_threshold: 30, min_runs: 5 },
-  flaky: { window_days: 14, detection_threshold: 2 },
+  quarantine: { auto: true, flaky_rate_threshold_percentage: 30, min_runs: 5 },
+  flaky: { window_days: 14, detection_threshold_ratio: 0.02 },
 };
 
 function looksLikeWorkflowPath(value?: string): boolean {
@@ -116,94 +116,65 @@ function deepMerge<T>(target: T, source: Record<string, unknown>): T {
   return result as T;
 }
 
+interface LegacyKeyEntry {
+  section: string;
+  oldKey: string;
+  newKey: string;
+  unitNote: string;
+}
+
+const LEGACY_KEYS: LegacyKeyEntry[] = [
+  { section: "sampling", oldKey: "percentage", newKey: "sample_percentage", unitNote: "value range 0-100" },
+  { section: "sampling", oldKey: "co_failure_days", newKey: "co_failure_window_days", unitNote: "days (int)" },
+  { section: "sampling", oldKey: "detected_flaky_rate", newKey: "detected_flaky_rate_ratio", unitNote: "0.0-1.0" },
+  { section: "sampling", oldKey: "detected_co_failure_strength", newKey: "detected_co_failure_strength_ratio", unitNote: "0.0-1.0" },
+  { section: "flaky", oldKey: "detection_threshold", newKey: "detection_threshold_ratio", unitNote: "0.0-1.0" },
+  { section: "quarantine", oldKey: "flaky_rate_threshold", newKey: "flaky_rate_threshold_percentage", unitNote: "value range 0-100" },
+];
+
+const LEGACY_PROFILE_KEYS: LegacyKeyEntry[] = [
+  { section: "profile.*", oldKey: "percentage", newKey: "sample_percentage", unitNote: "value range 0-100" },
+  { section: "profile.*", oldKey: "co_failure_days", newKey: "co_failure_window_days", unitNote: "days (int)" },
+  { section: "profile.*", oldKey: "adaptive_fnr_low", newKey: "adaptive_fnr_low_ratio", unitNote: "0.0-1.0" },
+  { section: "profile.*", oldKey: "adaptive_fnr_high", newKey: "adaptive_fnr_high_ratio", unitNote: "0.0-1.0" },
+];
+
+function checkLegacyKeys(parsed: Record<string, unknown>): void {
+  const errors: string[] = [];
+
+  for (const entry of LEGACY_KEYS) {
+    const section = parsed[entry.section];
+    if (section && typeof section === "object" && entry.oldKey in (section as Record<string, unknown>)) {
+      errors.push(
+        `deprecated key \`${entry.oldKey}\` in [${entry.section}] → rename to \`${entry.newKey}\` (${entry.unitNote})`
+      );
+    }
+  }
+
+  const profiles = parsed.profile as Record<string, unknown> | undefined;
+  if (profiles && typeof profiles === "object") {
+    for (const [profileName, profileValue] of Object.entries(profiles)) {
+      if (!profileValue || typeof profileValue !== "object") continue;
+      for (const entry of LEGACY_PROFILE_KEYS) {
+        if (entry.oldKey in (profileValue as Record<string, unknown>)) {
+          errors.push(
+            `deprecated key \`${entry.oldKey}\` in [profile.${profileName}] → rename to \`${entry.newKey}\` (${entry.unitNote})`
+          );
+        }
+      }
+    }
+  }
+
+  if (errors.length > 0) {
+    throw new Error(
+      `flaker.toml uses deprecated keys (see docs/how-to-use.md#config-migration):\n` +
+      errors.map((e) => `  ${e}`).join("\n")
+    );
+  }
+}
+
 export function loadConfig(dir: string): FlakerConfig {
   return loadConfigWithDiagnostics(dir).config;
-}
-
-function getNestedValue(
-  value: Record<string, unknown>,
-  path: readonly string[],
-): unknown {
-  let current: unknown = value;
-  for (const segment of path) {
-    if (
-      current === null ||
-      typeof current !== "object" ||
-      Array.isArray(current)
-    ) {
-      return undefined;
-    }
-    current = (current as Record<string, unknown>)[segment];
-  }
-  return current;
-}
-
-function setNestedValue(
-  value: Record<string, unknown>,
-  path: readonly string[],
-  nextValue: unknown,
-): void {
-  let current: Record<string, unknown> = value;
-  for (const segment of path.slice(0, -1)) {
-    const child = current[segment];
-    if (
-      child === null ||
-      typeof child !== "object" ||
-      Array.isArray(child)
-    ) {
-      return;
-    }
-    current = child as Record<string, unknown>;
-  }
-  const last = path[path.length - 1];
-  if (last) {
-    current[last] = nextValue;
-  }
-}
-
-function normalizeThresholdWarnings(
-  config: FlakerConfig,
-  parsed: Record<string, unknown>,
-): ConfigWarning[] {
-  const warnings: ConfigWarning[] = [];
-  const thresholdPaths = [
-    ["quarantine", "flaky_rate_threshold"] as const,
-    ["flaky", "detection_threshold"] as const,
-  ];
-
-  for (const path of thresholdPaths) {
-    const rawValue = getNestedValue(parsed, path);
-    if (typeof rawValue !== "number" || Number.isNaN(rawValue)) {
-      continue;
-    }
-
-    const joinedPath = path.join(".") as ConfigWarning["path"];
-    if (rawValue > 0 && rawValue < 1) {
-      const normalizedValue = Number((rawValue * 100).toFixed(4));
-      setNestedValue(
-        config as unknown as Record<string, unknown>,
-        path,
-        normalizedValue,
-      );
-      warnings.push({
-        code: "legacy-threshold-unit",
-        path: joinedPath,
-        value: rawValue,
-        normalizedValue,
-      });
-      continue;
-    }
-
-    if (rawValue < 0 || rawValue > 100) {
-      warnings.push({
-        code: "out-of-range-threshold",
-        path: joinedPath,
-        value: rawValue,
-      });
-    }
-  }
-
-  return warnings;
 }
 
 export function loadConfigWithDiagnostics(dir: string): LoadedConfigDiagnostics {
@@ -215,9 +186,9 @@ export function loadConfigWithDiagnostics(dir: string): LoadedConfigDiagnostics 
     throw new Error(`Config file not found: ${filePath}. Run 'flaker init' to create one.`);
   }
   const parsed = parse(content) as unknown as Record<string, unknown>;
+  checkLegacyKeys(parsed);
   const config = deepMerge(DEFAULT_CONFIG, parsed);
-  const warnings = normalizeThresholdWarnings(config, parsed);
-  return { config, warnings };
+  return { config, warnings: [] };
 }
 
 export function formatConfigWarning(warning: ConfigWarning): string {
@@ -244,6 +215,45 @@ export function resolveActrunWorkflowPath(config: FlakerConfig): string {
   );
 }
 
+export interface ConfigRangeError {
+  path: string;
+  value: number;
+  expected: string;
+}
+
+export function validateConfigRanges(config: FlakerConfig): ConfigRangeError[] {
+  const errors: ConfigRangeError[] = [];
+  const check = (path: string, value: number | undefined, min: number, max: number, label: string) => {
+    if (value == null) return;
+    if (typeof value !== "number" || Number.isNaN(value)) return;
+    if (value < min || value > max) {
+      errors.push({ path, value, expected: label });
+    }
+  };
+
+  check("flaky.detection_threshold_ratio", config.flaky.detection_threshold_ratio, 0, 1, "0.0-1.0");
+  check("quarantine.flaky_rate_threshold_percentage", config.quarantine.flaky_rate_threshold_percentage, 0, 100, "0-100");
+
+  if (config.sampling) {
+    check("sampling.sample_percentage", config.sampling.sample_percentage, 0, 100, "0-100");
+    check("sampling.holdout_ratio", config.sampling.holdout_ratio, 0, 1, "0.0-1.0");
+    check("sampling.detected_flaky_rate_ratio", config.sampling.detected_flaky_rate_ratio, 0, 1, "0.0-1.0");
+    check("sampling.detected_co_failure_strength_ratio", config.sampling.detected_co_failure_strength_ratio, 0, 1, "0.0-1.0");
+  }
+
+  if (config.profile) {
+    for (const [name, p] of Object.entries(config.profile)) {
+      check(`profile.${name}.sample_percentage`, p.sample_percentage, 0, 100, "0-100");
+      check(`profile.${name}.holdout_ratio`, p.holdout_ratio, 0, 1, "0.0-1.0");
+      check(`profile.${name}.adaptive_fnr_low_ratio`, p.adaptive_fnr_low_ratio, 0, 1, "0.0-1.0");
+      check(`profile.${name}.adaptive_fnr_high_ratio`, p.adaptive_fnr_high_ratio, 0, 1, "0.0-1.0");
+      check(`profile.${name}.adaptive_min_percentage`, p.adaptive_min_percentage, 0, 100, "0-100");
+    }
+  }
+
+  return errors;
+}
+
 /**
  * Write or update the [sampling] section in flaker.toml.
  * Preserves existing content by replacing the section if it exists,
@@ -257,14 +267,14 @@ export function writeSamplingConfig(dir: string, sampling: SamplingConfig): void
     "[sampling]",
     `strategy = "${sampling.strategy}"`,
   ];
-  if (sampling.percentage != null) lines.push(`percentage = ${sampling.percentage}`);
+  if (sampling.sample_percentage != null) lines.push(`sample_percentage = ${sampling.sample_percentage}`);
   if (sampling.holdout_ratio != null) lines.push(`holdout_ratio = ${sampling.holdout_ratio}`);
-  if (sampling.co_failure_days != null) lines.push(`co_failure_days = ${sampling.co_failure_days}`);
+  if (sampling.co_failure_window_days != null) lines.push(`co_failure_window_days = ${sampling.co_failure_window_days}`);
   if (sampling.model_path != null) lines.push(`model_path = "${sampling.model_path}"`);
   if (sampling.skip_quarantined != null) lines.push(`skip_quarantined = ${sampling.skip_quarantined}`);
   if (sampling.calibrated_at != null) lines.push(`calibrated_at = "${sampling.calibrated_at}"`);
-  if (sampling.detected_flaky_rate != null) lines.push(`detected_flaky_rate = ${sampling.detected_flaky_rate}`);
-  if (sampling.detected_co_failure_strength != null) lines.push(`detected_co_failure_strength = ${sampling.detected_co_failure_strength}`);
+  if (sampling.detected_flaky_rate_ratio != null) lines.push(`detected_flaky_rate_ratio = ${sampling.detected_flaky_rate_ratio}`);
+  if (sampling.detected_co_failure_strength_ratio != null) lines.push(`detected_co_failure_strength_ratio = ${sampling.detected_co_failure_strength_ratio}`);
   if (sampling.detected_test_count != null) lines.push(`detected_test_count = ${sampling.detected_test_count}`);
 
   const samplingBlock = lines.join("\n") + "\n";

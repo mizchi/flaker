@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
-import { collectCommitChanges } from "../../src/cli/commands/collect-commit-changes.js";
+import { collectCommitChanges } from "../../src/cli/commands/collect/commit-changes.js";
 
 describe("collectCommitChanges", () => {
   let store: DuckDBStore;

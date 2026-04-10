@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
-import { runTests } from "../../src/cli/commands/run.js";
+import { runTests } from "../../src/cli/commands/exec/run.js";
 import type { RunnerAdapter, TestId } from "../../src/cli/runners/types.js";
 import type { QuarantineManifestEntry } from "../../src/cli/quarantine-manifest.js";
 import type { DependencyResolver } from "../../src/cli/resolvers/types.js";

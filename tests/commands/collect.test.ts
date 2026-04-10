@@ -12,7 +12,7 @@ import {
   resolveCollectExitCode,
   writeCollectSummary,
   type GitHubClient,
-} from "../../src/cli/commands/collect.js";
+} from "../../src/cli/commands/collect/ci.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixtureReport = readFileSync(

@@ -23,11 +23,11 @@
 ### 開発ライフサイクルにおける位置:
 
 ```
-コード変更 → flaker sample (テスト選択) → 選択テスト実行 → flaker collect (結果蓄積)
-                                                                    ↓
-                                             flaker reason (分析) ← flaker flaky (検出)
-                                                      ↓
-                                             quarantine / bisect / fix
+コード変更 → flaker run --dry-run (テスト選択) → 選択テスト実行 → flaker collect (結果蓄積)
+                                                                          ↓
+                                               flaker analyze reason (分析) ← flaker analyze flaky (検出)
+                                                          ↓
+                                               quarantine / bisect / fix
 ```
 
 ---
@@ -191,7 +191,7 @@ flaker の `reason` コマンドは決定木を適用する:
 
 **保証する:**
 - 同一コミットで pass と fail が混在するテストは `--true-flaky` で必ず検出される
-- flaky rate が閾値を超え、十分なデータがあるテストは `flaky` で必ずフラグされる
+- flaky rate が閾値を超え、十分なデータがあるテストは `analyze flaky` で必ずフラグされる
 - `hybrid` サンプリングは affected + failed + new テストを必ず含む
 - quarantine 判定は同じデータに対して決定的
 - `bisect` はデータ中に転換点があれば必ず見つける
@@ -236,7 +236,7 @@ P(affected で検出) ≈ 95-99%
 | bisect | 5+ コミット | 20+ コミット |
 | トレンド分析 | 2+ 週間 | 4+ 週間 |
 
-`flaker eval` がデータ充足度を報告し、不足している場合は警告する。
+`flaker analyze eval` がデータ充足度を報告し、不足している場合は警告する。
 
 ### 収束の振る舞い
 

@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
-import { runCollectLocal } from "../../src/cli/commands/collect-local.js";
+import { runCollectLocal } from "../../src/cli/commands/collect/local.js";
 import { extractTestReportsFromArtifacts } from "../../src/cli/adapters/actrun.js";
 import { playwrightAdapter } from "../../src/cli/adapters/playwright.js";
 import { junitAdapter } from "../../src/cli/adapters/junit.js";

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
 import type { TestResult, WorkflowRun } from "../../src/cli/storage/types.js";
-import { runFlakyTrend, formatFlakyTrend } from "../../src/cli/commands/flaky.js";
+import { runFlakyTrend, formatFlakyTrend } from "../../src/cli/commands/analyze/flaky.js";
 
 describe("flaky trend", () => {
   let store: DuckDBStore;

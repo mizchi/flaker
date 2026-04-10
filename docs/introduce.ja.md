@@ -68,10 +68,10 @@ pnpm add -D @mizchi/flaker
 
 ## 使い方（3ステップ）
 
-### Step 1: calibrate — プロジェクトを分析する
+### Step 1: collect calibrate — プロジェクトを分析する
 
 ```bash
-flaker calibrate
+flaker collect calibrate
 ```
 
 プロジェクトのテスト数・flaky率・データ量を分析し、最適なサンプリング設定を推奨します。初回は `flaker.toml` に推奨設定を書き出します。
@@ -85,9 +85,9 @@ flaker calibrate
   Flaky rate:     3.9%
 
   Recommended:
-    strategy    = hybrid
-    percentage  = 30
-    holdout     = 0.1
+    strategy         = hybrid
+    sample_percentage = 30
+    holdout          = 0.1
 ```
 
 ### Step 2: collect — CI の履歴を集める
@@ -130,7 +130,7 @@ $ pnpm exec vitest run tests/auth.test.ts tests/utils.test.ts ...
 
 ## 設定なしで使えるか？
 
-**calibrate と collect を一度実行すれば、あとは `flaker run` だけ**です。
+**`flaker collect calibrate` と `flaker collect` を一度実行すれば、あとは `flaker run` だけ**です。
 
 設定ファイル（`flaker.toml`）はリポジトリに含め、チーム全員が同じサンプリング設定で実行できるようにします。
 
@@ -151,7 +151,7 @@ command = "pnpm exec vitest run"
 
 [sampling]
 strategy = "hybrid"
-percentage = 30
+sample_percentage = 30
 holdout_ratio = 0.1
 
 [profile.scheduled]
@@ -159,7 +159,7 @@ strategy = "full"
 
 [profile.ci]
 strategy = "hybrid"
-percentage = 30
+sample_percentage = 30
 adaptive = true
 
 [profile.local]
@@ -197,8 +197,8 @@ strategy = "full"
 
 [profile.ci]
 strategy = "hybrid"
-percentage = 30
-adaptive = true          # KPI に基づいて percentage を動的に調整
+sample_percentage = 30
+adaptive = true          # KPI に基づいて sample_percentage を動的に調整
 
 [profile.local]
 strategy = "affected"
@@ -209,10 +209,10 @@ max_duration_seconds = 60  # 時間制約内で優先度の高いテストを選
 
 | やりたいこと | コマンド |
 |------------|---------|
-| flaky テストの一覧を見る | `flaker flaky` |
+| flaky テストの一覧を見る | `flaker analyze flaky` |
 | サンプリングの品質を評価する | `flaker kpi` |
-| テストを実行せず選択だけ見る | `flaker sample` |
-| SQL で直接データを分析する | `flaker query "SELECT ..."` |
+| テストを実行せず選択だけ見る | `flaker run --dry-run` |
+| SQL で直接データを分析する | `flaker analyze query "SELECT ..."` |
 
 ## 対応テストフレームワーク
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
-import { runCollectLocal, type CollectLocalResult } from "../../src/cli/commands/collect-local.js";
+import { runCollectLocal, type CollectLocalResult } from "../../src/cli/commands/collect/local.js";
 
 function makeRunViewJson(runId: string, conclusion: string, tasks: { id: string; status: string; code: number }[]) {
   return JSON.stringify({

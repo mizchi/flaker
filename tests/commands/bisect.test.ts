@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
 import type { TestResult, WorkflowRun } from "../../src/cli/storage/types.js";
-import { runBisect } from "../../src/cli/commands/bisect.js";
+import { runBisect } from "../../src/cli/commands/debug/bisect.js";
 
 describe("bisect command", () => {
   let store: DuckDBStore;

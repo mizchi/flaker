@@ -4,7 +4,7 @@ import type { WorkflowRun, TestResult } from "../../src/cli/storage/types.js";
 import {
   runQuarantine,
   formatQuarantineTable,
-} from "../../src/cli/commands/quarantine.js";
+} from "../../src/cli/commands/policy/quarantine.js";
 
 describe("quarantine command", () => {
   let store: DuckDBStore;

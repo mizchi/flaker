@@ -1,0 +1,39 @@
+[repo]
+owner = "acme"
+name = "demo"
+
+[storage]
+path = ".flaker/data.duckdb"
+
+[adapter]
+type = "vitest"
+
+[runner]
+type = "vitest"
+command = "pnpm exec vitest run"
+
+[affected]
+resolver = "workspace"
+
+[flaky]
+window_days = 14
+detection_threshold = 2.0
+
+[quarantine]
+auto = true
+flaky_rate_threshold = 30.0
+min_runs = 10
+
+[sampling]
+strategy = "hybrid"
+percentage = 30
+holdout_ratio = 0.1
+co_failure_days = 90
+
+[profile.ci]
+strategy = "hybrid"
+percentage = 30
+adaptive = true
+adaptive_fnr_low = 0.02
+adaptive_fnr_high = 0.05
+adaptive_min_percentage = 15

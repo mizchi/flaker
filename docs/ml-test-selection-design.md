@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS commit_changes (
 #### 収集ソース
 
 - `collect` (GitHub): `git diff-tree --no-commit-id --name-status -r {sha}`
-- `collect-local` (actrun): `git diff-tree` または bit API
+- `collect local` (actrun): `git diff-tree` または bit API
 - `import`: レポートに commit_sha があればその時点の diff を取得
 
 #### Co-failure 導出クエリ
@@ -116,7 +116,7 @@ HAVING co_runs >= 3
 1. 過去の sampling_runs + CI 結果から confusion matrix を計算
 2. α を変化させて F1 スコアを最大化する値を探索（grid search / Bayesian opt）
 3. `.flaker/models/tuning.json` に保存
-4. `flaker sample` 時に自動ロード
+4. `flaker run` 時に自動ロード
 
 ## 時系列的特徴量
 

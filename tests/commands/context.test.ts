@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
-import { buildContext, formatContext } from "../../src/cli/commands/context.js";
+import { buildContext, formatContext } from "../../src/cli/commands/analyze/context.js";
 
 describe("flaker context", () => {
   let store: DuckDBStore;

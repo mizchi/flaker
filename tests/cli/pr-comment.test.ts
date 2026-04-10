@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { formatPrComment } from "../../src/cli/commands/report.js";
-import type { NormalizedReportSummary } from "../../src/cli/commands/report.js";
+import { formatPrComment } from "../../src/cli/commands/report/index.js";
+import type { NormalizedReportSummary } from "../../src/cli/commands/report/index.js";
 
 describe("formatPrComment", () => {
   const baseSummary: NormalizedReportSummary = {

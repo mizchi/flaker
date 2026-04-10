@@ -3,7 +3,7 @@ import {
   compareRetryResults,
   formatRetryReport,
   type RetryTestResult,
-} from "../../src/cli/commands/retry.js";
+} from "../../src/cli/commands/debug/retry.js";
 
 describe("compareRetryResults", () => {
   it("marks reproduced when local also fails", () => {
