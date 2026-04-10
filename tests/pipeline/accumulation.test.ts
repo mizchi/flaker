@@ -26,7 +26,7 @@ describe("data accumulation pipeline", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("calibrate detects project characteristics from accumulated data", { timeout: 15000 }, async () => {
+  it("calibrate detects project characteristics from accumulated data", async () => {
     const core = await loadCore();
     const fixture = core.generateFixture({
       test_count: 100,
