@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { SCHEMA_DDL, FLAKY_QUERY, CO_FAILURE_QUERY } from "./schema.js";
+import { SCHEMA_DDL, FLAKY_QUERY, CO_FAILURE_QUERY, TEST_CO_FAILURE_QUERY } from "./schema.js";
 import { createStableTestId, resolveTestIdentity } from "../identity.js";
 import type {
   MetricStore,
@@ -21,6 +21,8 @@ import type {
   CoFailureQueryOpts,
   ExportResult,
   ImportResult,
+  TestCoFailurePair,
+  TestCoFailureQueryOpts,
 } from "./types.js";
 
 export class DuckDBStore implements MetricStore {
@@ -122,14 +124,17 @@ export class DuckDBStore implements MetricStore {
 
   async recordCollectedArtifact(record: CollectedArtifactRecord): Promise<void> {
     await this.run(
-      `INSERT INTO collected_artifacts (workflow_run_id, adapter_type, artifact_name, adapter_config, collected_at)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO collected_artifacts (workflow_run_id, adapter_type, artifact_name, adapter_config, artifact_id, local_archive_path, artifact_entries, collected_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (workflow_run_id, adapter_type, artifact_name, adapter_config) DO NOTHING`,
       [
         record.workflowRunId,
         record.adapterType,
         record.artifactName,
         record.adapterConfig ?? "",
+        record.artifactId ?? null,
+        record.localArchivePath ?? null,
+        record.artifactEntries ? JSON.stringify(record.artifactEntries) : null,
         record.collectedAt ?? new Date(),
       ],
     );
@@ -216,8 +221,8 @@ export class DuckDBStore implements MetricStore {
     for (const r of results) {
       const resolved = resolveTestIdentity(r);
       await this.run(
-        `INSERT INTO test_results (id, workflow_run_id, test_id, task_id, suite, test_name, filter_text, status, duration_ms, retry_count, error_message, commit_sha, variant, quarantine, created_at)
-         VALUES (nextval('test_results_id_seq'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO test_results (id, workflow_run_id, test_id, task_id, suite, test_name, filter_text, status, duration_ms, retry_count, error_message, failure_location, stdout_text, stderr_text, artifact_paths, artifacts, commit_sha, variant, quarantine, created_at)
+         VALUES (nextval('test_results_id_seq'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           resolved.workflowRunId,
           resolved.testId,
@@ -229,6 +234,11 @@ export class DuckDBStore implements MetricStore {
           resolved.durationMs,
           resolved.retryCount,
           resolved.errorMessage,
+          resolved.failureLocation ? JSON.stringify(resolved.failureLocation) : null,
+          resolved.stdout ?? null,
+          resolved.stderr ?? null,
+          resolved.artifactPaths ? JSON.stringify(resolved.artifactPaths) : null,
+          resolved.artifacts ? JSON.stringify(resolved.artifacts) : null,
           resolved.commitSha,
           resolved.variant ? JSON.stringify(resolved.variant) : null,
           resolved.quarantine ? JSON.stringify(resolved.quarantine) : null,
@@ -295,6 +305,11 @@ export class DuckDBStore implements MetricStore {
         durationMs: row.duration_ms,
         retryCount: row.retry_count,
         errorMessage: row.error_message,
+        failureLocation: row.failure_location ? JSON.parse(row.failure_location) : null,
+        stdout: row.stdout_text ?? null,
+        stderr: row.stderr_text ?? null,
+        artifactPaths: row.artifact_paths ? JSON.parse(row.artifact_paths) : null,
+        artifacts: row.artifacts ? JSON.parse(row.artifacts) : null,
         commitSha: row.commit_sha,
         variant: resolved.variant,
         testId: resolved.testId,
@@ -515,6 +530,32 @@ export class DuckDBStore implements MetricStore {
     return boosts;
   }
 
+  async queryTestCoFailures(opts?: TestCoFailureQueryOpts): Promise<TestCoFailurePair[]> {
+    const windowDays = opts?.windowDays ?? 90;
+    const minCoFailures = opts?.minCoFailures ?? 2;
+    const minCoRate = opts?.minCoRate ?? 0.8;
+    const rows = await this.all(
+      TEST_CO_FAILURE_QUERY,
+      [windowDays.toString(), minCoFailures, minCoRate],
+    );
+    return rows.map((row: any) => ({
+      testAId: row.test_a_id,
+      testATaskId: row.test_a_task_id,
+      testASuite: row.test_a_suite,
+      testATestName: row.test_a_name,
+      testAFilter: row.test_a_filter ?? null,
+      testAFailRuns: row.test_a_fail_runs,
+      testBId: row.test_b_id,
+      testBTaskId: row.test_b_task_id,
+      testBSuite: row.test_b_suite,
+      testBTestName: row.test_b_name,
+      testBFilter: row.test_b_filter ?? null,
+      testBFailRuns: row.test_b_fail_runs,
+      coFailRuns: row.co_fail_runs,
+      coFailRate: row.co_fail_rate,
+    }));
+  }
+
   /** Escape a string for safe use in DuckDB SQL literals (single-quote context) */
   private sanitizeSqlLiteral(s: string): string {
     return s.replace(/'/g, "''");
@@ -526,6 +567,7 @@ export class DuckDBStore implements MetricStore {
     const wrPath = join(outputDir, `workflow_run_${workflowRunId}.parquet`);
     const trPath = join(outputDir, `test_results_${workflowRunId}.parquet`);
     const ccPath = join(outputDir, `commit_changes_${workflowRunId}.parquet`);
+    const caPath = join(outputDir, `collected_artifacts_${workflowRunId}.parquet`);
     const srPath = join(outputDir, `sampling_runs_${workflowRunId}.parquet`);
     const srtPath = join(outputDir, `sampling_run_tests_${workflowRunId}.parquet`);
 
@@ -540,6 +582,7 @@ export class DuckDBStore implements MetricStore {
     const safeWrPath = this.sanitizeSqlLiteral(wrPath);
     const safeTrPath = this.sanitizeSqlLiteral(trPath);
     const safeCcPath = this.sanitizeSqlLiteral(ccPath);
+    const safeCaPath = this.sanitizeSqlLiteral(caPath);
     const safeSha = this.sanitizeSqlLiteral(commitSha);
     const safeRunId = Number(workflowRunId);
 
@@ -566,6 +609,14 @@ export class DuckDBStore implements MetricStore {
       `COPY (SELECT * FROM commit_changes WHERE commit_sha = '${safeSha}') TO '${safeCcPath}' (FORMAT PARQUET)`,
     );
 
+    const [caCount] = await this.all(
+      `SELECT COUNT(*)::INTEGER AS cnt FROM collected_artifacts WHERE workflow_run_id = ?`,
+      [workflowRunId],
+    );
+    await this.run(
+      `COPY (SELECT * FROM collected_artifacts WHERE workflow_run_id = ${safeRunId}) TO '${safeCaPath}' (FORMAT PARQUET)`,
+    );
+
     const safeSrPath = this.sanitizeSqlLiteral(srPath);
     const safeSrtPath = this.sanitizeSqlLiteral(srtPath);
     const [srCount] = await this.all(
@@ -587,11 +638,13 @@ export class DuckDBStore implements MetricStore {
     return {
       testResultsCount: trCount.cnt,
       commitChangesCount: ccCount.cnt,
+      collectedArtifactsCount: caCount.cnt,
       samplingRunsCount: srCount.cnt,
       samplingRunTestsCount: srtCount.cnt,
       workflowRunPath: wrPath,
       testResultsPath: trPath,
       commitChangesPath: ccPath,
+      collectedArtifactsPath: caPath,
       samplingRunsPath: srPath,
       samplingRunTestsPath: srtPath,
     };
@@ -607,15 +660,17 @@ export class DuckDBStore implements MetricStore {
       if (name.startsWith("workflow_run_")) return 0;
       if (name.startsWith("sampling_runs_")) return 1;
       if (name.startsWith("commit_changes_")) return 2;
-      if (name.startsWith("test_results_")) return 3;
-      if (name.startsWith("sampling_run_tests_")) return 4;
-      return 5;
+      if (name.startsWith("collected_artifacts_")) return 3;
+      if (name.startsWith("test_results_")) return 4;
+      if (name.startsWith("sampling_run_tests_")) return 5;
+      return 6;
     };
     files.sort((a, b) => priorityOrder(a) - priorityOrder(b));
 
     let workflowRunsImported = 0;
     let testResultsImported = 0;
     let commitChangesImported = 0;
+    let collectedArtifactsImported = 0;
     let samplingRunsImported = 0;
     let samplingRunTestsImported = 0;
 
@@ -629,35 +684,42 @@ export class DuckDBStore implements MetricStore {
       if (file.startsWith("workflow_run_")) {
         const [before] = await this.all("SELECT COUNT(*)::INTEGER AS cnt FROM workflow_runs");
         await this.exec(
-          `INSERT OR IGNORE INTO workflow_runs SELECT * FROM read_parquet('${safePath}')`,
+          `INSERT OR IGNORE INTO workflow_runs BY NAME SELECT * FROM read_parquet('${safePath}')`,
         );
         const [after] = await this.all("SELECT COUNT(*)::INTEGER AS cnt FROM workflow_runs");
         workflowRunsImported += after.cnt - before.cnt;
       } else if (file.startsWith("sampling_runs_")) {
         const [before] = await this.all("SELECT COUNT(*)::INTEGER AS cnt FROM sampling_runs");
         await this.exec(
-          `INSERT OR IGNORE INTO sampling_runs SELECT * FROM read_parquet('${safePath}')`,
+          `INSERT OR IGNORE INTO sampling_runs BY NAME SELECT * FROM read_parquet('${safePath}')`,
         );
         const [after] = await this.all("SELECT COUNT(*)::INTEGER AS cnt FROM sampling_runs");
         samplingRunsImported += after.cnt - before.cnt;
       } else if (file.startsWith("test_results_")) {
         const [before] = await this.all("SELECT COUNT(*)::INTEGER AS cnt FROM test_results");
         await this.exec(
-          `INSERT OR IGNORE INTO test_results SELECT * FROM read_parquet('${safePath}')`,
+          `INSERT OR IGNORE INTO test_results BY NAME SELECT * FROM read_parquet('${safePath}')`,
         );
         const [after] = await this.all("SELECT COUNT(*)::INTEGER AS cnt FROM test_results");
         testResultsImported += after.cnt - before.cnt;
       } else if (file.startsWith("commit_changes_")) {
         const [before] = await this.all("SELECT COUNT(*)::INTEGER AS cnt FROM commit_changes");
         await this.exec(
-          `INSERT OR IGNORE INTO commit_changes SELECT * FROM read_parquet('${safePath}')`,
+          `INSERT OR IGNORE INTO commit_changes BY NAME SELECT * FROM read_parquet('${safePath}')`,
         );
         const [after] = await this.all("SELECT COUNT(*)::INTEGER AS cnt FROM commit_changes");
         commitChangesImported += after.cnt - before.cnt;
+      } else if (file.startsWith("collected_artifacts_")) {
+        const [before] = await this.all("SELECT COUNT(*)::INTEGER AS cnt FROM collected_artifacts");
+        await this.exec(
+          `INSERT OR IGNORE INTO collected_artifacts BY NAME SELECT * FROM read_parquet('${safePath}')`,
+        );
+        const [after] = await this.all("SELECT COUNT(*)::INTEGER AS cnt FROM collected_artifacts");
+        collectedArtifactsImported += after.cnt - before.cnt;
       } else if (file.startsWith("sampling_run_tests_")) {
         const [before] = await this.all("SELECT COUNT(*)::INTEGER AS cnt FROM sampling_run_tests");
         await this.exec(
-          `INSERT OR IGNORE INTO sampling_run_tests SELECT * FROM read_parquet('${safePath}')`,
+          `INSERT OR IGNORE INTO sampling_run_tests BY NAME SELECT * FROM read_parquet('${safePath}')`,
         );
         const [after] = await this.all("SELECT COUNT(*)::INTEGER AS cnt FROM sampling_run_tests");
         samplingRunTestsImported += after.cnt - before.cnt;
@@ -671,6 +733,7 @@ export class DuckDBStore implements MetricStore {
       workflowRunsImported,
       testResultsImported,
       commitChangesImported,
+      collectedArtifactsImported,
       samplingRunsImported,
       samplingRunTestsImported,
     };

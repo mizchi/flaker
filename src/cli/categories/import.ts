@@ -4,6 +4,7 @@ import { DuckDBStore } from "../storage/duckdb.js";
 import { loadConfig } from "../config.js";
 import { runImport } from "../commands/import/report.js";
 import { runImportParquet } from "../commands/import/parquet.js";
+import { parseWorkflowRunSource } from "../run-source.js";
 
 export function registerImportCommands(program: Command): void {
   const importCmd = program
@@ -17,7 +18,8 @@ export function registerImportCommands(program: Command): void {
     .option("--custom-command <cmd>", "Custom adapter command (required with --adapter custom)")
     .option("--commit <sha>", "Commit SHA")
     .option("--branch <branch>", "Branch name")
-    .action(async (file: string, opts: { adapter: string; customCommand?: string; commit?: string; branch?: string }) => {
+    .option("--source <source>", "Workflow run source: ci or local", "local")
+    .action(async (file: string, opts: { adapter: string; customCommand?: string; commit?: string; branch?: string; source?: string }) => {
       const config = loadConfig(process.cwd());
       const store = new DuckDBStore(resolve(config.storage.path));
       await store.initialize();
@@ -30,6 +32,7 @@ export function registerImportCommands(program: Command): void {
           commitSha: opts.commit,
           branch: opts.branch,
           repo: `${config.repo.owner}/${config.repo.name}`,
+          source: parseWorkflowRunSource(opts.source),
         });
         console.log(`Imported ${result.testsImported} test results`);
       } finally {

@@ -315,6 +315,25 @@ describe("PlaywrightRunner", () => {
     expect(capturedArgs).toContain("json");
   });
 
+  it("execute appends --grep-invert when excluding flaky-tagged tests", async () => {
+    let capturedArgs: string[] = [];
+    const runner = new PlaywrightRunner({
+      command: "pnpm exec playwright test",
+      safeExec: (_cmd, args) => {
+        capturedArgs = args;
+        return { exitCode: 0, stdout: playwrightJson, stderr: "" };
+      },
+    });
+
+    await runner.execute(
+      [{ suite: "login", testName: "logs in" }],
+      { grepInvert: "@flaky" },
+    );
+
+    expect(capturedArgs).toContain("--grep-invert");
+    expect(capturedArgs).toContain("@flaky");
+  });
+
   it("execute parses playwright JSON via adapter", async () => {
     const runner = new PlaywrightRunner({
       exec: () => ({ exitCode: 0, stdout: playwrightJson, stderr: "" }),
@@ -356,6 +375,30 @@ describe("PlaywrightRunner", () => {
     );
     expect(ids).toEqual([
       { suite: "app.spec.ts", testName: "renders", taskId: "app.spec.ts" },
+    ]);
+  });
+
+  it("listTests preserves playwright tags when present", async () => {
+    const listJson = JSON.stringify({
+      suites: [
+        {
+          title: "app.spec.ts",
+          specs: [{ title: "renders", file: "app.spec.ts", tags: ["@smoke", "@flaky"] }],
+        },
+      ],
+    });
+    const runner = new PlaywrightRunner({
+      exec: () => ({ exitCode: 0, stdout: listJson, stderr: "" }),
+    });
+
+    const ids = await runner.listTests();
+    expect(ids).toEqual([
+      {
+        suite: "app.spec.ts",
+        testName: "renders",
+        taskId: "app.spec.ts",
+        tags: ["@smoke", "@flaky"],
+      },
     ]);
   });
 });

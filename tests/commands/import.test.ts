@@ -152,9 +152,31 @@ describe("import command", () => {
       branch: "main",
       repo: "mizchi/crater",
     });
-    const runs = await store.raw<{ event: string }>("SELECT event FROM workflow_runs");
+    const runs = await store.raw<{ event: string; source: string }>(
+      "SELECT event, source FROM workflow_runs",
+    );
     expect(runs).toHaveLength(1);
     expect(runs[0].event).toBe("local-import");
+    expect(runs[0].source).toBe("local");
+  });
+
+  it("stores imported CI reports as ci source when requested", async () => {
+    const fixture = resolve(import.meta.dirname, "../fixtures/playwright-report.json");
+    await runImport({
+      store,
+      filePath: fixture,
+      adapterType: "playwright",
+      commitSha: "abc123",
+      branch: "main",
+      repo: "mizchi/crater",
+      source: "ci",
+    });
+    const runs = await store.raw<{ event: string; source: string }>(
+      "SELECT event, source FROM workflow_runs",
+    );
+    expect(runs).toHaveLength(1);
+    expect(runs[0].event).toBe("ci-import");
+    expect(runs[0].source).toBe("ci");
   });
 
   const customFixture = resolve(

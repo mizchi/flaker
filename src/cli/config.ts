@@ -13,8 +13,10 @@ export interface SamplingConfig {
   sample_percentage?: number;           // was `percentage`
   holdout_ratio?: number;
   co_failure_window_days?: number;      // was `co_failure_days`
+  cluster_mode?: "off" | "spread" | "pack";
   model_path?: string;
   skip_quarantined?: boolean;
+  skip_flaky_tagged?: boolean;
   calibrated_at?: string;
   detected_flaky_rate_ratio?: number;   // was `detected_flaky_rate`
   detected_co_failure_strength_ratio?: number;  // was `detected_co_failure_strength`
@@ -26,8 +28,10 @@ export interface ProfileConfig {
   sample_percentage?: number;           // was `percentage`
   holdout_ratio?: number;
   co_failure_window_days?: number;      // was `co_failure_days`
+  cluster_mode?: "off" | "spread" | "pack";
   model_path?: string;
   skip_quarantined?: boolean;
+  skip_flaky_tagged?: boolean;
   adaptive?: boolean;
   adaptive_fnr_low_ratio?: number;      // was `adaptive_fnr_low`
   adaptive_fnr_high_ratio?: number;     // was `adaptive_fnr_high`
@@ -47,6 +51,7 @@ export interface FlakerConfig {
     command: string;
     execute?: string;
     list?: string;
+    flaky_tag_pattern?: string;
     actrun?: { workflow?: string; job?: string; local?: boolean; trust?: boolean };
   };
   affected: { resolver: string; config: string };
@@ -270,6 +275,7 @@ export function writeSamplingConfig(dir: string, sampling: SamplingConfig): void
   if (sampling.sample_percentage != null) lines.push(`sample_percentage = ${sampling.sample_percentage}`);
   if (sampling.holdout_ratio != null) lines.push(`holdout_ratio = ${sampling.holdout_ratio}`);
   if (sampling.co_failure_window_days != null) lines.push(`co_failure_window_days = ${sampling.co_failure_window_days}`);
+  if (sampling.cluster_mode != null) lines.push(`cluster_mode = "${sampling.cluster_mode}"`);
   if (sampling.model_path != null) lines.push(`model_path = "${sampling.model_path}"`);
   if (sampling.skip_quarantined != null) lines.push(`skip_quarantined = ${sampling.skip_quarantined}`);
   if (sampling.calibrated_at != null) lines.push(`calibrated_at = "${sampling.calibrated_at}"`);

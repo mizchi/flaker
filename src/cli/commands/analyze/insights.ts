@@ -1,4 +1,5 @@
 import type { MetricStore } from "../../storage/types.js";
+import { workflowRunSourceSql } from "../../run-source.js";
 
 export interface InsightsOpts {
   store: MetricStore;
@@ -37,6 +38,7 @@ export interface InsightsResult {
 export async function runInsights(opts: InsightsOpts): Promise<InsightsResult> {
   const window = opts.windowDays ?? 90;
   const top = opts.top ?? 20;
+  const workflowSourceExpr = workflowRunSourceSql("wr");
 
   const rows = await opts.store.raw<{
     suite: string;
@@ -49,11 +51,11 @@ export async function runInsights(opts: InsightsOpts): Promise<InsightsResult> {
     SELECT
       tr.suite,
       tr.test_name,
-      COUNT(*) FILTER (WHERE COALESCE(wr.source, 'ci') = 'ci')::INTEGER AS ci_runs,
-      COUNT(*) FILTER (WHERE COALESCE(wr.source, 'ci') = 'ci'
+      COUNT(*) FILTER (WHERE ${workflowSourceExpr} = 'ci')::INTEGER AS ci_runs,
+      COUNT(*) FILTER (WHERE ${workflowSourceExpr} = 'ci'
         AND tr.status IN ('failed', 'flaky'))::INTEGER AS ci_fails,
-      COUNT(*) FILTER (WHERE wr.source = 'local')::INTEGER AS local_runs,
-      COUNT(*) FILTER (WHERE wr.source = 'local'
+      COUNT(*) FILTER (WHERE ${workflowSourceExpr} = 'local')::INTEGER AS local_runs,
+      COUNT(*) FILTER (WHERE ${workflowSourceExpr} = 'local'
         AND tr.status IN ('failed', 'flaky'))::INTEGER AS local_fails
     FROM test_results tr
     LEFT JOIN workflow_runs wr ON tr.workflow_run_id = wr.id

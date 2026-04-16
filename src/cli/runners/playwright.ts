@@ -19,6 +19,7 @@ import {
 interface PlaywrightListSpec {
   title: string;
   file: string;
+  tags?: string[];
 }
 
 interface PlaywrightListSuite {
@@ -30,6 +31,20 @@ interface PlaywrightListSuite {
 
 interface PlaywrightListOutput {
   suites: PlaywrightListSuite[];
+}
+
+function extractTitleTags(title: string): string[] {
+  return [...title.matchAll(/(^|\s)(@\S+)/g)]
+    .map((match) => match[2]?.trim())
+    .filter((value): value is string => Boolean(value));
+}
+
+function mergeTags(spec: PlaywrightListSpec): string[] | undefined {
+  const merged = new Set<string>([
+    ...(spec.tags ?? []),
+    ...extractTitleTags(spec.title ?? ""),
+  ]);
+  return merged.size > 0 ? [...merged] : undefined;
 }
 
 function collectSpecs(
@@ -46,6 +61,7 @@ function collectSpecs(
         suite: spec.file ?? nextFile,
         testName: spec.title,
         taskId: nextTaskId,
+        tags: mergeTags(spec),
       });
     }
   }
@@ -80,6 +96,9 @@ export class PlaywrightRunner implements RunnerAdapter {
     const pattern = tests.map((t) => escapeRegex(t.testName)).join("|");
     const { cmd, args } = parseBaseCommand(this.baseCommand);
     const runArgs = [...args, "--grep", pattern, "--reporter", "json"];
+    if (opts?.grepInvert) {
+      runArgs.push("--grep-invert", opts.grepInvert);
+    }
     if (opts?.workers) {
       runArgs.push(`--workers=${opts.workers}`);
     }

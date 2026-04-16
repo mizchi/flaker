@@ -95,4 +95,34 @@ describe("insights", () => {
     expect(report).toContain("CI vs Local Failure Insights");
     expect(report).toContain("Run more tests locally");
   });
+
+  it("treats legacy local-import events as local even without source metadata", async () => {
+    await store.insertWorkflowRun({
+      id: 1, repo: "test/repo", branch: "main", commitSha: "sha1",
+      event: "push", source: "ci", status: "success",
+      createdAt: new Date(), durationMs: 100,
+    });
+    await store.insertTestResults([{
+      workflowRunId: 1, suite: "legacy.test.ts", testName: "test1",
+      status: "passed", commitSha: "sha1", durationMs: 10,
+      retryCount: 0, errorMessage: null, variant: null,
+      createdAt: new Date(),
+    }]);
+
+    await store.insertWorkflowRun({
+      id: 2, repo: "test/repo", branch: "local", commitSha: "sha2",
+      event: "local-import", status: "failure",
+      createdAt: new Date(), durationMs: 100,
+    });
+    await store.insertTestResults([{
+      workflowRunId: 2, suite: "legacy.test.ts", testName: "test1",
+      status: "failed", commitSha: "sha2", durationMs: 10,
+      retryCount: 0, errorMessage: null, variant: null,
+      createdAt: new Date(),
+    }]);
+
+    const result = await runInsights({ store });
+    expect(result.summary.localOnlyCount).toBe(1);
+    expect(result.localOnly[0]?.suite).toBe("legacy.test.ts");
+  });
 });

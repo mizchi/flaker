@@ -1,4 +1,5 @@
 import type { MetricStore } from "../../storage/types.js";
+import { workflowRunSourceSql } from "../../run-source.js";
 
 export interface FlakerKpi {
   timestamp: string;
@@ -52,6 +53,7 @@ export async function computeKpi(
   opts?: { windowDays?: number },
 ): Promise<FlakerKpi> {
   const window = opts?.windowDays ?? 30;
+  const workflowSourceExpr = workflowRunSourceSql("wr");
 
   // --- Sampling: confusion matrix from matched commits ---
   // A "matched commit" has both a sampling_run (local) and CI test_results
@@ -91,7 +93,7 @@ export async function computeKpi(
       SELECT tr.commit_sha, tr.suite, tr.test_name, tr.status, tr.duration_ms
       FROM test_results tr
       JOIN workflow_runs wr ON tr.workflow_run_id = wr.id
-      WHERE COALESCE(wr.source, 'ci') = 'ci'
+      WHERE ${workflowSourceExpr} = 'ci'
         AND tr.created_at > CURRENT_TIMESTAMP - INTERVAL (${Number(window)} || ' days')
     ),
     matched_commits AS (

@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it, expect } from "vitest";
 import { actrunAdapter, type ActrunRunOutput } from "../../src/cli/adapters/actrun.js";
 
@@ -105,5 +108,37 @@ describe("actrunAdapter", () => {
     const results = actrunAdapter.parse(JSON.stringify(output));
     expect(results[0].suite).toBe("single-step");
     expect(results[0].testName).toBe("single-step");
+  });
+
+  it("loads per-task stdout/stderr and artifact paths when log files exist", () => {
+    const dir = mkdtempSync(join(tmpdir(), "flaker-actrun-logs-"));
+    const stdoutPath = join(dir, "stdout.log");
+    const stderrPath = join(dir, "stderr.log");
+    writeFileSync(stdoutPath, "stdout line 1\nstdout line 2\n", "utf-8");
+    writeFileSync(stderrPath, "stderr line 1\n", "utf-8");
+
+    try {
+      const output: ActrunRunOutput = {
+        ...sampleOutput,
+        tasks: [
+          {
+            id: "build/run-tests",
+            kind: "run",
+            status: "failed",
+            code: 1,
+            shell: "bash",
+            stdout_path: stdoutPath,
+            stderr_path: stderrPath,
+          },
+        ],
+      };
+
+      const results = actrunAdapter.parse(JSON.stringify(output));
+      expect(results[0].stdout).toBe("stdout line 1\nstdout line 2\n");
+      expect(results[0].stderr).toBe("stderr line 1\n");
+      expect(results[0].artifactPaths).toEqual([stdoutPath, stderrPath]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

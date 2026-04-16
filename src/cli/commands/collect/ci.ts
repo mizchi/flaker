@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import AdmZip from "adm-zip";
 import { createTestResultAdapter } from "../../adapters/index.js";
 import type { TestResultAdapter } from "../../adapters/types.js";
@@ -114,6 +114,30 @@ export function defaultArtifactNameForAdapter(adapterType: string): string {
   }
 }
 
+function sanitizeFileName(value: string): string {
+  return value
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    || "artifact";
+}
+
+function persistDownloadedArtifact(
+  storagePath: string,
+  runId: number,
+  adapterType: string,
+  artifactName: string,
+  zipBuffer: Buffer,
+): string {
+  const baseDir = resolve(dirname(storagePath), "artifacts", "collected", String(runId));
+  mkdirSync(baseDir, { recursive: true });
+  const fileName = `${sanitizeFileName(adapterType)}-${sanitizeFileName(artifactName)}.zip`;
+  const archivePath = join(baseDir, fileName);
+  writeFileSync(archivePath, zipBuffer);
+  return archivePath;
+}
+
 function getAdapter(adapterType: string, customCommand?: string): TestResultAdapter {
   return createTestResultAdapter(adapterType, customCommand);
 }
@@ -216,8 +240,12 @@ export async function collectWorkflowRuns(
       }
 
       const zipBuffer = await github.downloadArtifact(artifact.id);
+      const localArchivePath = storagePath
+        ? persistDownloadedArtifact(storagePath, run.id, adapterType, artifactName, zipBuffer)
+        : null;
       const zip = new AdmZip(zipBuffer);
       const entries = zip.getEntries();
+      const artifactEntries = entries.map((entry) => entry.entryName);
 
       let reportContent: string | null = null;
       for (const entry of entries) {
@@ -276,7 +304,12 @@ export async function collectWorkflowRuns(
       } else {
         await collectCommitChanges(store, process.cwd(), run.head_sha);
       }
-      await store.recordCollectedArtifact(collectedRecord);
+      await store.recordCollectedArtifact({
+        ...collectedRecord,
+        artifactId: artifact.id,
+        localArchivePath,
+        artifactEntries,
+      });
       if (storagePath) {
         await exportRunParquet(store, run.id, storagePath);
       }

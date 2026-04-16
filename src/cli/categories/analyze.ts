@@ -18,7 +18,14 @@ import {
   runSamplingKpi,
   writeEvalReport,
 } from "../commands/analyze/eval.js";
+import { formatFailureClusters, runFailureClusters } from "../commands/analyze/cluster.js";
 import { runQuery, formatQueryResult } from "../commands/analyze/query.js";
+import { formatAnalysisBundle, runAnalysisBundle } from "../commands/analyze/bundle.js";
+import {
+  formatFlakyTagTriageReport,
+  runFlakyTagTriage,
+} from "../commands/analyze/flaky-tag-triage.js";
+import { createRunner } from "../runners/index.js";
 
 export async function analyzeKpiAction(opts: { windowDays: string; json?: boolean }): Promise<void> {
   const config = loadConfig(process.cwd());
@@ -41,6 +48,79 @@ export function registerAnalyzeCommands(program: Command): void {
   const analyze = program
     .command("analyze")
     .description("Read-only inspection of flaker data");
+
+  analyze
+    .command("bundle")
+    .description("Export a machine-readable analysis bundle for AI consumers")
+    .option("--window-days <days>", "Analysis window in days", "30")
+    .option("--output <file>", "Write bundle JSON to a file")
+    .action(async (opts: { windowDays: string; output?: string }) => {
+      const { writeFileSync } = await import("node:fs");
+      const config = loadConfig(process.cwd());
+      const store = new DuckDBStore(resolve(config.storage.path));
+      await store.initialize();
+      try {
+        const bundle = await runAnalysisBundle({
+          store,
+          storagePath: config.storage.path,
+          resolverConfigured: !!(config as any).affected,
+          windowDays: parseInt(opts.windowDays, 10),
+        });
+        const rendered = formatAnalysisBundle(bundle);
+        console.log(rendered);
+        if (opts.output) {
+          writeFileSync(resolve(process.cwd(), opts.output), rendered, "utf8");
+        }
+      } finally {
+        await store.close();
+      }
+    });
+
+  analyze
+    .command("flaky-tag")
+    .description("Suggest which Playwright tests should gain or lose the flaky tag")
+    .option("--window-days <days>", "Analysis window in days")
+    .option("--tag <pattern>", "Tag pattern to manage", "@flaky")
+    .option("--min-runs <n>", "Minimum runs before suggesting a new flaky tag")
+    .option("--add-threshold <n>", "Flaky rate percentage required to suggest adding a tag")
+    .option("--remove-after-passes <n>", "Consecutive passing runs required to suggest removing a tag")
+    .option("--json", "Output as JSON")
+    .action(async (opts: {
+      windowDays?: string;
+      tag?: string;
+      minRuns?: string;
+      addThreshold?: string;
+      removeAfterPasses?: string;
+      json?: boolean;
+    }) => {
+      const cwd = process.cwd();
+      const config = loadConfig(cwd);
+      const store = new DuckDBStore(resolve(config.storage.path));
+      await store.initialize();
+      try {
+        const report = await runFlakyTagTriage({
+          store,
+          runner: createRunner(config.runner),
+          cwd,
+          tagPattern: opts.tag ?? config.runner.flaky_tag_pattern ?? "@flaky",
+          windowDays: opts.windowDays ? parseInt(opts.windowDays, 10) : config.flaky.window_days,
+          minRuns: opts.minRuns ? parseInt(opts.minRuns, 10) : config.quarantine.min_runs,
+          addThresholdPercentage: opts.addThreshold
+            ? parseInt(opts.addThreshold, 10)
+            : config.quarantine.flaky_rate_threshold_percentage,
+          removeAfterConsecutivePasses: opts.removeAfterPasses
+            ? parseInt(opts.removeAfterPasses, 10)
+            : 5,
+        });
+        console.log(
+          opts.json
+            ? JSON.stringify(report, null, 2)
+            : formatFlakyTagTriageReport(report),
+        );
+      } finally {
+        await store.close();
+      }
+    });
 
   analyze
     .command("kpi")
@@ -81,6 +161,36 @@ export function registerAnalyzeCommands(program: Command): void {
           testName: opts.test,
         });
         console.log(formatFlakyTable(results));
+      } finally {
+        await store.close();
+      }
+    });
+
+  analyze
+    .command("cluster")
+    .description("Inspect clusters of tests that frequently fail together")
+    .option("--window-days <days>", "Analysis window in days", "90")
+    .option("--min-co-failures <n>", "Minimum shared failing runs", "2")
+    .option("--min-co-rate <ratio>", "Minimum co-failure rate as ratio (0.0-1.0)", "0.8")
+    .option("--top <n>", "Number of clusters to show", "20")
+    .action(async (opts: {
+      windowDays: string;
+      minCoFailures: string;
+      minCoRate: string;
+      top: string;
+    }) => {
+      const config = loadConfig(process.cwd());
+      const store = new DuckDBStore(resolve(config.storage.path));
+      await store.initialize();
+      try {
+        const clusters = await runFailureClusters({
+          store,
+          windowDays: parseInt(opts.windowDays, 10),
+          minCoFailures: parseInt(opts.minCoFailures, 10),
+          minCoRate: Number(opts.minCoRate),
+          top: parseInt(opts.top, 10),
+        });
+        console.log(formatFailureClusters(clusters));
       } finally {
         await store.close();
       }

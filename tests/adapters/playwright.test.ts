@@ -116,4 +116,82 @@ describe("playwrightAdapter", () => {
       }),
     );
   });
+
+  it("parses attachment metadata and spec location from Playwright JSON", () => {
+    const reportJson = JSON.stringify({
+      suites: [
+        {
+          title: "auth.spec.ts",
+          file: "tests/auth.spec.ts",
+          suites: [
+            {
+              title: "auth flow",
+              specs: [
+                {
+                  title: "captures trace and screenshot",
+                  file: "tests/auth.spec.ts",
+                  line: 88,
+                  column: 9,
+                  tests: [
+                    {
+                      projectName: "chromium",
+                      status: "unexpected",
+                      results: [
+                        {
+                          status: "failed",
+                          duration: 1200,
+                          retry: 0,
+                          errors: [{ message: "trace assertion failed" }],
+                          attachments: [
+                            {
+                              name: "trace",
+                              path: "/artifacts/playwright/trace-blob.bin",
+                              contentType: "application/zip",
+                            },
+                            {
+                              name: "screenshot",
+                              path: "/artifacts/playwright/failure-image.bin",
+                              contentType: "image/png",
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    const results = playwrightAdapter.parse(reportJson);
+    expect(results).toHaveLength(1);
+    expect(results[0]?.failureLocation).toEqual({
+      file: "tests/auth.spec.ts",
+      line: 88,
+      column: 9,
+      functionName: null,
+      raw: "tests/auth.spec.ts:88:9",
+    });
+    expect(results[0]?.artifactPaths).toEqual([
+      "/artifacts/playwright/trace-blob.bin",
+      "/artifacts/playwright/failure-image.bin",
+    ]);
+    expect(results[0]?.artifacts).toEqual([
+      {
+        path: "/artifacts/playwright/trace-blob.bin",
+        fileName: "trace-blob.bin",
+        kind: "trace",
+        contentType: "application/zip",
+      },
+      {
+        path: "/artifacts/playwright/failure-image.bin",
+        fileName: "failure-image.bin",
+        kind: "screenshot",
+        contentType: "image/png",
+      },
+    ]);
+  });
 });

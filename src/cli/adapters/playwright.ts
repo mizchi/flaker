@@ -1,4 +1,11 @@
-import type { TestCaseResult, TestResultAdapter } from "./types.js";
+import { basename, extname } from "node:path";
+import type {
+  TestArtifactKind,
+  TestArtifactRef,
+  TestCaseResult,
+  TestFailureLocation,
+  TestResultAdapter,
+} from "./types.js";
 import { resolveTestIdentity } from "../identity.js";
 
 interface PlaywrightResult {
@@ -6,6 +13,12 @@ interface PlaywrightResult {
   duration: number;
   retry: number;
   error?: { message: string };
+  errors?: Array<{ message?: string; value?: string }>;
+  attachments?: Array<{
+    name?: string;
+    path?: string;
+    contentType?: string;
+  }>;
 }
 
 interface PlaywrightTest {
@@ -16,6 +29,9 @@ interface PlaywrightTest {
 
 interface PlaywrightSpec {
   title: string;
+  file?: string;
+  line?: number;
+  column?: number;
   tests: PlaywrightTest[];
 }
 
@@ -28,6 +44,79 @@ interface PlaywrightSuite {
 
 interface PlaywrightReport {
   suites: PlaywrightSuite[];
+}
+
+function inferArtifactKind(
+  path: string,
+  name?: string,
+  contentType?: string,
+): TestArtifactKind {
+  const fileName = basename(path).toLowerCase();
+  const label = `${name ?? ""} ${contentType ?? ""}`.toLowerCase();
+  const ext = extname(fileName);
+
+  if (fileName.includes("stdout") || label.includes("stdout")) return "stdout";
+  if (fileName.includes("stderr") || label.includes("stderr")) return "stderr";
+  if (fileName.includes("trace") || label.includes("trace")) return "trace";
+  if (
+    fileName.includes("screenshot")
+    || label.includes("screenshot")
+    || label.includes("image/")
+    || [".png", ".jpg", ".jpeg", ".gif", ".webp"].includes(ext)
+  ) return "screenshot";
+  if (label.includes("video") || [".mp4", ".webm", ".mov"].includes(ext)) return "video";
+  if (
+    fileName.includes("report")
+    || fileName.includes("results")
+    || label.includes("json")
+    || label.includes("xml")
+    || [".json", ".xml", ".html"].includes(ext)
+  ) return "report";
+  if ([ ".zip", ".tar", ".gz", ".tgz" ].includes(ext)) return "archive";
+  if ([ ".log", ".txt" ].includes(ext)) return "log";
+  return "other";
+}
+
+function collectArtifacts(results: PlaywrightResult[]): TestArtifactRef[] | null {
+  const byPath = new Map<string, TestArtifactRef>();
+  for (const result of results) {
+    for (const attachment of result.attachments ?? []) {
+      if (!attachment.path) {
+        continue;
+      }
+      if (byPath.has(attachment.path)) {
+        continue;
+      }
+      byPath.set(attachment.path, {
+        path: attachment.path,
+        fileName: basename(attachment.path),
+        kind: inferArtifactKind(
+          attachment.path,
+          attachment.name,
+          attachment.contentType,
+        ),
+        contentType: attachment.contentType ?? null,
+      });
+    }
+  }
+  return byPath.size > 0 ? [...byPath.values()] : null;
+}
+
+function resolveFailureLocation(
+  spec: PlaywrightSpec,
+  suiteFile: string,
+): TestFailureLocation | null {
+  const file = spec.file ?? suiteFile;
+  if (!file || typeof spec.line !== "number") {
+    return null;
+  }
+  return {
+    file,
+    line: spec.line,
+    column: typeof spec.column === "number" ? spec.column : null,
+    functionName: null,
+    raw: `${file}:${spec.line}${typeof spec.column === "number" ? `:${spec.column}` : ""}`,
+  };
 }
 
 function walkSuites(
@@ -61,8 +150,10 @@ function walkSuites(
 
         // Find first failure error message
         const firstFailure = test.results.find(
-          (r) => r.status === "failed" && r.error,
+          (r) => r.status === "failed" && (r.error || (r.errors?.length ?? 0) > 0),
         );
+        const artifacts = collectArtifacts(test.results);
+        const failureLocation = resolveFailureLocation(spec, nextFile);
 
         const result: TestCaseResult = resolveTestIdentity({
           suite: nextFile,
@@ -72,10 +163,20 @@ function walkSuites(
           durationMs: lastResult.duration,
           retryCount: maxRetry,
           variant: { project: test.projectName },
+          failureLocation,
+          artifactPaths: artifacts?.map((artifact) => artifact.path) ?? null,
+          artifacts,
         });
 
-        if (firstFailure?.error) {
+        if (firstFailure?.error?.message) {
           result.errorMessage = firstFailure.error.message;
+        } else {
+          const firstFailureMessage = firstFailure?.errors
+            ?.map((error) => error.message ?? error.value ?? "")
+            .find((message) => message.length > 0);
+          if (firstFailureMessage) {
+            result.errorMessage = firstFailureMessage;
+          }
         }
 
         out.push(result);

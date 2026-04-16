@@ -25,6 +25,15 @@ describe("Parquet export and import", () => {
       { filePath: "src/foo.ts", changeType: "modified", additions: 10, deletions: 5 },
       { filePath: "src/bar.ts", changeType: "added", additions: 20, deletions: 0 },
     ]);
+    await store.recordCollectedArtifact({
+      workflowRunId: 1,
+      adapterType: "playwright",
+      artifactName: "playwright-report",
+      adapterConfig: "",
+      artifactId: 101,
+      localArchivePath: "/tmp/flaker/artifacts/collected/1/playwright-playwright-report.zip",
+      artifactEntries: ["report.json", "trace-blob.bin"],
+    });
     await store.insertTestResults([
       {
         workflowRunId: 1, suite: "tests/login.spec.ts", testName: "login works",
@@ -34,6 +43,9 @@ describe("Parquet export and import", () => {
       {
         workflowRunId: 1, suite: "tests/signup.spec.ts", testName: "signup works",
         status: "failed", durationMs: 200, retryCount: 1, errorMessage: "timeout",
+        stdout: "signup stdout",
+        stderr: "signup stderr",
+        artifactPaths: ["/tmp/flaker/signup.stdout.log", "/tmp/flaker/signup.stderr.log"],
         commitSha: "sha1", variant: null, createdAt: new Date("2026-04-01"),
       },
     ]);
@@ -79,9 +91,11 @@ describe("Parquet export and import", () => {
 
     expect(result.testResultsCount).toBe(2);
     expect(result.commitChangesCount).toBe(2);
+    expect(result.collectedArtifactsCount).toBe(1);
     expect(existsSync(result.workflowRunPath)).toBe(true);
     expect(existsSync(result.testResultsPath)).toBe(true);
     expect(existsSync(result.commitChangesPath)).toBe(true);
+    expect(existsSync(result.collectedArtifactsPath)).toBe(true);
   });
 
   it("round-trips data through Parquet export/import", async () => {
@@ -96,6 +110,7 @@ describe("Parquet export and import", () => {
     expect(importResult.workflowRunsImported).toBe(1);
     expect(importResult.testResultsImported).toBe(2);
     expect(importResult.commitChangesImported).toBe(2);
+    expect(importResult.collectedArtifactsImported).toBe(1);
     expect(importResult.samplingRunsImported).toBe(1);
     expect(importResult.samplingRunTestsImported).toBe(2);
 
@@ -113,11 +128,42 @@ describe("Parquet export and import", () => {
     expect(tests[0].status).toBe("passed");
     expect(tests[1].status).toBe("failed");
 
+    const signupHistory = await store2.queryTestHistory(
+      "tests/signup.spec.ts",
+      "signup works",
+    );
+    expect(signupHistory[0].stdout).toBe("signup stdout");
+    expect(signupHistory[0].stderr).toBe("signup stderr");
+    expect(signupHistory[0].artifactPaths).toEqual([
+      "/tmp/flaker/signup.stdout.log",
+      "/tmp/flaker/signup.stderr.log",
+    ]);
+
     const changes = await store2.raw<{ file_path: string }>(
       "SELECT file_path FROM commit_changes ORDER BY file_path",
     );
     expect(changes).toHaveLength(2);
     expect(changes[0].file_path).toBe("src/bar.ts");
+
+    const collectedArtifacts = await store2.raw<{
+      artifact_name: string;
+      artifact_id: number;
+      local_archive_path: string;
+      artifact_entries: string;
+    }>(
+      `SELECT artifact_name, artifact_id::INTEGER AS artifact_id, local_archive_path, artifact_entries
+       FROM collected_artifacts
+       WHERE workflow_run_id = ?`,
+      [1],
+    );
+    expect(collectedArtifacts).toEqual([
+      {
+        artifact_name: "playwright-report",
+        artifact_id: 101,
+        local_archive_path: "/tmp/flaker/artifacts/collected/1/playwright-playwright-report.zip",
+        artifact_entries: JSON.stringify(["report.json", "trace-blob.bin"]),
+      },
+    ]);
 
     const samplingRuns = await store2.raw<{ id: number; commit_sha: string; selected_count: number }>(
       "SELECT id::INTEGER AS id, commit_sha, selected_count::INTEGER AS selected_count FROM sampling_runs",

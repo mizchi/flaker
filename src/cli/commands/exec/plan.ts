@@ -1,7 +1,7 @@
 import type { MetricStore } from "../../storage/types.js";
 import type { DependencyResolver } from "../../resolvers/types.js";
 import type { TestId } from "../../runners/types.js";
-import type { SamplingMode } from "./sampling-options.js";
+import type { ClusterSamplingMode, SamplingMode } from "./sampling-options.js";
 import {
   loadCore,
   type MetriciCore,
@@ -22,6 +22,11 @@ import {
   createMetaKey,
   buildListedTestIndex,
 } from "../dev/test-key.js";
+import {
+  applyClusterSamplingMode,
+  buildFailureClusters,
+  getDefaultClusterQuery,
+} from "../../failure-clusters.js";
 
 export interface SampleOpts {
   store: MetricStore;
@@ -40,6 +45,7 @@ export interface SampleOpts {
   holdoutRatio?: number;
   modelPath?: string;
   samplingMeta?: PrecomputedSamplingMeta;
+  clusterMode?: ClusterSamplingMode;
 }
 
 export interface SamplingSummary {
@@ -55,6 +61,7 @@ export interface SamplingSummary {
   estimatedSavedTests: number;
   estimatedSavedMinutes: number | null;
   fallbackReason: string | null;
+  clusterMode?: ClusterSamplingMode;
   // Optional per-test selection metadata (minimal: filled with placeholder values)
   // TODO: populate with real tier/score/reason from planner internals
   reasons?: Array<{
@@ -154,8 +161,15 @@ export async function planSample(opts: SampleOpts): Promise<SamplePlan> {
 
   const count = resolveCount(opts, allTests.length);
   const seed = opts.seed ?? Date.now();
-  const { sampled, effectiveMode } = await selectByStrategy(
+  const { sampled: initialSampled, effectiveMode } = await selectByStrategy(
     allTests, count, seed, opts, core,
+  );
+  const sampled = await applyFailureClusterMode(
+    allTests,
+    initialSampled,
+    effectiveMode,
+    count,
+    opts,
   );
 
   const holdout = selectHoldout(allTests, sampled, opts.holdoutRatio ?? 0, seed);
@@ -174,8 +188,40 @@ export async function planSample(opts: SampleOpts): Promise<SamplePlan> {
       sampled,
       holdoutCount: holdout.length,
       fallbackReason: meta.fallbackReason,
+      clusterMode: opts.clusterMode,
     }),
   };
+}
+
+async function applyFailureClusterMode(
+  allTests: TestMeta[],
+  sampled: TestMeta[],
+  effectiveMode: SamplingMode,
+  count: number,
+  opts: SampleOpts,
+): Promise<TestMeta[]> {
+  if (
+    opts.clusterMode == null
+    || opts.clusterMode === "off"
+    || (effectiveMode !== "weighted" && effectiveMode !== "hybrid")
+  ) {
+    return sampled;
+  }
+
+  const defaults = getDefaultClusterQuery();
+  const pairs = await opts.store.queryTestCoFailures({
+    windowDays: opts.coFailureDays ?? defaults.windowDays,
+    minCoFailures: defaults.minCoFailures,
+    minCoRate: defaults.minCoRate,
+  });
+
+  return applyClusterSamplingMode({
+    allTests,
+    sampled,
+    clusters: buildFailureClusters(pairs),
+    count,
+    mode: opts.clusterMode,
+  });
 }
 
 async function applyCoFailureBoosts(
@@ -372,6 +418,7 @@ interface BuildSamplingSummaryOpts {
   sampled: TestMeta[];
   holdoutCount: number;
   fallbackReason: string | null;
+  clusterMode?: ClusterSamplingMode;
 }
 
 function roundMetric(value: number): number {
@@ -407,6 +454,7 @@ function buildSamplingSummary(opts: BuildSamplingSummaryOpts): SamplingSummary {
     estimatedSavedTests: Math.max(candidateCount - selectedCount, 0),
     estimatedSavedMinutes,
     fallbackReason: opts.fallbackReason,
+    clusterMode: opts.clusterMode,
     // Minimal: populate reasons with placeholder tier/score/reason
     // TODO: populate with real tier/score/reason from planner internals
     reasons: opts.sampled.map((t) => ({
@@ -428,6 +476,7 @@ export function formatSamplingSummary(
     "# Sampling Summary",
     "",
     `  Strategy:                 ${summary.strategy}`,
+    `  Cluster mode:             ${summary.clusterMode ?? "off"}`,
     `  Selected tests:           ${summary.selectedCount} / ${summary.candidateCount}${summary.sampleRatio != null ? ` (${summary.sampleRatio}%)` : ""}`,
     `  Estimated saved tests:    ${summary.estimatedSavedTests}`,
     `  Estimated saved minutes:  ${summary.estimatedSavedMinutes ?? "N/A"}`,

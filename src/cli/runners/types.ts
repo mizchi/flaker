@@ -7,6 +7,7 @@ export interface TestId {
   filter?: string | null;
   variant?: Record<string, string> | null;
   testId?: string;
+  tags?: string[];
 }
 
 export interface RunnerCapabilities {
@@ -20,6 +21,7 @@ export interface ExecuteOpts {
   retries?: number;
   env?: Record<string, string>;
   workers?: number;
+  grepInvert?: string;
 }
 
 export interface ExecuteResult {

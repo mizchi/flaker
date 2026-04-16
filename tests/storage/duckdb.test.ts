@@ -313,6 +313,81 @@ describe("DuckDBStore", () => {
     });
   });
 
+  it("persists raw failure evidence with stored test results", async () => {
+    const run: WorkflowRun = {
+      id: 402,
+      repo: "owner/repo",
+      branch: "main",
+      commitSha: "evidence123",
+      event: "push",
+      status: "completed",
+      createdAt: new Date(),
+      durationMs: 1000,
+    };
+    await store.insertWorkflowRun(run);
+
+    await store.insertTestResults([
+      {
+        workflowRunId: 402,
+        suite: "e2e",
+        testName: "captures logs",
+        status: "failed",
+        durationMs: 150,
+        retryCount: 0,
+        errorMessage: "AssertionError: expected true to be false",
+        stdout: "stdout line 1\nstdout line 2\n",
+        stderr: "stderr line 1\n",
+        artifactPaths: [
+          "/tmp/flaker/stdout.log",
+          "/tmp/flaker/stderr.log",
+          "/tmp/flaker/trace-blob.bin",
+        ],
+        artifacts: [
+          {
+            path: "/tmp/flaker/trace-blob.bin",
+            fileName: "trace-blob.bin",
+            kind: "trace",
+            contentType: "application/zip",
+          },
+        ],
+        failureLocation: {
+          file: "/workspace/src/api.ts",
+          line: 88,
+          column: 3,
+          functionName: "renderApiState",
+          raw: "/workspace/src/api.ts:88:3",
+        },
+        commitSha: "evidence123",
+        variant: null,
+        createdAt: new Date("2025-01-04T00:00:00Z"),
+      },
+    ]);
+
+    const history = await store.queryTestHistory("e2e", "captures logs");
+    expect(history[0].stdout).toBe("stdout line 1\nstdout line 2\n");
+    expect(history[0].stderr).toBe("stderr line 1\n");
+    expect(history[0].artifactPaths).toEqual([
+      "/tmp/flaker/stdout.log",
+      "/tmp/flaker/stderr.log",
+      "/tmp/flaker/trace-blob.bin",
+    ]);
+    expect(history[0].artifacts).toEqual([
+      {
+        path: "/tmp/flaker/trace-blob.bin",
+        fileName: "trace-blob.bin",
+        kind: "trace",
+        contentType: "application/zip",
+      },
+    ]);
+    expect(history[0].failureLocation).toEqual({
+      file: "/workspace/src/api.ts",
+      line: 88,
+      column: 3,
+      functionName: "renderApiState",
+      raw: "/workspace/src/api.ts:88:3",
+    });
+  });
+
   it("executes raw SQL", async () => {
     const rows = await store.raw<{ answer: number }>("SELECT 42 AS answer");
     expect(rows).toHaveLength(1);

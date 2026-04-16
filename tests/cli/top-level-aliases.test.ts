@@ -17,6 +17,8 @@ describe("top-level aliases", () => {
     expect(help).toContain("--dry-run");
     expect(help).toContain("--explain");
     expect(help).toContain("--strategy");
+    expect(help).toContain("--cluster-mode");
+    expect(help).toContain("--skip-flaky-tagged");
   });
 
   it("flaker kpi --help shows analyze kpi options", () => {

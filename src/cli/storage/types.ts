@@ -1,5 +1,9 @@
 import type { TestIdentityFields } from "../identity.js";
 import type { QuarantineManifestEntry } from "../quarantine-manifest.js";
+import type {
+  TestArtifactRef,
+  TestFailureLocation,
+} from "../adapters/types.js";
 
 export interface WorkflowRun {
   id: number;
@@ -24,6 +28,11 @@ export interface TestResult {
   durationMs: number | null;
   retryCount: number;
   errorMessage: string | null;
+  failureLocation?: TestFailureLocation | null;
+  stdout?: string | null;
+  stderr?: string | null;
+  artifactPaths?: string[] | null;
+  artifacts?: TestArtifactRef[] | null;
   commitSha: string;
   variant: Record<string, string> | null;
   testId?: string;
@@ -103,6 +112,9 @@ export interface CollectedArtifactRecord {
   adapterType: string;
   artifactName: string;
   adapterConfig?: string | null;
+  artifactId?: number | null;
+  localArchivePath?: string | null;
+  artifactEntries?: string[] | null;
   collectedAt?: Date;
 }
 
@@ -158,14 +170,39 @@ export interface CoFailureQueryOpts {
   minCoRuns?: number;
 }
 
+export interface TestCoFailurePair {
+  testAId: string;
+  testATaskId: string;
+  testASuite: string;
+  testATestName: string;
+  testAFilter: string | null;
+  testAFailRuns: number;
+  testBId: string;
+  testBTaskId: string;
+  testBSuite: string;
+  testBTestName: string;
+  testBFilter: string | null;
+  testBFailRuns: number;
+  coFailRuns: number;
+  coFailRate: number;
+}
+
+export interface TestCoFailureQueryOpts {
+  windowDays?: number;
+  minCoFailures?: number;
+  minCoRate?: number;
+}
+
 export interface ExportResult {
   testResultsCount: number;
   commitChangesCount: number;
+  collectedArtifactsCount: number;
   samplingRunsCount: number;
   samplingRunTestsCount: number;
   workflowRunPath: string;
   testResultsPath: string;
   commitChangesPath: string;
+  collectedArtifactsPath: string;
   samplingRunsPath: string;
   samplingRunTestsPath: string;
 }
@@ -174,6 +211,7 @@ export interface ImportResult {
   workflowRunsImported: number;
   testResultsImported: number;
   commitChangesImported: number;
+  collectedArtifactsImported: number;
   samplingRunsImported: number;
   samplingRunTestsImported: number;
 }
@@ -201,6 +239,7 @@ export interface MetricStore {
   hasCommitChanges(commitSha: string): Promise<boolean>;
   queryCoFailures(opts: CoFailureQueryOpts): Promise<CoFailureResult[]>;
   getCoFailureBoosts(changedFiles: string[], opts?: CoFailureQueryOpts): Promise<Map<string, number>>;
+  queryTestCoFailures(opts?: TestCoFailureQueryOpts): Promise<TestCoFailurePair[]>;
   exportRunToParquet(workflowRunId: number, outputDir: string): Promise<ExportResult>;
   importFromParquetDir(inputDir: string): Promise<ImportResult>;
 }

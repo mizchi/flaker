@@ -3,7 +3,7 @@ import {
   planSample,
   type SamplingSummary,
 } from "./plan.js";
-import type { SamplingMode } from "./sampling-options.js";
+import type { ClusterSamplingMode, SamplingMode } from "./sampling-options.js";
 import type { QuarantineManifestEntry } from "../../quarantine-manifest.js";
 import type { DependencyResolver } from "../../resolvers/types.js";
 import {
@@ -29,12 +29,15 @@ export interface RunOpts {
   resolver?: DependencyResolver;
   changedFiles?: string[];
   skipQuarantined?: boolean;
+  skipFlakyTagged?: boolean;
+  flakyTagPattern?: string;
   quarantineManifestEntries?: QuarantineManifestEntry[];
   cwd?: string;
   coFailureDays?: number;
   holdoutRatio?: number;
   dryRun?: boolean;
   explain?: boolean;
+  clusterMode?: ClusterSamplingMode;
 }
 
 export interface RunCommandResult extends ExecuteResult {
@@ -82,6 +85,27 @@ async function loadListedTests(
   }
 }
 
+function matchesFlakyTag(
+  test: TestId,
+  flakyTagPattern: string,
+): boolean {
+  const normalizedPattern = flakyTagPattern.trim();
+  if (normalizedPattern.length === 0) {
+    return false;
+  }
+  if (test.tags?.some((tag) => tag === normalizedPattern)) {
+    return true;
+  }
+  return test.testName.includes(normalizedPattern);
+}
+
+function filterFlakyTaggedTests(
+  tests: TestId[],
+  flakyTagPattern: string,
+): TestId[] {
+  return tests.filter((test) => !matchesFlakyTag(test, flakyTagPattern));
+}
+
 export function formatExplainTable(
   tests: TestId[],
   summary: SamplingSummary,
@@ -101,8 +125,38 @@ export function formatExplainTable(
   return [header, ...rows].join("\n");
 }
 
+function attachGlobalOutputToSingleResult(
+  result: ExecuteResult,
+): ExecuteResult {
+  if (result.results.length !== 1) {
+    return result;
+  }
+
+  const [single] = result.results;
+  const stdout = single.stdout ?? (result.stdout.length > 0 ? result.stdout : undefined);
+  const stderr = single.stderr ?? (result.stderr.length > 0 ? result.stderr : undefined);
+
+  if (stdout === single.stdout && stderr === single.stderr) {
+    return result;
+  }
+
+  return {
+    ...result,
+    results: [
+      {
+        ...single,
+        stdout,
+        stderr,
+      },
+    ],
+  };
+}
+
 export async function runTests(opts: RunOpts): Promise<RunCommandResult> {
-  const listedTests = await loadListedTests(opts.runner, opts.cwd);
+  const allListedTests = await loadListedTests(opts.runner, opts.cwd);
+  const listedTests = opts.skipFlakyTagged && opts.flakyTagPattern
+    ? filterFlakyTaggedTests(allListedTests, opts.flakyTagPattern)
+    : allListedTests;
   const plan = await planSample({
     store: opts.store,
     count: opts.count,
@@ -117,6 +171,7 @@ export async function runTests(opts: RunOpts): Promise<RunCommandResult> {
     listedTests,
     coFailureDays: opts.coFailureDays,
     holdoutRatio: opts.holdoutRatio,
+    clusterMode: opts.clusterMode,
   });
   const tests = enrichSampledTests(plan.sampled, listedTests);
   const holdoutTests = enrichSampledTests(plan.holdout, listedTests);
@@ -139,12 +194,22 @@ export async function runTests(opts: RunOpts): Promise<RunCommandResult> {
     opts.quarantineManifestEntries && opts.quarantineManifestEntries.length > 0
       ? withQuarantineRuntime(opts.runner, opts.quarantineManifestEntries)
       : opts.runner;
-  const result = await orchestrate(runtimeRunner, tests, { cwd: opts.cwd });
+  const result = attachGlobalOutputToSingleResult(
+    await orchestrate(runtimeRunner, tests, {
+      cwd: opts.cwd,
+      grepInvert: opts.skipFlakyTagged ? opts.flakyTagPattern : undefined,
+    }),
+  );
 
   // Run holdout tests if any
   let holdoutResult: ExecuteResult | undefined;
   if (holdoutTests.length > 0) {
-    holdoutResult = await orchestrate(runtimeRunner, holdoutTests, { cwd: opts.cwd });
+    holdoutResult = attachGlobalOutputToSingleResult(
+      await orchestrate(runtimeRunner, holdoutTests, {
+        cwd: opts.cwd,
+        grepInvert: opts.skipFlakyTagged ? opts.flakyTagPattern : undefined,
+      }),
+    );
   }
 
   return {

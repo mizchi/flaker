@@ -17,6 +17,7 @@ import {
 import {
   parseSampleCount,
   parseSamplePercentage,
+  parseClusterSamplingMode,
   parseSamplingMode,
 } from "../commands/exec/sampling-options.js";
 import { ActrunRunner } from "../runners/actrun.js";
@@ -43,10 +44,12 @@ interface SamplingCliOpts {
   count?: string;
   percentage?: string;
   skipQuarantined?: boolean;
+  skipFlakyTagged?: boolean;
   changed?: string;
   coFailureDays?: string;
   holdoutRatio?: string;
   modelPath?: string;
+  clusterMode?: string;
 }
 
 function addSamplingOptions<T extends Command>(cmd: T): T {
@@ -56,8 +59,10 @@ function addSamplingOptions<T extends Command>(cmd: T): T {
     .option("--count <n>", "Number of tests to sample")
     .option("--percentage <n>", "Percentage of tests to sample")
     .option("--skip-quarantined", "Exclude quarantined tests")
+    .option("--skip-flaky-tagged", "Exclude tests tagged with the configured flaky tag")
     .option("--changed <files>", "Comma-separated list of changed files (for affected/hybrid)")
     .option("--co-failure-days <days>", "Co-failure analysis window in days")
+    .option("--cluster-mode <mode>", "Failure-cluster sampling mode: off, spread, pack")
     .option("--holdout-ratio <ratio>", "Fraction of skipped tests to run as holdout (0-1)")
     .option("--model-path <path>", "Path to GBDT model JSON") as T;
 }
@@ -68,10 +73,12 @@ interface ResolvedSamplingOpts {
   count?: number;
   percentage?: number;
   skipQuarantined?: boolean;
+  skipFlakyTagged?: boolean;
   changed?: string;
   coFailureDays?: number;
   holdoutRatio?: number;
   modelPath?: string;
+  clusterMode?: "off" | "spread" | "pack";
 }
 
 /** Merge CLI options with [sampling] config and parse to final types. CLI args take priority. */
@@ -88,10 +95,12 @@ function resolveSamplingOpts(
     count: parseSampleCount(opts.count),
     percentage: parseSamplePercentage(opts.percentage) ?? profile.sample_percentage,
     skipQuarantined: opts.skipQuarantined ?? profile.skip_quarantined,
+    skipFlakyTagged: opts.skipFlakyTagged ?? profile.skip_flaky_tagged,
     changed: opts.changed,
     coFailureDays: opts.coFailureDays ? parseInt(opts.coFailureDays, 10) : profile.co_failure_window_days,
     holdoutRatio: opts.holdoutRatio ? parseFloat(opts.holdoutRatio) : profile.holdout_ratio,
     modelPath: opts.modelPath ?? profile.model_path,
+    clusterMode: parseClusterSamplingMode(opts.clusterMode) ?? profile.cluster_mode ?? "off",
   };
 }
 
@@ -262,10 +271,13 @@ export async function execRunAction(rawOpts: SamplingCliOpts & { runner: string;
       resolver,
       changedFiles,
       skipQuarantined: opts.skipQuarantined,
+      skipFlakyTagged: opts.skipFlakyTagged,
+      flakyTagPattern: config.runner.flaky_tag_pattern ?? "@flaky",
       quarantineManifestEntries: manifest?.entries,
       cwd,
       coFailureDays: opts.coFailureDays,
       holdoutRatio: opts.holdoutRatio,
+      clusterMode: opts.clusterMode,
       dryRun: rawOpts.dryRun,
       explain: rawOpts.explain,
     });

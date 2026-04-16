@@ -10,6 +10,14 @@ export const SAMPLING_MODES = [
 
 export type SamplingMode = (typeof SAMPLING_MODES)[number];
 
+export const CLUSTER_MODES = [
+  "off",
+  "spread",
+  "pack",
+] as const;
+
+export type ClusterSamplingMode = (typeof CLUSTER_MODES)[number];
+
 export function parseSamplingMode(raw: string): SamplingMode {
   if (isSamplingMode(raw)) {
     return raw;
@@ -34,6 +42,18 @@ export function parseSamplePercentage(raw?: string): number | undefined {
   return value;
 }
 
+export function parseClusterSamplingMode(
+  raw?: string,
+): ClusterSamplingMode | undefined {
+  if (raw == null) return undefined;
+  if (isClusterSamplingMode(raw)) {
+    return raw;
+  }
+  throw new Error(
+    `Unknown cluster sampling mode: ${raw}. Expected one of: ${CLUSTER_MODES.join(", ")}`,
+  );
+}
+
 function parseOptionalInteger(raw: string | undefined, flag: string): number | undefined {
   if (raw == null) return undefined;
   const value = Number(raw);
@@ -47,4 +67,8 @@ function parseOptionalInteger(raw: string | undefined, flag: string): number | u
 
 function isSamplingMode(raw: string): raw is SamplingMode {
   return SAMPLING_MODES.includes(raw as SamplingMode);
+}
+
+function isClusterSamplingMode(raw: string): raw is ClusterSamplingMode {
+  return CLUSTER_MODES.includes(raw as ClusterSamplingMode);
 }

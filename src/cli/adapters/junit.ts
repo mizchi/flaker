@@ -1,4 +1,8 @@
-import type { TestCaseResult, TestResultAdapter } from "./types.js";
+import type {
+  TestCaseResult,
+  TestFailureLocation,
+  TestResultAdapter,
+} from "./types.js";
 import { resolveTestIdentity } from "../identity.js";
 
 function getAttr(tag: string, attr: string): string | undefined {
@@ -32,9 +36,14 @@ export const junitAdapter: TestResultAdapter = {
         const testName = getAttr(tcTag, "name") ?? "unknown";
         const timeStr = getAttr(tcTag, "time") ?? "0";
         const durationMs = Math.round(parseFloat(timeStr) * 1000);
+        const file = getAttr(tcTag, "file");
+        const line = getAttr(tcTag, "line");
 
         let status: TestCaseResult["status"] = "passed";
         let errorMessage: string | undefined;
+        let stdout: string | undefined;
+        let stderr: string | undefined;
+        let failureLocation: TestFailureLocation | null = null;
 
         if (/<failure\s/.test(tcBlock)) {
           status = "failed";
@@ -46,12 +55,39 @@ export const junitAdapter: TestResultAdapter = {
           status = "skipped";
         }
 
+        const stdoutMatch = tcBlock.match(/<system-out>([\s\S]*?)<\/system-out>/i);
+        const stderrMatch = tcBlock.match(/<system-err>([\s\S]*?)<\/system-err>/i);
+        stdout = stdoutMatch?.[1]
+          ?.replace(/^<!\[CDATA\[/, "")
+          .replace(/\]\]>$/, "")
+          .trim();
+        stderr = stderrMatch?.[1]
+          ?.replace(/^<!\[CDATA\[/, "")
+          .replace(/\]\]>$/, "")
+          .trim();
+
+        if (file && line) {
+          const parsedLine = Number.parseInt(line, 10);
+          if (Number.isFinite(parsedLine)) {
+            failureLocation = {
+              file,
+              line: parsedLine,
+              column: null,
+              functionName: null,
+              raw: `${file}:${parsedLine}`,
+            };
+          }
+        }
+
         const result: TestCaseResult = resolveTestIdentity({
           suite: suiteName,
           testName,
           status,
           durationMs,
           retryCount: 0,
+          failureLocation,
+          stdout,
+          stderr,
         });
 
         if (errorMessage !== undefined) {

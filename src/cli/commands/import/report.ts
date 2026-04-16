@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { createTestResultAdapter } from "../../adapters/index.js";
 import type { MetricStore, WorkflowRun, TestResult } from "../../storage/types.js";
 import { toStoredTestResult } from "../../storage/test-result-mapper.js";
+import type { WorkflowRunSource } from "../../run-source.js";
+import { importEventForSource } from "../../run-source.js";
 
 interface ImportOpts {
   store: MetricStore;
@@ -11,6 +13,7 @@ interface ImportOpts {
   commitSha?: string;
   branch?: string;
   repo?: string;
+  source?: WorkflowRunSource;
 }
 
 interface ImportResult {
@@ -31,6 +34,7 @@ export async function runImport(opts: ImportOpts): Promise<ImportResult> {
   const commitSha = opts.commitSha ?? "local-" + Date.now();
   const branch = opts.branch ?? "local";
   const repo = opts.repo ?? "local/local";
+  const source = opts.source ?? "local";
   const now = new Date();
 
   const runId = Date.now();
@@ -39,7 +43,8 @@ export async function runImport(opts: ImportOpts): Promise<ImportResult> {
     repo,
     branch,
     commitSha,
-    event: "local-import",
+    event: importEventForSource(source),
+    source,
     status: "completed",
     createdAt: now,
     durationMs: null,

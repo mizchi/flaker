@@ -303,6 +303,70 @@ describe("collectWorkflowRuns", () => {
       [1001],
     );
     expect(tests[0].count).toBe(4);
+
+    const collectedArtifacts = await store.raw<{
+      artifact_id_value: number | null;
+      artifact_entries: string | null;
+    }>(
+      `SELECT artifact_id::INTEGER AS artifact_id_value, artifact_entries
+       FROM collected_artifacts
+       WHERE workflow_run_id = ? AND adapter_type = ?`,
+      [1001, "playwright"],
+    );
+    expect(collectedArtifacts).toEqual([
+      {
+        artifact_id_value: 100100,
+        artifact_entries: JSON.stringify(["report.json"]),
+      },
+    ]);
+  });
+
+  it("stores downloaded CI artifact archives and records the local path", async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), "flaker-ci-artifact-"));
+    const storagePath = join(tmpDir, "data.duckdb");
+    const mockRuns = [
+      {
+        id: 1001,
+        head_branch: "main",
+        head_sha: "abc123",
+        event: "push",
+        conclusion: "success",
+        created_at: "2025-06-01T00:00:00Z",
+        run_started_at: "2025-06-01T00:00:00Z",
+        updated_at: "2025-06-01T00:05:00Z",
+      },
+    ];
+
+    const github = createMockGitHubClient(mockRuns, {
+      1001: [{ name: "playwright-report", content: fixtureReport }],
+    });
+
+    const result = await collectWorkflowRuns({
+      store,
+      github,
+      repo: "owner/repo",
+      adapterType: "playwright",
+      artifactName: "playwright-report",
+      storagePath,
+    });
+
+    expect(result.runsCollected).toBe(1);
+
+    const collectedArtifacts = await store.raw<{
+      artifact_id_value: number | null;
+      local_archive_path: string | null;
+    }>(
+      `SELECT artifact_id::INTEGER AS artifact_id_value, local_archive_path
+       FROM collected_artifacts
+       WHERE workflow_run_id = ? AND adapter_type = ?`,
+      [1001, "playwright"],
+    );
+
+    expect(collectedArtifacts).toHaveLength(1);
+    expect(collectedArtifacts[0]?.artifact_id_value).toBe(100100);
+    expect(collectedArtifacts[0]?.local_archive_path).toContain("/artifacts/collected/1001/");
+    expect(collectedArtifacts[0]?.local_archive_path).toContain("playwright-playwright-report.zip");
+    expect(collectedArtifacts[0]?.local_archive_path && existsSync(collectedArtifacts[0].local_archive_path)).toBe(true);
   });
 
   it("collects built-in vrt migration reports from artifacts", async () => {

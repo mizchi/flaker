@@ -25,6 +25,8 @@ describe("profile integration", () => {
     sample_percentage: 30,
     holdout_ratio: 0.1,
     co_failure_window_days: 90,
+    cluster_mode: "spread",
+    skip_flaky_tagged: true,
   };
 
   const profiles: Record<string, ProfileConfig> = {
@@ -32,8 +34,10 @@ describe("profile integration", () => {
     ci: { strategy: "hybrid", sample_percentage: 25, adaptive: true },
     local: {
       strategy: "affected",
+      cluster_mode: "pack",
       max_duration_seconds: 60,
       fallback_strategy: "weighted",
+      skip_flaky_tagged: false,
     },
   };
 
@@ -50,13 +54,17 @@ describe("profile integration", () => {
     expect(p.sample_percentage).toBe(25);
     expect(p.adaptive).toBe(true);
     expect(p.holdout_ratio).toBe(0.1); // inherited from sampling
+    expect(p.cluster_mode).toBe("spread"); // inherited from sampling
+    expect(p.skip_flaky_tagged).toBe(true);
   });
 
   it("local profile uses affected with time budget", () => {
     const p = resolveProfile("local", profiles, sampling);
     expect(p.strategy).toBe("affected");
+    expect(p.cluster_mode).toBe("pack");
     expect(p.max_duration_seconds).toBe(60);
     expect(p.fallback_strategy).toBe("weighted");
+    expect(p.skip_flaky_tagged).toBe(false);
     expect(resolveFallbackSamplingMode(p)).toBe("weighted");
   });
 

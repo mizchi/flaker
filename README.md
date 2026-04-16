@@ -177,6 +177,12 @@ From a local report file:
 flaker import report <file> --adapter playwright --commit "$(git rev-parse HEAD)"
 ```
 
+If the imported artifact came from CI rather than a local run, mark it explicitly:
+
+```bash
+flaker import report <file> --adapter playwright --source ci --commit <sha>
+```
+
 From actrun local history:
 
 ```bash
@@ -201,8 +207,10 @@ trust = true
 
 ```bash
 flaker analyze flaky
+flaker analyze flaky-tag --json
 flaker analyze reason
 flaker analyze eval
+flaker analyze bundle --output .artifacts/flaker-analysis.json
 ```
 
 Useful evaluation outputs:
@@ -247,6 +255,7 @@ flaker run --runner actrun
 - average saved minutes
 
 When flaker has no local history yet, the sampling summary now explains the cold-start fallback and suggests the next steps to build usable history.
+The first `flaker run` can still sample from the runner's listed tests, record that local run, and use the new history on the next run, so a fresh project can try the package immediately.
 
 ## Execution Profiles
 
@@ -271,6 +280,11 @@ flaker run --profile local
 Configure in `flaker.toml`:
 
 ```toml
+[runner]
+type = "playwright"
+command = "pnpm exec playwright test -c playwright.config.ts"
+flaky_tag_pattern = "@flaky"
+
 [profile.scheduled]
 strategy = "full"
 
@@ -278,11 +292,52 @@ strategy = "full"
 strategy = "hybrid"
 sample_percentage = 30
 adaptive = true        # auto-adjust based on false negative rate
+skip_flaky_tagged = true
 
 [profile.local]
 strategy = "affected"
 max_duration_seconds = 60
 fallback_strategy = "weighted"
+skip_flaky_tagged = true
+```
+
+This supports a simple Playwright workflow:
+
+- `scheduled` runs all E2E tests and accumulates history
+- `ci` / `local` exclude tests tagged with `@flaky`
+- `flaker analyze flaky-tag --json` emits add/remove suggestions for a daily AI triage agent
+
+Recommended `@flaky` loop:
+
+1. Start with full E2E execution so flaker can accumulate baseline history.
+2. When a Playwright test is known to be flaky, tag it with `@flaky`.
+   `flaker` detects both Playwright tags and `@flaky` embedded in the test title.
+3. Keep `scheduled` as full execution, and use `ci` / `local` with `skip_flaky_tagged = true`.
+   For Playwright, flaker passes `--grep-invert @flaky` to normal runs.
+4. Run daily triage and let an AI agent update test sources based on the report:
+
+```bash
+flaker analyze flaky-tag --json > .artifacts/flaky-tag-triage.json
+```
+
+The triage report contains:
+
+- `suggestions.add`: untagged tests that are unstable enough to move into `@flaky`
+- `suggestions.remove`: currently tagged tests that have enough consecutive clean passes to return to normal execution
+- `suggestions.keep`: currently tagged tests that should remain excluded from normal execution
+
+By default, add-thresholds come from `[quarantine]`:
+
+- `quarantine.flaky_rate_threshold_percentage`
+- `quarantine.min_runs`
+
+Remove suggestions default to `5` consecutive clean passes, and can be tuned:
+
+```bash
+flaker analyze flaky-tag --json \
+  --add-threshold 30 \
+  --min-runs 10 \
+  --remove-after-passes 5
 ```
 
 Data flows downstream: daily accumulates history → CI uses it for smarter sampling → local uses dependency graph for fast feedback. The `adaptive` flag automatically reduces CI percentage when data quality is high.
@@ -466,8 +521,9 @@ path = ".flaker/data.duckdb"
 type = "playwright"
 
 [runner]
-type = "vitest"
-command = "pnpm exec vitest run"
+type = "playwright"
+command = "pnpm exec playwright test"
+flaky_tag_pattern = "@flaky"
 
 [affected]
 resolver = "workspace"
@@ -494,11 +550,13 @@ strategy = "full"
 strategy = "hybrid"
 sample_percentage = 30
 adaptive = true
+skip_flaky_tagged = true
 
 [profile.local]
 strategy = "affected"
 max_duration_seconds = 60
 fallback_strategy = "weighted"
+skip_flaky_tagged = true
 ```
 
 ## Docs

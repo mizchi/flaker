@@ -1,5 +1,10 @@
 import type { ProfileConfig, SamplingConfig } from "./config.js";
-import { parseSamplingMode, type SamplingMode } from "./commands/exec/sampling-options.js";
+import {
+  parseClusterSamplingMode,
+  parseSamplingMode,
+  type ClusterSamplingMode,
+  type SamplingMode,
+} from "./commands/exec/sampling-options.js";
 
 export interface TimeBudgetResult<T> {
   selected: T[];
@@ -125,8 +130,10 @@ export interface ResolvedProfile {
   sample_percentage?: number;
   holdout_ratio?: number;
   co_failure_window_days?: number;
+  cluster_mode?: ClusterSamplingMode;
   model_path?: string;
   skip_quarantined?: boolean;
+  skip_flaky_tagged?: boolean;
   adaptive: boolean;
   adaptive_fnr_low_ratio: number;
   adaptive_fnr_high_ratio: number;
@@ -180,8 +187,10 @@ export function resolveProfile(
     sample_percentage: sampling?.sample_percentage,
     holdout_ratio: sampling?.holdout_ratio,
     co_failure_window_days: sampling?.co_failure_window_days,
+    cluster_mode: sampling?.cluster_mode,
     model_path: sampling?.model_path,
     skip_quarantined: sampling?.skip_quarantined,
+    skip_flaky_tagged: sampling?.skip_flaky_tagged,
   };
 
   // Override with profile config
@@ -206,8 +215,10 @@ export function resolveProfile(
     sample_percentage: merged.sample_percentage,
     holdout_ratio: merged.holdout_ratio,
     co_failure_window_days: merged.co_failure_window_days,
+    cluster_mode: parseClusterSamplingMode(merged.cluster_mode),
     model_path: merged.model_path,
     skip_quarantined: merged.skip_quarantined,
+    skip_flaky_tagged: merged.skip_flaky_tagged,
     adaptive,
     adaptive_fnr_low_ratio,
     adaptive_fnr_high_ratio,

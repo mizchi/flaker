@@ -74,6 +74,19 @@ function resolveTimestampIso(value?: string, epochMs?: number): string | undefin
   return undefined;
 }
 
+function readOptionalLog(path?: string): string | undefined {
+  if (!path || !existsSync(path)) {
+    return undefined;
+  }
+  return readFileSync(path, "utf-8");
+}
+
+function collectArtifactPaths(task: ActrunTask): string[] | null {
+  const paths = [task.stdout_path, task.stderr_path]
+    .filter((value): value is string => typeof value === "string" && value.length > 0);
+  return paths.length > 0 ? paths : null;
+}
+
 export function resolveActrunConclusion(output: ActrunRunOutput): string {
   if (output.conclusion) return output.conclusion;
   if (typeof output.ok === "boolean") return output.ok ? "success" : "failure";
@@ -116,6 +129,9 @@ export const actrunAdapter: TestResultAdapter = {
         status: mapStatus(task),
         durationMs: 0,
         retryCount: 0,
+        stdout: readOptionalLog(task.stdout_path),
+        stderr: readOptionalLog(task.stderr_path),
+        artifactPaths: collectArtifactPaths(task),
       });
     });
   },

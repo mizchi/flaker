@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { MetricStore } from "../../storage/types.js";
 import { MOONBIT_JS_BRIDGE_URL } from "../../core/build-artifact.js";
+import { workflowRunSourceSql } from "../../run-source.js";
 
 export interface EvalReport {
   dataSufficiency: {
@@ -471,11 +472,13 @@ export async function runSamplingKpi(
 ): Promise<SamplingKpiReport> {
   const { store } = opts;
   const windowDays = opts.windowDays ?? 30;
+  const workflowSourceExpr = workflowRunSourceSql("wr");
   const commitSignalRows = await store.raw<CommitSignalRow>(`
     WITH recent_results AS (
       SELECT
         wr.commit_sha,
         wr.event,
+        ${workflowSourceExpr} AS run_source,
         wr.id AS workflow_run_id,
         wr.duration_ms AS workflow_duration_ms,
         tr.test_id,
@@ -490,10 +493,7 @@ export async function runSamplingKpi(
     aggregated_results AS (
       SELECT
         commit_sha,
-        CASE
-          WHEN event IN ('local-import', 'actrun-local', 'flaker-local-run') THEN 'local'
-          ELSE 'ci'
-        END AS run_kind,
+        run_source AS run_kind,
         COUNT(DISTINCT workflow_run_id)::INTEGER AS run_count,
         COUNT(DISTINCT COALESCE(NULLIF(test_id, ''), suite || '::' || test_name))::INTEGER AS distinct_tests,
         COUNT(*) FILTER (
@@ -502,7 +502,7 @@ export async function runSamplingKpi(
         )::INTEGER AS failure_signals,
         MAX(workflow_duration_ms)::INTEGER AS duration_ms
       FROM recent_results
-      GROUP BY commit_sha, run_kind
+      GROUP BY commit_sha, run_source
     ),
     recent_sampling_runs AS (
       SELECT

@@ -135,6 +135,7 @@ describe("writeSamplingConfig", () => {
       strategy: "hybrid",
       sample_percentage: 20,
       holdout_ratio: 0.1,
+      cluster_mode: "spread",
     };
     writeSamplingConfig(d, sampling);
     const content = readFileSync(join(d, "flaker.toml"), "utf-8");
@@ -142,6 +143,7 @@ describe("writeSamplingConfig", () => {
     expect(content).toContain('strategy = "hybrid"');
     expect(content).toContain('sample_percentage = 20');
     expect(content).toContain('holdout_ratio = 0.1');
+    expect(content).toContain('cluster_mode = "spread"');
     // Original content preserved
     expect(content).toContain('[repo]');
     expect(content).toContain('owner = "test"');
@@ -175,7 +177,7 @@ describe("resolveSamplingOpts integration", () => {
     mkdirSync(dir, { recursive: true });
     writeFileSync(
       join(dir, "flaker.toml"),
-      `[repo]\nowner = "test"\nname = "repo"\n\n[sampling]\nstrategy = "hybrid"\nsample_percentage = 25\nholdout_ratio = 0.05\nco_failure_window_days = 60\n`,
+      `[repo]\nowner = "test"\nname = "repo"\n\n[sampling]\nstrategy = "hybrid"\nsample_percentage = 25\nholdout_ratio = 0.05\nco_failure_window_days = 60\ncluster_mode = "pack"\n`,
       "utf-8",
     );
     const config = loadConfig(dir);
@@ -184,6 +186,7 @@ describe("resolveSamplingOpts integration", () => {
     expect(config.sampling!.sample_percentage).toBe(25);
     expect(config.sampling!.holdout_ratio).toBe(0.05);
     expect(config.sampling!.co_failure_window_days).toBe(60);
+    expect(config.sampling!.cluster_mode).toBe("pack");
     rmSync(dir, { recursive: true, force: true });
   });
 });

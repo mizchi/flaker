@@ -41,7 +41,7 @@ export function createProgram(): Command {
   program
     .name("flaker")
     .description("Intelligent test selection — run fewer tests, catch more failures")
-    .version("0.3.0")
+    .version("0.4.0")
     .showHelpAfterError()
     .showSuggestionAfterError();
 
@@ -63,8 +63,10 @@ export function createProgram(): Command {
     .option("--count <n>", "Number of tests to sample")
     .option("--percentage <n>", "Percentage of tests to sample")
     .option("--skip-quarantined", "Exclude quarantined tests")
+    .option("--skip-flaky-tagged", "Exclude tests tagged with the configured flaky tag")
     .option("--changed <files>", "Comma-separated list of changed files (for affected/hybrid)")
     .option("--co-failure-days <days>", "Co-failure analysis window in days")
+    .option("--cluster-mode <mode>", "Failure-cluster sampling mode: off, spread, pack")
     .option("--holdout-ratio <ratio>", "Fraction of skipped tests to run as holdout (0-1)")
     .option("--model-path <path>", "Path to GBDT model JSON")
     .option("--runner <runner>", "Runner type: direct or actrun", "direct")
@@ -101,7 +103,7 @@ Commands (by category):
   collect    Import history and calibration (ci, local, coverage, commit-changes, calibrate)
   import     Ingest external reports        (report, parquet)
   report     Normalize and diff reports     (summary, diff, aggregate)
-  analyze    Read-only inspection           (kpi, flaky, reason, insights, eval, context, query)
+  analyze    Read-only inspection           (bundle, kpi, flaky, reason, insights, eval, context, query)
   debug      Active investigation           (diagnose, bisect, confirm, retry, doctor)
   policy     Enforcement and ownership      (quarantine, check)
   dev        Model training and benchmarks  (train, tune, self-eval, eval-fixture, eval-co-failure, test-key)

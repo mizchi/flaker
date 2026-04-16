@@ -21,9 +21,19 @@ describe("CLI help", () => {
     const runHelp = runCmd?.helpInformation();
     const analyzeCmd = program.commands.find((command) => command.name() === "analyze");
     const evalHelp = analyzeCmd?.commands.find((command) => command.name() === "eval")?.helpInformation();
+    const bundleHelp = analyzeCmd?.commands.find((command) => command.name() === "bundle")?.helpInformation();
+    const flakyTagHelp = analyzeCmd?.commands.find((command) => command.name() === "flaky-tag")?.helpInformation();
+    const importCmd = program.commands.find((command) => command.name() === "import");
+    const importReportHelp = importCmd?.commands.find((command) => command.name() === "report")?.helpInformation();
 
     expect(runHelp).toContain("--dry-run");
     expect(runHelp).toContain("--explain");
+    expect(runHelp).toContain("--cluster-mode");
+    expect(runHelp).toContain("--skip-flaky-tagged");
     expect(evalHelp).toContain("Measure whether local sampled runs predict CI");
+    expect(bundleHelp).toContain("AI consumers");
+    expect(bundleHelp).toContain("--window-days");
+    expect(flakyTagHelp).toContain("--remove-after-passes");
+    expect(importReportHelp).toContain("--source");
   });
 });

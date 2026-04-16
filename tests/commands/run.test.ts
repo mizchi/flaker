@@ -198,6 +198,54 @@ describe("run command", () => {
     expect(result.samplingSummary.candidateCount).toBe(2);
   });
 
+  it("attaches runner stdout/stderr to a single executed test result", async () => {
+    const runner: RunnerAdapter = {
+      name: "mock",
+      capabilities: { nativeParallel: false },
+      async listTests() {
+        return [
+          {
+            suite: "tests/paint-vrt.spec.ts",
+            testName: "optional snapshot asset",
+            taskId: "paint-vrt",
+          },
+        ];
+      },
+      async execute(tests) {
+        return {
+          exitCode: 1,
+          results: tests.map((test) => ({
+            suite: test.suite,
+            testName: test.testName,
+            taskId: test.taskId,
+            status: "failed",
+            durationMs: 10,
+            retryCount: 0,
+            errorMessage: "snapshot mismatch",
+          })),
+          durationMs: 10,
+          stdout: "runner stdout",
+          stderr: "runner stderr",
+        };
+      },
+    };
+
+    const result = await runTests({
+      store,
+      runner,
+      mode: "random",
+      count: 1,
+    });
+
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0]).toMatchObject({
+      suite: "tests/paint-vrt.spec.ts",
+      testName: "optional snapshot asset",
+      stdout: "runner stdout",
+      stderr: "runner stderr",
+    });
+  });
+
   it("supports hybrid mode in runTests", async () => {
     for (const entry of [
       { suite: "tests/auth.spec.ts", testName: "auth works" },
@@ -373,5 +421,99 @@ describe("run command", () => {
       "@desktop",
       "@mobile",
     ]);
+  });
+
+  it("excludes @flaky-tagged tests from planning and execution when configured", async () => {
+    await store.insertTestResults([
+      {
+        workflowRunId: 1,
+        suite: "tests/flaky.spec.ts",
+        testName: "flaky case",
+        status: "failed",
+        durationMs: 100,
+        retryCount: 1,
+        errorMessage: "boom",
+        commitSha: "abc",
+        variant: null,
+        createdAt: new Date(),
+      },
+      {
+        workflowRunId: 1,
+        suite: "tests/stable.spec.ts",
+        testName: "stable case",
+        status: "passed",
+        durationMs: 100,
+        retryCount: 0,
+        errorMessage: null,
+        commitSha: "abc",
+        variant: null,
+        createdAt: new Date(),
+      },
+    ]);
+
+    const calls: TestId[][] = [];
+    const grepInvertArgs: Array<string | undefined> = [];
+    const runner: RunnerAdapter = {
+      name: "playwright",
+      capabilities: { nativeParallel: true },
+      async listTests() {
+        return [
+          {
+            suite: "tests/flaky.spec.ts",
+            testName: "flaky case",
+            taskId: "tests/flaky.spec.ts",
+            tags: ["@flaky"],
+          },
+          {
+            suite: "tests/stable.spec.ts",
+            testName: "stable case",
+            taskId: "tests/stable.spec.ts",
+          },
+        ];
+      },
+      async execute(tests, opts) {
+        calls.push([...tests]);
+        grepInvertArgs.push(opts?.grepInvert);
+        return {
+          exitCode: 0,
+          results: tests.map((test) => ({
+            suite: test.suite,
+            testName: test.testName,
+            taskId: test.taskId,
+            status: "passed",
+            durationMs: 10,
+            retryCount: 0,
+          })),
+          durationMs: 10,
+          stdout: "",
+          stderr: "",
+        };
+      },
+    };
+
+    const result = await runTests({
+      store,
+      runner,
+      mode: "full",
+      skipFlakyTagged: true,
+      flakyTagPattern: "@flaky",
+    });
+
+    expect(result.samplingSummary.candidateCount).toBe(1);
+    expect(result.samplingSummary.selectedCount).toBe(1);
+    expect(result.sampledTests).toEqual([
+      expect.objectContaining({
+        suite: "tests/stable.spec.ts",
+        testName: "stable case",
+      }),
+    ]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toEqual([
+      expect.objectContaining({
+        suite: "tests/stable.spec.ts",
+        testName: "stable case",
+      }),
+    ]);
+    expect(grepInvertArgs).toEqual(["@flaky"]);
   });
 });

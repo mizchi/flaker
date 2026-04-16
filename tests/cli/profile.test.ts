@@ -34,8 +34,9 @@ path = ".flaker/data"
 type = "playwright"
 
 [runner]
-type = "vitest"
-command = "pnpm test"
+type = "playwright"
+command = "pnpm exec playwright test"
+flaky_tag_pattern = "@flaky"
 
 [affected]
 resolver = "git"
@@ -53,6 +54,7 @@ detection_threshold_ratio = 0.02
 [profile.scheduled]
 strategy = "random"
 sample_percentage = 30
+cluster_mode = "spread"
 
 [profile.ci]
 strategy = "full"
@@ -61,9 +63,11 @@ max_duration_seconds = 300
 [profile.local]
 strategy = "random"
 sample_percentage = 10
+cluster_mode = "pack"
 adaptive = true
 adaptive_fnr_low_ratio = 0.01
 adaptive_fnr_high_ratio = 0.04
+skip_flaky_tagged = true
 `.trim(),
     );
 
@@ -73,6 +77,7 @@ adaptive_fnr_high_ratio = 0.04
     expect(config.profile?.["scheduled"]).toEqual({
       strategy: "random",
       sample_percentage: 30,
+      cluster_mode: "spread",
     });
     expect(config.profile?.["ci"]).toEqual({
       strategy: "full",
@@ -81,10 +86,13 @@ adaptive_fnr_high_ratio = 0.04
     expect(config.profile?.["local"]).toMatchObject({
       strategy: "random",
       sample_percentage: 10,
+      cluster_mode: "pack",
       adaptive: true,
       adaptive_fnr_low_ratio: 0.01,
       adaptive_fnr_high_ratio: 0.04,
+      skip_flaky_tagged: true,
     });
+    expect(config.runner.flaky_tag_pattern).toBe("@flaky");
   });
 
   it("backward compat: no profile sections → profile is undefined", () => {
@@ -192,18 +200,30 @@ describe("resolveProfile", () => {
   it("merges profile over sampling defaults", () => {
     const result = resolveProfile(
       "scheduled",
-      { scheduled: { strategy: "random", sample_percentage: 30 } },
-      { strategy: "random", sample_percentage: 50, holdout_ratio: 0.1 },
+      { scheduled: { strategy: "random", sample_percentage: 30, cluster_mode: "spread" } },
+      { strategy: "random", sample_percentage: 50, holdout_ratio: 0.1, cluster_mode: "pack", skip_quarantined: true, skip_flaky_tagged: true },
     );
     expect(result.strategy).toBe("random");
     expect(result.sample_percentage).toBe(30); // profile wins
     expect(result.holdout_ratio).toBe(0.1); // from sampling
+    expect(result.cluster_mode).toBe("spread"); // profile wins
+    expect(result.skip_flaky_tagged).toBe(true); // from sampling
+  });
+
+  it("allows profile to override skip_flaky_tagged", () => {
+    const result = resolveProfile(
+      "ci",
+      { ci: { strategy: "hybrid", skip_flaky_tagged: false } },
+      { strategy: "hybrid", skip_flaky_tagged: true },
+    );
+    expect(result.skip_flaky_tagged).toBe(false);
   });
 
   it("falls back to sampling strategy when profile not found", () => {
-    const result = resolveProfile("unknown", {}, { strategy: "random", sample_percentage: 20 });
+    const result = resolveProfile("unknown", {}, { strategy: "random", sample_percentage: 20, cluster_mode: "pack" });
     expect(result.strategy).toBe("random");
     expect(result.sample_percentage).toBe(20);
+    expect(result.cluster_mode).toBe("pack");
   });
 
   it("provides adaptive field defaults", () => {
