@@ -1,0 +1,34 @@
+{
+  "schema": "studio-vrt-flaker",
+  "schemaVersion": 1,
+  "dir": "regression/preview-vs-hrc",
+  "results": [
+    {
+      "domain": "papplica.app",
+      "scenario": "initial",
+      "viewport": "desktop",
+      "width": 1440,
+      "height": 900,
+      "diffPixels": 0,
+      "approved": true
+    },
+    {
+      "domain": "papplica.app",
+      "scenario": "interaction-hero-hover",
+      "viewport": "desktop",
+      "width": 1440,
+      "height": 900,
+      "diffPixels": 466,
+      "approved": true
+    },
+    {
+      "domain": "papplica.app",
+      "scenario": "interaction-contact-name",
+      "viewport": "desktop",
+      "width": 1440,
+      "height": 900,
+      "diffPixels": 1200,
+      "approved": false
+    }
+  ]
+}

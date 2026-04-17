@@ -26,6 +26,27 @@ interface MigrationReport {
   results: MigrationResult[];
 }
 
+interface VersionedVrtResult {
+  domain: string;
+  scenario?: string;
+  viewport: string;
+  width: number;
+  height: number;
+  diffPixels: number;
+  approved?: boolean;
+  approvalReasons?: string[];
+  dominantCategory?: string;
+  categorySummary?: string;
+  paintTreeSummary?: string;
+}
+
+interface VersionedVrtReport {
+  schema: "studio-vrt-flaker";
+  schemaVersion: number;
+  dir: string;
+  results: VersionedVrtResult[];
+}
+
 function normalizePath(value: string): string {
   return value.replaceAll("\\", "/");
 }
@@ -90,6 +111,38 @@ function buildVariant(viewport: MigrationViewport): Record<string, string> {
   };
 }
 
+function buildScenarioVariant(result: VersionedVrtResult): Record<string, string> {
+  const variant: Record<string, string> = {
+    backend: "chromium",
+    viewport: result.viewport,
+    width: String(result.width),
+    height: String(result.height),
+  };
+  if (result.scenario && result.scenario !== "initial") {
+    variant.scenario = result.scenario;
+  }
+  return variant;
+}
+
+function isVersionedVrtReport(report: MigrationReport | VersionedVrtReport): report is VersionedVrtReport {
+  return "schema" in report;
+}
+
+function resolveScenarioSuite(report: VersionedVrtReport, result: VersionedVrtResult): string {
+  return normalizePath(`${report.dir}/${result.domain}`);
+}
+
+function resolveScenarioTestName(result: VersionedVrtResult): string {
+  const scenario = result.scenario ?? "initial";
+  return scenario === "initial"
+    ? `viewport:${result.viewport}`
+    : `viewport:${result.viewport} / scenario:${scenario}`;
+}
+
+function resolveScenarioTaskId(report: VersionedVrtReport, result: VersionedVrtResult): string {
+  return resolveScenarioSuite(report, result);
+}
+
 function buildErrorMessage(result: MigrationResult): string | undefined {
   const pieces = [
     `${result.diffPixels}px diff`,
@@ -106,7 +159,43 @@ function buildErrorMessage(result: MigrationResult): string | undefined {
 export const vrtMigrationAdapter: TestResultAdapter = {
   name: "vrt-migration",
   parse(input: string): TestCaseResult[] {
-    const report = JSON.parse(input) as MigrationReport;
+    const report = JSON.parse(input) as MigrationReport | VersionedVrtReport;
+
+    if (isVersionedVrtReport(report)) {
+      if (report.schema !== "studio-vrt-flaker") {
+        throw new Error(`Unsupported VRT schema: ${report.schema}`);
+      }
+      if (report.schemaVersion !== 1) {
+        throw new Error(`Unsupported VRT schemaVersion: ${report.schemaVersion}`);
+      }
+
+      return report.results.map((result) => {
+        const suite = resolveScenarioSuite(report, result);
+        const status: TestCaseResult["status"] =
+          result.approved || result.diffPixels === 0 ? "passed" : "failed";
+        const errorMessage = status === "failed"
+          ? buildErrorMessage(result)
+          : result.approved
+            ? (result.approvalReasons ?? []).join("; ") || "approved"
+            : undefined;
+
+        const testCaseResult: TestCaseResult = resolveTestIdentity({
+          suite,
+          testName: resolveScenarioTestName(result),
+          taskId: resolveScenarioTaskId(report, result),
+          status,
+          durationMs: 0,
+          retryCount: 0,
+          variant: buildScenarioVariant(result),
+        });
+
+        if (errorMessage) {
+          testCaseResult.errorMessage = errorMessage;
+        }
+        return testCaseResult;
+      });
+    }
+
     const taskId = inferTaskId(report.dir);
 
     return report.results.map((result) => {
