@@ -1,15 +1,28 @@
 name: release-please
 
-# Manual trigger only. Release timing is an explicit maintainer decision.
-# Run via Actions UI or: gh workflow run release-please.yml
+# Two triggers:
+# 1. workflow_dispatch: maintainer runs this to create a Release PR.
+# 2. pull_request closed on main with head.ref starting with release-please--:
+#    fires automatically after the Release PR is merged so release-please
+#    creates the tag + GitHub Release (no second manual dispatch needed).
+# Regular feat:/fix: PR merges are filtered out by the job-level if-guard.
 on:
   workflow_dispatch:
+  pull_request:
+    types: [closed]
+    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
   release-please:
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        (github.event.pull_request.merged == true &&
+         startsWith(github.event.pull_request.head.ref, 'release-please--'))
+      }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/create-github-app-token@v2
