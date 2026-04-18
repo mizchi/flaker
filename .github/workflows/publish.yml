@@ -31,14 +31,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build package
+        run: pnpm run build
+
       - name: Verify
         run: |
           pnpm run typecheck
           pnpm vitest run
           moon test --target js
-
-      - name: Build package
-        run: pnpm run build
 
       - name: CLI smoke
         run: node dist/cli/main.js --help >/dev/null
