@@ -13,12 +13,16 @@ describe("flaker --help", () => {
     expect(top).toContain("Getting started:");
   });
 
-  it("contains Daily workflow section", () => {
-    expect(top).toContain("Daily workflow:");
+  it("contains Primary commands section", () => {
+    expect(top).toContain("Primary commands:");
   });
 
-  it("contains Commands (by category) section", () => {
-    expect(top).toContain("Commands (by category):");
+  it("contains Gate model section", () => {
+    expect(top).toContain("Gate model:");
+  });
+
+  it("contains Management and advanced categories section", () => {
+    expect(top).toContain("Management and advanced categories:");
   });
 
   for (const category of ["setup", "exec", "collect", "import", "report", "analyze", "debug", "policy", "dev"]) {

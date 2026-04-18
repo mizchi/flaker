@@ -3,7 +3,14 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadConfig } from "../../src/cli/config.js";
-import { detectProfileName, resolveProfile, computeAdaptivePercentage } from "../../src/cli/profile.js";
+import {
+  detectProfileName,
+  resolveProfile,
+  computeAdaptivePercentage,
+  gateNameFromProfileName,
+  profileNameFromGateName,
+  resolveRequestedProfileName,
+} from "../../src/cli/profile.js";
 import type { AdaptiveSignals } from "../../src/cli/profile.js";
 
 // --- Task 1: ProfileConfig type and TOML parsing ---
@@ -181,6 +188,38 @@ describe("detectProfileName", () => {
 
   it("returns 'local' as default when nothing is set", () => {
     expect(detectProfileName(undefined)).toBe("local");
+  });
+});
+
+describe("gate/profile mapping", () => {
+  it("maps iteration gate to local profile", () => {
+    expect(profileNameFromGateName("iteration")).toBe("local");
+  });
+
+  it("maps merge gate to ci profile", () => {
+    expect(profileNameFromGateName("merge")).toBe("ci");
+  });
+
+  it("maps release gate to scheduled profile", () => {
+    expect(profileNameFromGateName("release")).toBe("scheduled");
+  });
+
+  it("maps known profiles back to gate names", () => {
+    expect(gateNameFromProfileName("local")).toBe("iteration");
+    expect(gateNameFromProfileName("ci")).toBe("merge");
+    expect(gateNameFromProfileName("scheduled")).toBe("release");
+  });
+
+  it("resolves requested profile from gate", () => {
+    expect(resolveRequestedProfileName(undefined, "merge")).toBe("ci");
+  });
+
+  it("allows matching profile and gate", () => {
+    expect(resolveRequestedProfileName("ci", "merge")).toBe("ci");
+  });
+
+  it("rejects conflicting profile and gate", () => {
+    expect(() => resolveRequestedProfileName("local", "merge")).toThrow(/conflicts with --gate/);
   });
 });
 

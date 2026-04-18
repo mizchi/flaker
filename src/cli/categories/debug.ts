@@ -11,6 +11,14 @@ import { createRunner } from "../runners/index.js";
 import { createTestResultAdapter } from "../adapters/index.js";
 import { resolve } from "node:path";
 
+export async function debugDoctorAction(): Promise<void> {
+  const report = await runDoctor(process.cwd(), {
+    createStore: () => new DuckDBStore(":memory:"),
+  });
+  console.log(formatDoctorReport(report));
+  process.exit(report.ok ? 0 : 1);
+}
+
 export function registerDebugCommands(program: Command): void {
   const debug = program
     .command("debug")
@@ -200,11 +208,5 @@ With --json, prints: {"verdict": "BROKEN|FLAKY|TRANSIENT", "runs": {...}}
   debug
     .command("doctor")
     .description("Check local flaker runtime requirements")
-    .action(async () => {
-      const report = await runDoctor(process.cwd(), {
-        createStore: () => new DuckDBStore(":memory:"),
-      });
-      console.log(formatDoctorReport(report));
-      process.exit(report.ok ? 0 : 1);
-    });
+    .action(debugDoctorAction);
 }

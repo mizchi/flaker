@@ -61,6 +61,8 @@ Then ask the agent something like:
 - "E2E VRT の nightly triage を設計したい"
 
 The setup reference checklist lives at [docs/new-project-checklist.ja.md](docs/new-project-checklist.ja.md).
+The user guide lives at [docs/usage-guide.ja.md](docs/usage-guide.ja.md) and [docs/usage-guide.md](docs/usage-guide.md).
+The operations guide lives at [docs/operations-guide.ja.md](docs/operations-guide.ja.md) and [docs/operations-guide.md](docs/operations-guide.md).
 The operations quick start lives at [docs/flaker-management-quickstart.ja.md](docs/flaker-management-quickstart.ja.md) and [docs/flaker-management-quickstart.md](docs/flaker-management-quickstart.md).
 
 ## Use as a MoonBit Library
@@ -157,12 +159,90 @@ target-specific `_js.mbt` / `_native.mbt` modules.
 4. Run the sampled tests and compare local outcomes with CI.
 5. Evaluate whether the sampling strategy is actually trustworthy.
 
+## Mental Model
+
+`flaker` exposes sampling strategies and execution profiles, but operationally it
+is easier to reason about it in four layers:
+
+- **Gate**: a decision boundary such as "can the author keep iterating?", "can
+  this PR merge?", or "can we release?"
+- **Budget**: the constraints that a gate must stay within
+- **Loop**: a background routine that keeps a gate trustworthy over time
+- **Policy**: the rules for how the system reacts when trust drops
+
+In this model, sampling is not the primary concept. Sampling is an internal
+strategy used to keep a gate inside its budgets.
+
+### 1. Gates
+
+Most teams only need three gates:
+
+- **Iteration Gate**: fast local feedback for the author
+- **Merge Gate**: the PR or mainline gate
+- **Release Gate**: a stricter full-suite or pre-release check
+
+### 2. Budgets
+
+A gate can have more than one budget:
+
+- **Time budget**: how long humans are willing to wait
+- **Signal budget**: how much false negative or flaky noise is acceptable
+- **Execution budget**: CI minutes, parallelism, browser workers, compute cost
+- **Product performance budget**: LCP, INP, bundle size, latency, or similar
+
+This distinction matters because "performance budget" can mean either:
+
+- execution performance of the test system itself
+- performance of the product being tested
+
+### 3. Loops
+
+Loops are not usually gates. They exist to make gates reliable:
+
+- **Observation loop**: scheduled full runs, history collection, holdout
+  verification, KPI refresh
+- **Triage loop**: quarantine review, `@flaky` tagging, promotion, demotion,
+  owner assignment
+- **Incident loop**: retry, confirm, diagnose, and fix after a real failure
+
+### 4. Policies
+
+Policies encode operational decisions:
+
+- when to auto-quarantine
+- when to exclude `@flaky` tests from normal execution
+- when to promote an advisory check to required
+- when to demote a required check back to advisory
+- how retries are interpreted
+
+Retries can help classify failures, but they are not proof of stability.
+
+### Mapping to flaker today
+
+The current CLI and config already fit this model:
+
+| Mental model | Current flaker shape |
+|-------------|----------------------|
+| Iteration Gate | `profile.local` |
+| Merge Gate | `profile.ci` |
+| Release Gate | usually a full run, often backed by `profile.scheduled` or a dedicated release workflow |
+| Observation loop | `flaker collect` + `flaker run --gate release` + `flaker analyze eval` |
+| Triage loop | `flaker analyze flaky-tag` + `flaker policy quarantine` + weekly review |
+| Incident loop | `flaker debug retry` + `flaker debug confirm` + `flaker debug diagnose` |
+
+If you describe flaker this way, the surface area becomes smaller:
+
+- users choose gates and budgets
+- operators run loops and maintain policies
+- flaker chooses strategies such as `affected`, `hybrid`, or `full`
+
 ## Quick Start
 
 1. **Initialize**: `flaker init` — creates `flaker.toml`, auto-detects repo from git remote
 2. **Calibrate**: `flaker collect calibrate` — analyzes history and writes optimal sampling config
-3. **Check environment**: `flaker debug doctor` — verifies DuckDB, MoonBit, and config
-4. **Run**: `flaker run` — selects and executes tests (auto-detected profile)
+3. **Check environment**: `flaker doctor` — verifies DuckDB, MoonBit, and config
+4. **Run a gate**: `flaker run --gate iteration` — fast local feedback
+5. **Inspect health**: `flaker status` — KPI dashboard for sampling, flaky tests, and data quality
 
 ### Initialize
 
@@ -245,7 +325,7 @@ The markdown mode is meant for weekly review notes. It summarizes:
 ```bash
 flaker run --dry-run --strategy hybrid --count 25
 flaker run --dry-run --strategy affected --changed src/foo.ts
-flaker run --dry-run --profile local --changed src/foo.ts
+flaker run --dry-run --gate iteration --changed src/foo.ts
 ```
 
 ### Sample and execute
@@ -253,7 +333,7 @@ flaker run --dry-run --profile local --changed src/foo.ts
 ```bash
 flaker run --strategy hybrid --count 25
 flaker run --strategy affected --changed src/foo.ts
-flaker run --profile local --changed src/foo.ts
+flaker run --gate iteration --changed src/foo.ts
 flaker run --runner actrun
 ```
 
@@ -267,24 +347,30 @@ flaker run --runner actrun
 When flaker has no local history yet, the sampling summary now explains the cold-start fallback and suggests the next steps to build usable history.
 The first `flaker run` can still sample from the runner's listed tests, record that local run, and use the new history on the next run, so a fresh project can try the package immediately.
 
-## Execution Profiles
+## Execution Gates
 
-flaker automatically selects the right strategy for each execution context:
+User-facing CLI usage should prefer gates. Profiles remain available as the
+advanced internal mechanism.
 
-| Profile | Strategy | Auto-detected |
-|---------|----------|--------------|
-| `scheduled` | `full` (all tests) | `--profile scheduled` (explicit only) |
-| `ci` | `hybrid` + adaptive percentage | `CI=true` |
-| `local` | `affected` + `fallback_strategy` + time budget | default |
+| Gate | Backing profile | Purpose |
+|------|-----------------|---------|
+| `iteration` | `local` | Fast local feedback for the author |
+| `merge` | `ci` | PR / mainline gate |
+| `release` | `scheduled` | Full or near-full verification |
 
 ```bash
-# Auto-detect (CI → ci, otherwise → local)
+# Auto-detects the backing profile
 flaker run
 
-# Explicit
-flaker run --profile scheduled
-flaker run --profile ci
+# Explicit gate selection
+flaker run --gate iteration
+flaker run --gate merge
+flaker run --gate release
+
+# Advanced: explicit profile names still work
 flaker run --profile local
+flaker run --profile ci
+flaker run --profile scheduled
 ```
 
 Configure in `flaker.toml`:
@@ -313,8 +399,8 @@ skip_flaky_tagged = true
 
 This supports a simple Playwright workflow:
 
-- `scheduled` runs all E2E tests and accumulates history
-- `ci` / `local` exclude tests tagged with `@flaky`
+- `release` / `scheduled` runs all E2E tests and accumulates history
+- `merge` / `iteration` exclude tests tagged with `@flaky`
 - `flaker analyze flaky-tag --json` emits add/remove suggestions for a daily AI triage agent
 
 Recommended `@flaky` loop:
@@ -322,7 +408,7 @@ Recommended `@flaky` loop:
 1. Start with full E2E execution so flaker can accumulate baseline history.
 2. When a Playwright test is known to be flaky, tag it with `@flaky`.
    `flaker` detects both Playwright tags and `@flaky` embedded in the test title.
-3. Keep `scheduled` as full execution, and use `ci` / `local` with `skip_flaky_tagged = true`.
+3. Keep `release` / `scheduled` as full execution, and use `merge` / `iteration` with `skip_flaky_tagged = true`.
    For Playwright, flaker passes `--grep-invert @flaky` to normal runs.
 4. Run daily triage and let an AI agent update test sources based on the report:
 
@@ -350,14 +436,14 @@ flaker analyze flaky-tag --json \
   --remove-after-passes 5
 ```
 
-Data flows downstream: daily accumulates history → CI uses it for smarter sampling → local uses dependency graph for fast feedback. The `adaptive` flag automatically reduces CI percentage when data quality is high.
+Data flows downstream: release observation accumulates history → merge uses it for smarter sampling → iteration uses dependency graph for fast feedback. The `adaptive` flag automatically reduces CI percentage when data quality is high.
 
 For local dogfooding, the practical loop is:
 
 ```bash
 flaker exec affected --changed src/foo.ts
-flaker run --dry-run --profile local --changed src/foo.ts
-flaker run --profile local --changed src/foo.ts
+flaker run --dry-run --gate iteration --changed src/foo.ts
+flaker run --gate iteration --changed src/foo.ts
 ```
 
 ## CI Integration
@@ -368,7 +454,7 @@ Post test results directly on pull requests:
 
 ```yaml
 - name: Run flaker
-  run: flaker run --profile ci
+  run: flaker run --gate merge
 
 - name: Post PR comment
   if: github.event_name == 'pull_request'
@@ -393,12 +479,12 @@ This creates a GitHub Issue per quarantined test via `gh` CLI, with flaky rate, 
 
 The repo now ships two GitHub-native self-host lanes:
 
-- [ci.yml](https://github.com/mizchi/flaker/blob/main/.github/workflows/ci.yml): a `self-host-advisory` job runs on pull requests, executes `flaker run --profile ci`, snapshots `kpi` / `eval`, and updates a sticky PR comment.
-- [nightly-self-host.yml](https://github.com/mizchi/flaker/blob/main/.github/workflows/nightly-self-host.yml): a scheduled job rebuilds recent CI history with `flaker collect`, runs `flaker run --profile scheduled`, and updates a rolling issue labeled `flaker-self-host`.
+- [ci.yml](https://github.com/mizchi/flaker/blob/main/.github/workflows/ci.yml): a `self-host-advisory` job runs on pull requests, executes `flaker run --gate merge`, snapshots `kpi` / `eval`, and updates a sticky PR comment.
+- [nightly-self-host.yml](https://github.com/mizchi/flaker/blob/main/.github/workflows/nightly-self-host.yml): a scheduled job rebuilds recent CI history with `flaker collect`, runs `flaker run --gate release`, and updates a rolling issue labeled `flaker-self-host`.
 
 Both lanes render the same promotion-readiness summary from `scripts/self-host-review.mjs`. The current default is still advisory: the PR job is non-blocking, and the nightly workflow carries the long-form trend.
 
-Promote `flaker run --profile ci` to a required check only after the nightly issue shows:
+Promote `flaker run --gate merge` to a required check only after the nightly issue shows:
 
 - `matched commits >= 20`
 - `false negative rate <= 5%`
@@ -412,10 +498,10 @@ Start with advisory mode, not CI gating.
 
 The most practical rollout looks like this:
 
-1. `flaker run --profile scheduled` in a nightly scheduled workflow (full test + data accumulation)
-2. `flaker run --profile ci` on PR push (selective execution, posts PR comment)
-3. `flaker run --profile local` during development (fast feedback)
-4. Review `flaker analyze eval` weekly
+1. `flaker run --gate release` in a nightly scheduled workflow (full test + data accumulation)
+2. `flaker run --gate merge` on PR push (selective execution, posts PR comment)
+3. `flaker run --gate iteration` during development (fast feedback)
+4. Review `flaker status` and `flaker analyze eval` weekly
 5. Only tighten the workflow after local-to-CI correlation looks strong
 
 This works best in repositories with:
@@ -572,7 +658,11 @@ skip_flaky_tagged = true
 ## Docs
 
 - [新規プロジェクト導入チェックリスト (ja)](https://github.com/mizchi/flaker/blob/main/docs/new-project-checklist.ja.md)
-- [Usage Guide](https://github.com/mizchi/flaker/blob/main/docs/how-to-use.md)
+- [Usage Guide (ja)](https://github.com/mizchi/flaker/blob/main/docs/usage-guide.ja.md)
+- [Usage Guide](https://github.com/mizchi/flaker/blob/main/docs/usage-guide.md)
+- [Operations Guide (ja)](https://github.com/mizchi/flaker/blob/main/docs/operations-guide.ja.md)
+- [Operations Guide](https://github.com/mizchi/flaker/blob/main/docs/operations-guide.md)
+- [Detailed Command Reference](https://github.com/mizchi/flaker/blob/main/docs/how-to-use.md)
 - [Why flaker](https://github.com/mizchi/flaker/blob/main/docs/why-flaker.md)
 - [Design Partner Rollout](https://github.com/mizchi/flaker/blob/main/docs/design-partner-rollout.ja.md)
 

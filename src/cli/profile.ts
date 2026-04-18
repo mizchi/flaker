@@ -74,6 +74,18 @@ export interface AdaptiveSignals {
   divergenceRate: number | null;
 }
 
+export type GateName = "iteration" | "merge" | "release";
+
+const GATE_TO_PROFILE: Record<GateName, string> = {
+  iteration: "local",
+  merge: "ci",
+  release: "scheduled",
+};
+
+const PROFILE_TO_GATE = new Map<string, GateName>(
+  Object.entries(GATE_TO_PROFILE).map(([gate, profile]) => [profile, gate as GateName]),
+);
+
 function formatSignals(signals: AdaptiveSignals): string {
   const parts: string[] = [];
   if (signals.falseNegativeRate != null) {
@@ -122,6 +134,43 @@ export function computeAdaptivePercentage(
     percentage: opts.basePercentage,
     reason: `adaptive: ${signalsStr} (${driverSignal} drove) within target range, keeping ${opts.basePercentage}%`,
   };
+}
+
+export function normalizeGateName(name: string): GateName | undefined {
+  const normalized = name.trim().toLowerCase();
+  if (normalized === "iteration" || normalized === "merge" || normalized === "release") {
+    return normalized;
+  }
+  return undefined;
+}
+
+export function profileNameFromGateName(gateName: string): string {
+  const gate = normalizeGateName(gateName);
+  if (!gate) {
+    throw new Error(
+      `Unknown gate '${gateName}'. Expected one of: iteration, merge, release.`,
+    );
+  }
+  return GATE_TO_PROFILE[gate];
+}
+
+export function gateNameFromProfileName(profileName: string): GateName | undefined {
+  return PROFILE_TO_GATE.get(profileName);
+}
+
+export function resolveRequestedProfileName(
+  explicitProfile: string | undefined,
+  explicitGate: string | undefined,
+): string {
+  const gateProfile = explicitGate ? profileNameFromGateName(explicitGate) : undefined;
+
+  if (explicitProfile && gateProfile && explicitProfile !== gateProfile) {
+    throw new Error(
+      `--profile ${explicitProfile} conflicts with --gate ${explicitGate} (${gateProfile}). Use one or make them match.`,
+    );
+  }
+
+  return detectProfileName(explicitProfile ?? gateProfile);
 }
 
 export interface ResolvedProfile {

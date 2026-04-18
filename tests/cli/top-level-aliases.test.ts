@@ -14,17 +14,32 @@ describe("top-level aliases", () => {
 
   it("flaker run --help shows exec run options", () => {
     const help = execSync(`node ${cliPath} run --help`, { encoding: "utf-8" });
+    expect(help).toContain("--gate");
     expect(help).toContain("--dry-run");
     expect(help).toContain("--explain");
     expect(help).toContain("--strategy");
     expect(help).toContain("--cluster-mode");
     expect(help).toContain("--skip-flaky-tagged");
+    expect(help).toContain("iteration");
+    expect(help).toContain("merge");
+    expect(help).toContain("release");
   });
 
   it("flaker kpi --help shows analyze kpi options", () => {
     const help = execSync(`node ${cliPath} kpi --help`, { encoding: "utf-8" });
     expect(help).toContain("--window-days");
     expect(help).toContain("--json");
+  });
+
+  it("flaker status --help shows user-facing status options", () => {
+    const help = execSync(`node ${cliPath} status --help`, { encoding: "utf-8" });
+    expect(help).toContain("--window-days");
+    expect(help).toContain("--json");
+  });
+
+  it("flaker doctor --help shows the top-level doctor alias", () => {
+    const help = execSync(`node ${cliPath} doctor --help`, { encoding: "utf-8" });
+    expect(help).toContain("User-facing environment check");
   });
 
   it("flaker collect --help shows collect subcommands and ci options", () => {

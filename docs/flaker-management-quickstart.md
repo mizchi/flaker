@@ -3,7 +3,10 @@
 [日本語版](flaker-management-quickstart.ja.md)
 
 The shortest path to start operating `flaker` after setup.
-This page assumes you already have `flaker.toml` and have started running `flaker run --profile ci` in advisory mode.
+This page assumes you already have `flaker.toml` and have started running `flaker run --gate merge` in advisory mode.
+
+For the full operating model, start with [operations-guide.md](operations-guide.md).
+For normal day-to-day usage only, use [usage-guide.md](usage-guide.md).
 
 If you have not installed or initialized flaker yet, start with [new-project-checklist.ja.md](new-project-checklist.ja.md).
 
@@ -81,7 +84,7 @@ Run this nightly or once per day:
 mkdir -p .artifacts
 export GITHUB_TOKEN=$(gh auth token)
 pnpm flaker collect ci --days 1
-pnpm flaker run --profile scheduled
+pnpm flaker run --gate release
 pnpm flaker analyze flaky-tag --json > .artifacts/flaky-tag-triage.json
 pnpm flaker analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
 ```

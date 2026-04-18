@@ -239,6 +239,8 @@ Node.js/npm パッケージとしても利用可能です（TypeScript CLI が M
 ## 関連ドキュメント
 
 - [なぜ flaker が必要か（理論的背景）](why-flaker.ja.md)
+- [利用ガイド](usage-guide.ja.md)
+- [運用ガイド](operations-guide.ja.md)
 - [詳細な使い方リファレンス](how-to-use.ja.md)
 - [テストアダプター設定ガイド](test-result-adapters.md)
 - [サンプリング戦略の評価レポート](sampling-strategy-evaluation-report.ja.md)

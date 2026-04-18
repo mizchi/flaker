@@ -10,8 +10,10 @@ describe("CLI help", () => {
     expect(help).toContain("Intelligent test selection");
     expect(help).toContain("Getting started");
     expect(help).toContain("flaker init");
-    expect(help).toContain("flaker collect calibrate");
-    expect(help).toContain("Commands (by category)");
+    expect(help).toContain("flaker doctor");
+    expect(help).toContain("flaker run --gate merge");
+    expect(help).toContain("Primary commands");
+    expect(help).toContain("Management and advanced categories");
   });
 
   it("shows exec run help with --dry-run and --explain flags", () => {
@@ -28,6 +30,7 @@ describe("CLI help", () => {
 
     expect(runHelp).toContain("--dry-run");
     expect(runHelp).toContain("--explain");
+    expect(runHelp).toContain("--gate");
     expect(runHelp).toContain("--cluster-mode");
     expect(runHelp).toContain("--skip-flaky-tagged");
     expect(evalHelp).toContain("Measure whether local sampled runs predict CI");

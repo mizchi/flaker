@@ -39,7 +39,7 @@ The order matters because each step exposes errors that would cascade if deferre
 ```
 Day 0  prerequisites           5 min   node>=24, pnpm>=10, gh auth, git remote
 Day 1  install + init          15 min  pnpm add -D @mizchi/flaker → init → doctor → resolver
-Day 1  local dry-run smoke      5 min  flaker run --profile local --dry-run --explain
+Day 1  local dry-run smoke      5 min  flaker run --gate iteration --dry-run --explain
 Day 2  collect ci + calibrate  30 min  collect ci --days 30 → collect calibrate → analyze kpi
 Day 3  package.json scripts     5 min  flaker:run:local, flaker:eval:markdown, etc.
 Day 5  Actions integration     15 min  PR advisory job (continue-on-error: true) + nightly history
@@ -62,7 +62,7 @@ pnpm add -D @mizchi/flaker
 pnpm flaker init --adapter <adapter> --runner <runner>
 
 # 3. doctor
-pnpm flaker debug doctor
+pnpm flaker doctor
 
 # 4. set resolver in flaker.toml — edit [affected] section manually
 #    workspace: resolver = "workspace"
@@ -70,7 +70,7 @@ pnpm flaker debug doctor
 #    bitflow:   resolver = "bitflow"
 
 # 5. dry-run smoke
-pnpm flaker run --profile local --dry-run --explain --changed "$(git diff --name-only main | tr '\n' ',')"
+pnpm flaker run --gate iteration --dry-run --explain --changed "$(git diff --name-only main | tr '\n' ',')"
 ```
 
 ## Day 2 commands
@@ -90,12 +90,12 @@ If `collect ci` reports 0 runs, the most likely cause is GITHUB_TOKEN missing th
 {
   "scripts": {
     "flaker": "flaker",
-    "flaker:run:local": "flaker run --profile local",
-    "flaker:run:scheduled": "flaker run --profile scheduled",
+    "flaker:run:iteration": "flaker run --gate iteration",
+    "flaker:run:release": "flaker run --gate release",
     "flaker:collect:ci": "flaker collect ci --days 7",
     "flaker:collect:local": "flaker collect local --last 1",
     "flaker:eval:markdown": "flaker analyze eval --markdown --window 7",
-    "flaker:doctor": "flaker debug doctor"
+    "flaker:doctor": "flaker doctor"
   }
 }
 ```
@@ -108,7 +108,7 @@ PR advisory (advisory mode, MUST be `continue-on-error: true` for the first 2-4 
 
 ```yaml
 - name: Run tests via flaker (advisory)
-  run: pnpm flaker run --profile ci
+  run: pnpm flaker run --gate merge
   continue-on-error: true
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -118,13 +118,13 @@ Nightly history (separate workflow, scheduled cron):
 
 ```yaml
 - run: pnpm flaker collect ci --days 1
-- run: pnpm flaker run --profile scheduled
+- run: pnpm flaker run --gate release
 - run: pnpm flaker analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
 ```
 
 ## Promotion criteria for required check
 
-Only promote `flaker run --profile ci` from advisory to required when `analyze kpi` shows ALL of:
+Only promote `flaker run --gate merge` from advisory to required when `analyze kpi` shows ALL of:
 
 - `Matched commits ≥ 20`
 - `Recall ≥ 90%` (CI failures caught by local sampling)
@@ -162,6 +162,8 @@ All paths relative to `${CLAUDE_PLUGIN_ROOT}` of the installed plugin, or in the
 
 - `README.md` — feature overview, install
 - `docs/new-project-checklist.ja.md` — the canonical full checklist (this skill is its action-oriented summary)
+- `docs/usage-guide.ja.md` / `docs/usage-guide.md` — user-facing entrypoint after setup
+- `docs/operations-guide.ja.md` / `docs/operations-guide.md` — maintainer / CI owner entrypoint
 - `docs/how-to-use.md` / `docs/how-to-use.ja.md` — full command reference and `#config-migration` table
 - `docs/contributing.md` — sibling dogfood, MoonBit/TS fallback, build internals
 - `CHANGELOG.md` — version history, breaking changes per release

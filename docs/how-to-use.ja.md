@@ -4,6 +4,12 @@
 
 [English](how-to-use.md)
 
+このページは **詳細なコマンドリファレンス**。
+
+- 日常利用の入口: [usage-guide.ja.md](usage-guide.ja.md)
+- 運用設計の入口: [operations-guide.ja.md](operations-guide.ja.md)
+- 導入手順: [new-project-checklist.ja.md](new-project-checklist.ja.md)
+
 ## インストール
 
 ```bash

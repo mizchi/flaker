@@ -3,23 +3,14 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { registerSetupCommands, setupInitAction } from "./categories/setup.js";
-import { registerExecCommands, execRunAction } from "./categories/exec.js";
+import { registerExecCommands, execRunAction, RUN_COMMAND_HELP } from "./categories/exec.js";
 import { registerCollectCommands } from "./categories/collect.js";
 import { registerImportCommands } from "./categories/import.js";
 import { registerReportCommands } from "./categories/report.js";
 import { registerAnalyzeCommands, analyzeKpiAction } from "./categories/analyze.js";
-import { registerDebugCommands } from "./categories/debug.js";
+import { registerDebugCommands, debugDoctorAction } from "./categories/debug.js";
 import { registerPolicyCommands } from "./categories/policy.js";
 import { registerDevCommands } from "./categories/dev.js";
-
-function appendHelpText<T extends Command>(
-  command: T,
-  extra: string,
-): T {
-  const originalHelpInformation = command.helpInformation.bind(command);
-  command.helpInformation = () => `${originalHelpInformation()}${extra}`;
-  return command;
-}
 
 function isDirectCliExecution(): boolean {
   return process.argv[1] != null
@@ -57,8 +48,9 @@ export function createProgram(): Command {
 
   program
     .command("run")
-    .description("Alias for `flaker exec run`")
-    .option("--profile <name>", "Execution profile: scheduled, ci, local (auto-detected if omitted)")
+    .description("Run the selected gate or profile")
+    .option("--gate <name>", "Gate name: iteration, merge, release")
+    .option("--profile <name>", "Advanced: execution profile name such as scheduled, ci, local")
     .option("--strategy <s>", "Sampling strategy: random, weighted, affected, hybrid, gbdt, full")
     .option("--count <n>", "Number of tests to sample")
     .option("--percentage <n>", "Percentage of tests to sample")
@@ -73,6 +65,7 @@ export function createProgram(): Command {
     .option("--retry", "Retry failed tests (actrun only)")
     .option("--dry-run", "Select tests but do not execute them")
     .option("--explain", "Print per-test selection tier, score, and reason")
+    .addHelpText("after", RUN_COMMAND_HELP)
     .action(execRunAction);
 
   program
@@ -82,24 +75,44 @@ export function createProgram(): Command {
     .option("--json", "Output as JSON")
     .action(analyzeKpiAction);
 
+  program
+    .command("status")
+    .description("User-facing status dashboard (alias for `flaker analyze kpi`)")
+    .option("--window-days <days>", "Analysis window in days", "30")
+    .option("--json", "Output as JSON")
+    .action(analyzeKpiAction);
+
+  program
+    .command("doctor")
+    .description("User-facing environment check (alias for `flaker debug doctor`)")
+    .action(debugDoctorAction);
+
   const originalHelpInformation = program.helpInformation.bind(program);
   program.helpInformation = () => {
     const base = originalHelpInformation();
     const extras = `
 Getting started:
   flaker init                       Create flaker.toml (auto-detects repo)
-  flaker collect calibrate          Analyze history, write optimal sampling config
-  flaker debug doctor               Check runtime requirements
-  flaker run                        Select and execute tests
+  flaker doctor                     Check runtime requirements
+  flaker run --gate iteration       Fast local feedback
+  flaker run --gate merge           PR / mainline gate
+  flaker status                     KPI dashboard (sampling, flaky, data quality)
 
-Daily workflow:
-  flaker run                        Execute with auto-selected profile
-  flaker run --dry-run --explain    Preview selection with reasons
-  flaker analyze kpi                KPI dashboard (sampling, flaky, data quality)
+Primary commands:
+  init        Create flaker.toml and bootstrap config
+  run         Run the selected gate or profile
+  status      Show the user-facing health dashboard
+  doctor      Check local runtime requirements
 
-Commands (by category):
-  setup      Project scaffolding            (init)
-  exec       Test selection and execution   (run, affected)
+Gate model:
+  iteration   -> profile.local      Fast author feedback
+  merge       -> profile.ci         PR / mainline gate
+  release     -> profile.scheduled  Full or near-full verification
+
+Run \`flaker run --help\` for gate mapping and advanced run options.
+Run \`flaker status --help\` or \`flaker doctor --help\` for user-facing commands.
+
+Management and advanced categories:
   collect    Import history and calibration (ci, local, coverage, commit-changes, calibrate)
   import     Ingest external reports        (report, parquet)
   report     Normalize and diff reports     (summary, diff, aggregate)
@@ -107,6 +120,10 @@ Commands (by category):
   debug      Active investigation           (diagnose, bisect, confirm, retry, doctor)
   policy     Enforcement and ownership      (quarantine, check)
   dev        Model training and benchmarks  (train, tune, self-eval, eval-fixture, eval-co-failure, test-key)
+
+Compatibility and internal categories remain available:
+  setup      Project scaffolding            (init)
+  exec       Test selection and execution   (run, affected)
 
 Run \`flaker <category> --help\` for the full list under each category.
 Run \`flaker <category> <command> --help\` for per-command options.
@@ -134,7 +151,7 @@ if (isDirectCliExecution()) {
       }
       if (err.message.includes("DuckDB") || err.message.includes("duckdb")) {
         console.error(`Error: ${err.message}`);
-        console.error(`Run 'flaker debug doctor' to check your setup.`);
+        console.error(`Run 'flaker doctor' to check your setup.`);
         process.exit(1);
       }
     }

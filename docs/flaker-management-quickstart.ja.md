@@ -3,7 +3,10 @@
 [English](flaker-management-quickstart.md)
 
 `flaker` を導入したあと、どう運用を始めるかの最短手順。
-このページは `flaker.toml` がすでにあり、`flaker run --profile ci` を advisory として回し始める段階を前提にする。
+このページは `flaker.toml` がすでにあり、`flaker run --gate merge` を advisory として回し始める段階を前提にする。
+
+運用全体の整理は [operations-guide.ja.md](operations-guide.ja.md) を先に読むとよい。
+日常利用だけなら [usage-guide.ja.md](usage-guide.ja.md) を使う。
 
 まだ導入していない場合は先に [new-project-checklist.ja.md](new-project-checklist.ja.md) を使う。
 
@@ -81,7 +84,7 @@ nightly または 1 日 1 回、次を回す。
 mkdir -p .artifacts
 export GITHUB_TOKEN=$(gh auth token)
 pnpm flaker collect ci --days 1
-pnpm flaker run --profile scheduled
+pnpm flaker run --gate release
 pnpm flaker analyze flaky-tag --json > .artifacts/flaky-tag-triage.json
 pnpm flaker analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
 ```

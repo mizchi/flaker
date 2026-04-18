@@ -25,11 +25,12 @@ If the repository does not have `flaker.toml` and no CI lane yet, use `flaker-se
 
 ## Read order
 
-1. Read `../../docs/flaker-management-quickstart.ja.md` or `../../docs/flaker-management-quickstart.md` first, depending on the user's language.
-2. Read `references/management-guide.ja.md` for the full operating model.
-3. If the user wants theory or justification, read `references/theory.ja.md`.
-4. If the user wants copy-paste defaults, read `references/presets.ja.md`.
-5. Reuse templates from `assets/` instead of rewriting them.
+1. Read `../../docs/operations-guide.ja.md` or `../../docs/operations-guide.md` first, depending on the user's language.
+2. Read `../../docs/flaker-management-quickstart.ja.md` or `../../docs/flaker-management-quickstart.md` for the first 10 minutes.
+3. Read `references/management-guide.ja.md` for the full operating model.
+4. If the user wants theory or justification, read `references/theory.ja.md`.
+5. If the user wants copy-paste defaults, read `references/presets.ja.md`.
+6. Reuse templates from `assets/` instead of rewriting them.
 
 ## What to inspect first
 

@@ -28,10 +28,11 @@ import { createResolver } from "../resolvers/index.js";
 import { resolveCurrentCommitSha, detectChangedFiles } from "../core/git.js";
 import { loadQuarantineManifestIfExists } from "../quarantine-manifest.js";
 import {
-  detectProfileName,
+  gateNameFromProfileName,
   resolveProfile,
   computeAdaptivePercentage,
   resolveFallbackSamplingMode,
+  resolveRequestedProfileName,
   type ResolvedProfile,
 } from "../profile.js";
 import { computeKpi } from "../commands/analyze/kpi.js";
@@ -40,6 +41,7 @@ import { runSamplingKpi } from "../commands/analyze/eval.js";
 
 interface SamplingCliOpts {
   profile?: string;
+  gate?: string;
   strategy: string;
   count?: string;
   percentage?: string;
@@ -54,7 +56,8 @@ interface SamplingCliOpts {
 
 function addSamplingOptions<T extends Command>(cmd: T): T {
   return cmd
-    .option("--profile <name>", "Execution profile: scheduled, ci, local (auto-detected if omitted)")
+    .option("--gate <name>", "Gate name: iteration, merge, release")
+    .option("--profile <name>", "Advanced: execution profile name such as scheduled, ci, local")
     .option("--strategy <s>", "Sampling strategy: random, weighted, affected, hybrid, gbdt, full")
     .option("--count <n>", "Number of tests to sample")
     .option("--percentage <n>", "Percentage of tests to sample")
@@ -66,6 +69,16 @@ function addSamplingOptions<T extends Command>(cmd: T): T {
     .option("--holdout-ratio <ratio>", "Fraction of skipped tests to run as holdout (0-1)")
     .option("--model-path <path>", "Path to GBDT model JSON") as T;
 }
+
+export const RUN_COMMAND_HELP = `
+Gate names:
+  iteration  -> profile.local      Fast local feedback for the author
+  merge      -> profile.ci         PR / mainline gate
+  release    -> profile.scheduled  Full or near-full verification
+
+Use --gate for the normal workflow.
+Use --profile only when you need an advanced or custom profile name.
+`;
 
 interface ResolvedSamplingOpts {
   resolvedProfile: ResolvedProfile;
@@ -86,7 +99,7 @@ function resolveSamplingOpts(
   opts: SamplingCliOpts,
   config: FlakerConfig,
 ): ResolvedSamplingOpts {
-  const profileName = detectProfileName(opts.profile);
+  const profileName = resolveRequestedProfileName(opts.profile, opts.gate);
   const profile = resolveProfile(profileName, config.profile, config.sampling);
 
   return {
@@ -155,7 +168,12 @@ export async function execRunAction(rawOpts: SamplingCliOpts & { runner: string;
   const cwd = process.cwd();
   const config = loadConfig(cwd);
   const resolved = resolveSamplingOpts(rawOpts, config);
-  console.log(`# Profile: ${resolved.resolvedProfile.name}`);
+  const gateName = gateNameFromProfileName(resolved.resolvedProfile.name);
+  if (gateName) {
+    console.log(`# Gate: ${gateName} (profile: ${resolved.resolvedProfile.name})`);
+  } else {
+    console.log(`# Profile: ${resolved.resolvedProfile.name}`);
+  }
   const opts = { ...resolved, runner: rawOpts.runner, retry: rawOpts.retry };
   const store = new DuckDBStore(resolve(config.storage.path));
   await store.initialize();
@@ -365,12 +383,14 @@ export function registerExecCommands(program: Command): void {
   addSamplingOptions(
     exec
       .command("run")
-      .description("Select and run tests (auto-detects changed files and strategy from config)")
+      .description("Run the selected gate or profile (auto-detects changed files and strategy from config)")
       .option("--runner <runner>", "Runner type: direct or actrun", "direct")
       .option("--retry", "Retry failed tests (actrun only)")
       .option("--dry-run", "Select tests but do not execute them")
       .option("--explain", "Print per-test selection tier, score, and reason"),
-  ).action(execRunAction);
+  )
+    .addHelpText("after", RUN_COMMAND_HELP)
+    .action(execRunAction);
 
   exec
     .command("affected [paths...]")

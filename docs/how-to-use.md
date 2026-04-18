@@ -4,6 +4,12 @@ Too many tests to run them all. CI keeps failing on flaky tests. Can't tell what
 
 [日本語版](how-to-use.ja.md)
 
+This page is the **detailed command reference**.
+
+- day-to-day usage entrypoint: [usage-guide.md](usage-guide.md)
+- operations entrypoint: [operations-guide.md](operations-guide.md)
+- onboarding checklist: [new-project-checklist.ja.md](new-project-checklist.ja.md)
+
 ## Installation
 
 ```bash
