@@ -15,6 +15,7 @@ It does not cover:
 For those, see [operations-guide.md](operations-guide.md).
 
 If flaker is not installed or initialized yet, start with [new-project-checklist.md](new-project-checklist.md).
+If you are upgrading from `0.4.x`, read [migration-0.4-to-0.5.md](migration-0.4-to-0.5.md) first.
 
 ## Audience
 

@@ -21,6 +21,8 @@ It is designed for repositories where:
 - How well does local sampled execution predict CI outcomes?
 
 > **Upgrading from 0.0.x / 0.1.x?** See [docs/how-to-use.md#config-migration](docs/how-to-use.md#config-migration) for the full key rename map. Starting with `0.2.0`, the CLI refuses to start on legacy configs and points to the migration guide.
+>
+> **Upgrading from 0.4.x?** See [docs/migration-0.4-to-0.5.md](docs/migration-0.4-to-0.5.md) or [docs/migration-0.4-to-0.5.ja.md](docs/migration-0.4-to-0.5.ja.md). `0.5.x` keeps existing profiles working, but the recommended user-facing commands are now gate-oriented.
 
 ## Install as a CLI
 
@@ -61,6 +63,7 @@ Then ask the agent something like:
 - "E2E VRT の nightly triage を設計したい"
 
 The setup reference checklist lives at [docs/new-project-checklist.ja.md](docs/new-project-checklist.ja.md) and [docs/new-project-checklist.md](docs/new-project-checklist.md).
+The `0.4.x -> 0.5.x` migration guide lives at [docs/migration-0.4-to-0.5.ja.md](docs/migration-0.4-to-0.5.ja.md) and [docs/migration-0.4-to-0.5.md](docs/migration-0.4-to-0.5.md).
 The user guide lives at [docs/usage-guide.ja.md](docs/usage-guide.ja.md) and [docs/usage-guide.md](docs/usage-guide.md).
 The operations guide lives at [docs/operations-guide.ja.md](docs/operations-guide.ja.md) and [docs/operations-guide.md](docs/operations-guide.md).
 The operations quick start lives at [docs/flaker-management-quickstart.ja.md](docs/flaker-management-quickstart.ja.md) and [docs/flaker-management-quickstart.md](docs/flaker-management-quickstart.md).

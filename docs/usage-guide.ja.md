@@ -15,6 +15,7 @@
 それらは [operations-guide.ja.md](operations-guide.ja.md) を参照。
 
 まだ導入していない場合は [new-project-checklist.ja.md](new-project-checklist.ja.md) から始める。
+`0.4.x` から上げる場合は [migration-0.4-to-0.5.ja.md](migration-0.4-to-0.5.ja.md) を先に見る。
 
 ## 対象読者
 

@@ -2,6 +2,37 @@
 
 ## [0.5.0](https://github.com/mizchi/flaker/compare/flaker-v0.4.0...flaker-v0.5.0) (2026-04-18)
 
+### Migration guide
+
+Upgrading from `0.4.x` does **not** require a `flaker.toml` rename.
+The main change is the recommended user-facing CLI surface:
+
+- prefer `flaker run --gate iteration|merge|release` over profile-oriented examples
+- prefer `flaker doctor` over `flaker debug doctor`
+- prefer `flaker status` over `flaker analyze kpi` for the default dashboard
+
+Existing profile-based configs and commands remain supported:
+
+- `profile.local`, `profile.ci`, `profile.scheduled` still work
+- `flaker run --profile ...` is still supported for advanced and custom setups
+- existing category commands under `analyze`, `debug`, `policy`, and `dev` are unchanged
+
+For a practical migration checklist, see:
+
+- [docs/migration-0.4-to-0.5.ja.md](docs/migration-0.4-to-0.5.ja.md)
+- [docs/migration-0.4-to-0.5.md](docs/migration-0.4-to-0.5.md)
+
+### Highlights
+
+- gate-oriented daily workflow: `flaker run --gate iteration`, `flaker doctor`, `flaker status`
+- docs are split by audience: usage vs operations
+- management guidance is now explicit for advisory/required gates, quarantine, and staged E2E/VRT rollout
+
+### Compatibility notes
+
+- no config-key migration is required from `0.4.x`
+- this is a conceptual UX migration, not a hard CLI break like `0.2.0`
+- if you already use custom profiles in CI, you can keep them and adopt gates gradually in docs and scripts
 
 ### Features
 
