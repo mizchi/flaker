@@ -8,7 +8,7 @@ This page is the **detailed command reference**.
 
 - day-to-day usage entrypoint: [usage-guide.md](usage-guide.md)
 - operations entrypoint: [operations-guide.md](operations-guide.md)
-- onboarding checklist: [new-project-checklist.ja.md](new-project-checklist.ja.md)
+- onboarding checklist: [new-project-checklist.md](new-project-checklist.md)
 
 ## Installation
 

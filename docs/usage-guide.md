@@ -14,7 +14,7 @@ It does not cover:
 
 For those, see [operations-guide.md](operations-guide.md).
 
-If flaker is not installed or initialized yet, start with [new-project-checklist.ja.md](new-project-checklist.ja.md).
+If flaker is not installed or initialized yet, start with [new-project-checklist.md](new-project-checklist.md).
 
 ## Audience
 
@@ -81,5 +81,5 @@ pnpm flaker status
 - detailed command reference: [how-to-use.md](how-to-use.md)
 - runner / adapter details: [runner-adapters.md](runner-adapters.md), [test-result-adapters.md](test-result-adapters.md)
 - failure investigation: [diagnose.md](diagnose.md), `flaker debug confirm`, `flaker debug retry`
-- initial onboarding: [new-project-checklist.ja.md](new-project-checklist.ja.md)
+- initial onboarding: [new-project-checklist.md](new-project-checklist.md)
 - operations and rollout: [operations-guide.md](operations-guide.md)

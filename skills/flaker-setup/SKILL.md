@@ -9,8 +9,8 @@ description: Set up @mizchi/flaker on a new repository. Use when the user asks t
 
 **Always read the canonical checklist first.** It lives next to this skill in the plugin:
 
-- Plugin-relative: `${CLAUDE_PLUGIN_ROOT}/docs/new-project-checklist.ja.md`
-- GitHub: <https://github.com/mizchi/flaker/blob/main/docs/new-project-checklist.ja.md>
+- Plugin-relative: `${CLAUDE_PLUGIN_ROOT}/docs/new-project-checklist.ja.md` or `${CLAUDE_PLUGIN_ROOT}/docs/new-project-checklist.md`
+- GitHub: <https://github.com/mizchi/flaker/blob/main/docs/new-project-checklist.ja.md> or <https://github.com/mizchi/flaker/blob/main/docs/new-project-checklist.md>
 
 If both are unreachable, fall back to the procedure below.
 
@@ -161,7 +161,7 @@ If the user wants to gate sooner, push back: empirically less than 20 matched co
 All paths relative to `${CLAUDE_PLUGIN_ROOT}` of the installed plugin, or in the [flaker repo on GitHub](https://github.com/mizchi/flaker).
 
 - `README.md` — feature overview, install
-- `docs/new-project-checklist.ja.md` — the canonical full checklist (this skill is its action-oriented summary)
+- `docs/new-project-checklist.ja.md` / `docs/new-project-checklist.md` — the canonical full checklist (this skill is its action-oriented summary)
 - `docs/usage-guide.ja.md` / `docs/usage-guide.md` — user-facing entrypoint after setup
 - `docs/operations-guide.ja.md` / `docs/operations-guide.md` — maintainer / CI owner entrypoint
 - `docs/how-to-use.md` / `docs/how-to-use.ja.md` — full command reference and `#config-migration` table

@@ -8,7 +8,7 @@ This page assumes you already have `flaker.toml` and have started running `flake
 For the full operating model, start with [operations-guide.md](operations-guide.md).
 For normal day-to-day usage only, use [usage-guide.md](usage-guide.md).
 
-If you have not installed or initialized flaker yet, start with [new-project-checklist.ja.md](new-project-checklist.ja.md).
+If you have not installed or initialized flaker yet, start with [new-project-checklist.md](new-project-checklist.md).
 
 This quick start has three goals:
 

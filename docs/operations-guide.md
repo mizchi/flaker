@@ -12,7 +12,7 @@ It does not try to be:
 
 For those, see [usage-guide.md](usage-guide.md) and [how-to-use.md](how-to-use.md).
 
-If flaker is not installed or initialized yet, start with [new-project-checklist.ja.md](new-project-checklist.ja.md).
+If flaker is not installed or initialized yet, start with [new-project-checklist.md](new-project-checklist.md).
 
 ## Audience
 

@@ -60,7 +60,7 @@ Then ask the agent something like:
 - "flaker の advisory を required に上げる条件を決めたい"
 - "E2E VRT の nightly triage を設計したい"
 
-The setup reference checklist lives at [docs/new-project-checklist.ja.md](docs/new-project-checklist.ja.md).
+The setup reference checklist lives at [docs/new-project-checklist.ja.md](docs/new-project-checklist.ja.md) and [docs/new-project-checklist.md](docs/new-project-checklist.md).
 The user guide lives at [docs/usage-guide.ja.md](docs/usage-guide.ja.md) and [docs/usage-guide.md](docs/usage-guide.md).
 The operations guide lives at [docs/operations-guide.ja.md](docs/operations-guide.ja.md) and [docs/operations-guide.md](docs/operations-guide.md).
 The operations quick start lives at [docs/flaker-management-quickstart.ja.md](docs/flaker-management-quickstart.ja.md) and [docs/flaker-management-quickstart.md](docs/flaker-management-quickstart.md).
@@ -658,6 +658,7 @@ skip_flaky_tagged = true
 ## Docs
 
 - [新規プロジェクト導入チェックリスト (ja)](https://github.com/mizchi/flaker/blob/main/docs/new-project-checklist.ja.md)
+- [New Project Onboarding Checklist](https://github.com/mizchi/flaker/blob/main/docs/new-project-checklist.md)
 - [Usage Guide (ja)](https://github.com/mizchi/flaker/blob/main/docs/usage-guide.ja.md)
 - [Usage Guide](https://github.com/mizchi/flaker/blob/main/docs/usage-guide.md)
 - [Operations Guide (ja)](https://github.com/mizchi/flaker/blob/main/docs/operations-guide.ja.md)
