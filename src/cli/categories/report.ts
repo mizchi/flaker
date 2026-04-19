@@ -13,6 +13,7 @@ import {
   createReportSummaryArtifact,
   loadReportSummaryArtifactsFromDir,
 } from "../commands/report/index.js";
+import { deprecate } from "../deprecation.js";
 
 function parseKeyValuePairs(input?: string): Record<string, string> | undefined {
   if (!input) return undefined;
@@ -31,16 +32,121 @@ function parseKeyValuePairs(input?: string): Record<string, string> | undefined 
   return Object.fromEntries(entries);
 }
 
+type SummaryOpts = {
+  adapter: string;
+  input: string;
+  bundle?: boolean;
+  shard?: string;
+  module?: string;
+  offset?: string;
+  limit?: string;
+  matrix?: string;
+  variant?: string;
+  meta?: string;
+  json?: boolean;
+  markdown?: boolean;
+  prComment?: boolean;
+};
+
+function runSummaryAction(opts: SummaryOpts): void {
+  const formatCount = [opts.json, opts.markdown, opts.prComment].filter(Boolean).length;
+  if (formatCount > 1) {
+    console.error("Error: choose one of --json, --markdown, or --pr-comment");
+    process.exit(1);
+  }
+  if (opts.bundle && opts.markdown) {
+    console.error("Error: --bundle cannot be combined with --markdown");
+    process.exit(1);
+  }
+
+  const summary = runReportSummarize({
+    adapter: opts.adapter,
+    input: readFileSync(resolve(opts.input), "utf-8"),
+  });
+  if (opts.bundle) {
+    console.log(
+      JSON.stringify(
+        createReportSummaryArtifact(summary, {
+          shard: opts.shard,
+          module: opts.module,
+          offset: opts.offset ? Number(opts.offset) : undefined,
+          limit: opts.limit ? Number(opts.limit) : undefined,
+          matrix: parseKeyValuePairs(opts.matrix),
+          variant: parseKeyValuePairs(opts.variant),
+          extra: parseKeyValuePairs(opts.meta),
+        }),
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+  if (opts.prComment) {
+    console.log(formatPrComment(summary));
+    return;
+  }
+  console.log(
+    formatReportSummary(summary, opts.json ? "json" : "markdown"),
+  );
+}
+
+type DiffOpts = {
+  base: string;
+  head: string;
+  adapter?: string;
+  json?: boolean;
+  markdown?: boolean;
+};
+
+function runDiffAction(opts: DiffOpts): void {
+  if (opts.json && opts.markdown) {
+    console.error("Error: choose either --json or --markdown");
+    process.exit(1);
+  }
+
+  const baseInput = readFileSync(resolve(opts.base), "utf-8");
+  const headInput = readFileSync(resolve(opts.head), "utf-8");
+  const base = opts.adapter
+    ? runReportSummarize({ adapter: opts.adapter, input: baseInput })
+    : parseReportSummary(baseInput);
+  const head = opts.adapter
+    ? runReportSummarize({ adapter: opts.adapter, input: headInput })
+    : parseReportSummary(headInput);
+  const diff = runReportDiff({ base, head });
+
+  console.log(formatReportDiff(diff, opts.json ? "json" : "markdown"));
+}
+
+type AggregateOpts = {
+  json?: boolean;
+  markdown?: boolean;
+};
+
+function runAggregateAction(dir: string, opts: AggregateOpts): void {
+  if (opts.json && opts.markdown) {
+    console.error("Error: choose either --json or --markdown");
+    process.exit(1);
+  }
+
+  const aggregate = runReportAggregate({
+    summaries: loadReportSummaryArtifactsFromDir(resolve(dir)),
+  });
+  console.log(
+    formatReportAggregate(aggregate, opts.json ? "json" : "markdown"),
+  );
+}
+
 export function registerReportCommands(program: Command): void {
   const reportCmd = program
     .command("report")
-    .description("Normalize and diff reports");
-
-  reportCmd
-    .command("summary")
-    .description("Summarize a raw adapter report")
-    .requiredOption("--adapter <type>", "Adapter type (playwright, junit, vrt-migration, vrt-bench)")
-    .requiredOption("--input <file>", "Raw adapter report file")
+    .description("Normalize and diff reports")
+    .argument("[file]", "Input file (or directory for --aggregate)")
+    .option("--summary", "Summarize a raw adapter report")
+    .option("--diff <base>", "Diff against a base report file")
+    .option("--aggregate <dir>", "Aggregate shard-aware summary artifacts from a directory")
+    // summary flags
+    .option("--adapter <type>", "Adapter type (playwright, junit, vrt-migration, vrt-bench)")
+    .option("--input <file>", "Raw adapter report file (alias for positional [file])")
     .option("--bundle", "Wrap summary with shard metadata for aggregation")
     .option("--shard <name>", "Shard name")
     .option("--module <name>", "Module name")
@@ -52,115 +158,143 @@ export function registerReportCommands(program: Command): void {
     .option("--json", "Output JSON report")
     .option("--markdown", "Output Markdown report")
     .option("--pr-comment", "Output compact Markdown for PR comments")
+    // diff flags
+    .option("--head <file>", "Head summary or raw report file (for --diff)")
     .action(
-      (opts: {
-        adapter: string;
-        input: string;
-        bundle?: boolean;
-        shard?: string;
-        module?: string;
-        offset?: string;
-        limit?: string;
-        matrix?: string;
-        variant?: string;
-        meta?: string;
-        json?: boolean;
-        markdown?: boolean;
-        prComment?: boolean;
-      }) => {
-        const formatCount = [opts.json, opts.markdown, opts.prComment].filter(Boolean).length;
-        if (formatCount > 1) {
-          console.error("Error: choose one of --json, --markdown, or --pr-comment");
-          process.exit(1);
+      (
+        file: string | undefined,
+        opts: {
+          summary?: boolean;
+          diff?: string;
+          aggregate?: string;
+          // summary opts
+          adapter?: string;
+          input?: string;
+          bundle?: boolean;
+          shard?: string;
+          module?: string;
+          offset?: string;
+          limit?: string;
+          matrix?: string;
+          variant?: string;
+          meta?: string;
+          json?: boolean;
+          markdown?: boolean;
+          prComment?: boolean;
+          // diff opts
+          head?: string;
+        },
+      ) => {
+        const flagCount = [opts.summary, opts.diff !== undefined, opts.aggregate !== undefined].filter(Boolean).length;
+        if (flagCount === 0) {
+          reportCmd.help();
+          return;
         }
-        if (opts.bundle && opts.markdown) {
-          console.error("Error: --bundle cannot be combined with --markdown");
-          process.exit(1);
+        if (flagCount > 1) {
+          console.error("Error: --summary, --diff, and --aggregate are mutually exclusive");
+          process.exit(2);
         }
 
-        const summary = runReportSummarize({
-          adapter: opts.adapter,
-          input: readFileSync(resolve(opts.input), "utf-8"),
-        });
-        if (opts.bundle) {
-          console.log(
-            JSON.stringify(
-              createReportSummaryArtifact(summary, {
-                shard: opts.shard,
-                module: opts.module,
-                offset: opts.offset ? Number(opts.offset) : undefined,
-                limit: opts.limit ? Number(opts.limit) : undefined,
-                matrix: parseKeyValuePairs(opts.matrix),
-                variant: parseKeyValuePairs(opts.variant),
-                extra: parseKeyValuePairs(opts.meta),
-              }),
-              null,
-              2,
-            ),
-          );
+        if (opts.summary) {
+          const inputFile = file ?? opts.input;
+          if (!inputFile) {
+            console.error("Error: --summary requires a file argument or --input <file>");
+            process.exit(2);
+          }
+          if (!opts.adapter) {
+            console.error("Error: --summary requires --adapter <type>");
+            process.exit(2);
+          }
+          runSummaryAction({
+            adapter: opts.adapter,
+            input: inputFile,
+            bundle: opts.bundle,
+            shard: opts.shard,
+            module: opts.module,
+            offset: opts.offset,
+            limit: opts.limit,
+            matrix: opts.matrix,
+            variant: opts.variant,
+            meta: opts.meta,
+            json: opts.json,
+            markdown: opts.markdown,
+            prComment: opts.prComment,
+          });
           return;
         }
-        if (opts.prComment) {
-          console.log(formatPrComment(summary));
+
+        if (opts.diff !== undefined) {
+          const headFile = file ?? opts.head;
+          if (!headFile) {
+            console.error("Error: --diff requires a head file argument or --head <file>");
+            process.exit(2);
+          }
+          runDiffAction({
+            base: opts.diff,
+            head: headFile,
+            adapter: opts.adapter,
+            json: opts.json,
+            markdown: opts.markdown,
+          });
           return;
         }
-        console.log(
-          formatReportSummary(summary, opts.json ? "json" : "markdown"),
-        );
+
+        if (opts.aggregate !== undefined) {
+          runAggregateAction(opts.aggregate, {
+            json: opts.json,
+            markdown: opts.markdown,
+          });
+        }
       },
     );
 
-  reportCmd
-    .command("diff")
-    .description("Diff two normalized summaries or raw adapter reports")
-    .requiredOption("--base <file>", "Base summary or raw report file")
-    .requiredOption("--head <file>", "Head summary or raw report file")
-    .option("--adapter <type>", "Adapter type when diffing raw reports")
-    .option("--json", "Output JSON report")
-    .option("--markdown", "Output Markdown report")
-    .action(
-      (opts: {
-        base: string;
-        head: string;
-        adapter?: string;
-        json?: boolean;
-        markdown?: boolean;
-      }) => {
-        if (opts.json && opts.markdown) {
-          console.error("Error: choose either --json or --markdown");
-          process.exit(1);
-        }
+  deprecate(
+    reportCmd
+      .command("summary")
+      .description("Summarize a raw adapter report")
+      .requiredOption("--adapter <type>", "Adapter type (playwright, junit, vrt-migration, vrt-bench)")
+      .requiredOption("--input <file>", "Raw adapter report file")
+      .option("--bundle", "Wrap summary with shard metadata for aggregation")
+      .option("--shard <name>", "Shard name")
+      .option("--module <name>", "Module name")
+      .option("--offset <n>", "Shard offset")
+      .option("--limit <n>", "Shard limit")
+      .option("--matrix <pairs>", "Comma-separated matrix metadata (key=value)")
+      .option("--variant <pairs>", "Comma-separated variant metadata (key=value)")
+      .option("--meta <pairs>", "Comma-separated extra metadata (key=value)")
+      .option("--json", "Output JSON report")
+      .option("--markdown", "Output Markdown report")
+      .option("--pr-comment", "Output compact Markdown for PR comments")
+      .action((opts: SummaryOpts) => {
+        runSummaryAction(opts);
+      }),
+    { since: "0.7.0", remove: "0.8.0", canonical: "flaker report --summary" },
+  );
 
-        const baseInput = readFileSync(resolve(opts.base), "utf-8");
-        const headInput = readFileSync(resolve(opts.head), "utf-8");
-        const base = opts.adapter
-          ? runReportSummarize({ adapter: opts.adapter, input: baseInput })
-          : parseReportSummary(baseInput);
-        const head = opts.adapter
-          ? runReportSummarize({ adapter: opts.adapter, input: headInput })
-          : parseReportSummary(headInput);
-        const diff = runReportDiff({ base, head });
+  deprecate(
+    reportCmd
+      .command("diff")
+      .description("Diff two normalized summaries or raw adapter reports")
+      .requiredOption("--base <file>", "Base summary or raw report file")
+      .requiredOption("--head <file>", "Head summary or raw report file")
+      .option("--adapter <type>", "Adapter type when diffing raw reports")
+      .option("--json", "Output JSON report")
+      .option("--markdown", "Output Markdown report")
+      .action((opts: DiffOpts) => {
+        runDiffAction(opts);
+      }),
+    { since: "0.7.0", remove: "0.8.0", canonical: "flaker report --diff <base>" },
+  );
 
-        console.log(formatReportDiff(diff, opts.json ? "json" : "markdown"));
-      },
-    );
-
-  reportCmd
-    .command("aggregate <dir>")
-    .description("Aggregate shard-aware summary artifacts")
-    .option("--json", "Output JSON report")
-    .option("--markdown", "Output Markdown report")
-    .action((dir: string, opts: { json?: boolean; markdown?: boolean }) => {
-      if (opts.json && opts.markdown) {
-        console.error("Error: choose either --json or --markdown");
-        process.exit(1);
-      }
-
-      const aggregate = runReportAggregate({
-        summaries: loadReportSummaryArtifactsFromDir(resolve(dir)),
-      });
-      console.log(
-        formatReportAggregate(aggregate, opts.json ? "json" : "markdown"),
-      );
-    });
+  deprecate(
+    reportCmd
+      .command("aggregate <dir>")
+      .description("Aggregate shard-aware summary artifacts")
+      .option("--json", "Output JSON report")
+      .option("--markdown", "Output Markdown report")
+      .action((dir: string, opts: AggregateOpts) => {
+        runAggregateAction(dir, opts);
+      }),
+    { since: "0.7.0", remove: "0.8.0", canonical: "flaker report --aggregate <dir>" },
+  );
 }
