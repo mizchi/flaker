@@ -13,3 +13,11 @@ describe("flaker plan", () => {
     expect(res.stdout).toContain("Preview actions");
   });
 });
+
+describe("flaker apply", () => {
+  it("prints help text mentioning 'Apply planned actions'", () => {
+    const res = spawnSync("node", [CLI, "apply", "--help"], { encoding: "utf8" });
+    expect(res.status).toBe(0);
+    expect(res.stdout).toContain("Apply planned actions");
+  });
+});
