@@ -155,6 +155,19 @@ detection_threshold_ratio = 0.02       # この割合以上で flaky と判定
 
 ## コマンドリファレンス
 
+### `flaker plan` / `flaker apply` — 宣言的収束
+
+```bash
+flaker plan           # 現状との差分を表示 (dry-run)
+flaker plan --json
+flaker apply          # 差分を埋めるために collect / calibrate / run / quarantine apply を自動実行
+flaker apply --json
+```
+
+`flaker.toml` を **desired state** とみなし、現在の DB 状態を見て「何をすべきか」を planner が組み立てる。履歴ゼロの新規 repo なら `collect_ci` + `cold_start_run` が、十分な履歴があれば `collect_ci` + `calibrate` + `quarantine_apply` が選ばれる。ユーザー側が順序を覚える必要はない。
+
+`[promotion]` セクションの閾値と現状の KPI を突き合わせて `flaker status` がドリフトを表示する。
+
 ### `flaker collect` — CI からデータ収集
 
 ```bash
@@ -362,6 +375,38 @@ flaker policy quarantine --remove "suite>testName"       # 解除
 ```
 
 隔離されたテストは `--skip-quarantined` で実行から除外できます。
+
+### `flaker debug retry` — CI 失敗をローカル再現
+
+```bash
+flaker debug retry                      # 直近の失敗 CI run から失敗テストを取り、ローカル再実行
+flaker debug retry --run 12345678       # 特定の workflow run id を指定
+```
+
+CI の失敗 artifact から失敗テスト群を抽出し、ローカルで一括再実行します。**最初に打つコマンド**の位置付けで、複数の CI 失敗をまとめて「再現する / しない」で一次振り分けするために使います。出力は 2 値 (再現 / 非再現) で、`BROKEN/FLAKY/TRANSIENT` の分類までは行いません。細かい分類が欲しい場合は、非再現のテストを `flaker debug confirm` に回します。
+
+### `flaker debug confirm` — 失敗を 3 分類に判定
+
+```bash
+# remote: workflow_dispatch を叩いて CI で繰り返し実行
+flaker debug confirm "tests/api.test.ts:handles timeout"
+flaker debug confirm "tests/api.test.ts:handles timeout" --repeat 10
+
+# local: 手元の runner で繰り返し実行
+flaker debug confirm "tests/api.test.ts:handles timeout" --runner local
+```
+
+指定した 1 テストを `--repeat N` 回実行し、結果を 3 分類に判定します (`--repeat` の既定値は `5`):
+
+| 分類 | 条件 | 意味 / 推奨アクション |
+|---|---|---|
+| `BROKEN` | `failures == N` | 毎回失敗。regression として修正する |
+| `FLAKY` | `0 < failures < N` | 断続的失敗。`@flaky` タグ付与または quarantine |
+| `TRANSIENT` | `failures == 0` | 再現せず。CI 環境起因 / 一過性ノイズとして記録のみ |
+
+`--repeat 10` 以上は、低頻度の flaky を既定値 `5` では検出しきれないと疑うときに使います。試行回数を増やすほど判定が安定する一方、wall time が伸びます。
+
+remote モードは `.github/workflows/flaker-confirm.yml` を要求します。未生成の repo では `flaker init --force` で作り直すか、`templates/flaker-confirm.yml` をコピーしてください。
 
 ### `flaker debug bisect` — 原因コミット特定
 

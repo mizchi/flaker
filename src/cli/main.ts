@@ -1,16 +1,37 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Command } from "commander";
+import { Command, type HelpContext } from "commander";
 import { registerSetupCommands, setupInitAction } from "./categories/setup.js";
 import { registerExecCommands, execRunAction, RUN_COMMAND_HELP } from "./categories/exec.js";
 import { registerCollectCommands } from "./categories/collect.js";
 import { registerImportCommands } from "./categories/import.js";
 import { registerReportCommands } from "./categories/report.js";
-import { registerAnalyzeCommands, analyzeKpiAction } from "./categories/analyze.js";
+import { registerAnalyzeCommands, analyzeKpiAction, statusAction } from "./categories/analyze.js";
+import { registerGateCommands } from "./categories/gate.js";
+import { registerOpsCommands } from "./categories/ops.js";
+import { registerQuarantineCommands } from "./categories/quarantine.js";
 import { registerDebugCommands, debugDoctorAction } from "./categories/debug.js";
 import { registerPolicyCommands } from "./categories/policy.js";
 import { registerDevCommands } from "./categories/dev.js";
+import { registerApplyCommands } from "./categories/apply.js";
+
+function warnDeprecated(aliasName: string, canonical: string): void {
+  process.stderr.write(
+    `warning: \`flaker ${aliasName}\` is deprecated and will be removed in 0.7.0. `
+    + `Use \`${canonical}\` instead.\n`,
+  );
+}
+
+function attachDeprecationWarning(cmd: Command, aliasName: string, canonical: string): void {
+  const origOutputHelp = cmd.outputHelp.bind(cmd);
+  const wrapped = (context?: HelpContext) => {
+    warnDeprecated(aliasName, canonical);
+    return origOutputHelp(context);
+  };
+  // Commander's outputHelp has overloads; cast to satisfy the assignment
+  cmd.outputHelp = wrapped as typeof cmd.outputHelp;
+}
 
 function isDirectCliExecution(): boolean {
   return process.argv[1] != null
@@ -20,10 +41,14 @@ function isDirectCliExecution(): boolean {
 export function createProgram(): Command {
   const program = new Command();
   registerSetupCommands(program);
+  registerApplyCommands(program);
   registerExecCommands(program);
   registerCollectCommands(program);
   registerImportCommands(program);
   registerReportCommands(program);
+  registerGateCommands(program);
+  registerOpsCommands(program);
+  registerQuarantineCommands(program);
   registerAnalyzeCommands(program);
   registerDebugCommands(program);
   registerPolicyCommands(program);
@@ -68,24 +93,32 @@ export function createProgram(): Command {
     .addHelpText("after", RUN_COMMAND_HELP)
     .action(execRunAction);
 
-  program
+  const kpiCmd = program
     .command("kpi")
-    .description("Alias for `flaker analyze kpi`")
+    .description("DEPRECATED alias for `flaker analyze kpi` (removed in 0.7.0)")
     .option("--window-days <days>", "Analysis window in days", "30")
     .option("--json", "Output as JSON")
-    .action(analyzeKpiAction);
+    .action((opts) => {
+      warnDeprecated("kpi", "flaker analyze kpi");
+      return analyzeKpiAction(opts);
+    });
+  attachDeprecationWarning(kpiCmd, "kpi", "flaker analyze kpi");
 
   program
     .command("status")
-    .description("User-facing status dashboard (alias for `flaker analyze kpi`)")
+    .description("User-facing summary dashboard (summary-only, no promotion decision)")
     .option("--window-days <days>", "Analysis window in days", "30")
     .option("--json", "Output as JSON")
-    .action(analyzeKpiAction);
+    .action(statusAction);
 
-  program
+  const doctorCmd = program
     .command("doctor")
-    .description("User-facing environment check (alias for `flaker debug doctor`)")
-    .action(debugDoctorAction);
+    .description("DEPRECATED alias for `flaker debug doctor` (removed in 0.7.0)")
+    .action(() => {
+      warnDeprecated("doctor", "flaker debug doctor");
+      return debugDoctorAction();
+    });
+  attachDeprecationWarning(doctorCmd, "doctor", "flaker debug doctor");
 
   const originalHelpInformation = program.helpInformation.bind(program);
   program.helpInformation = () => {
@@ -103,6 +136,9 @@ Primary commands:
   run         Run the selected gate or profile
   status      Show the user-facing health dashboard
   doctor      Check local runtime requirements
+  gate        Review gate readiness and sampling health
+  ops         Generate operator review artifacts
+  quarantine  Suggest quarantine add/remove plans
 
 Gate model:
   iteration   -> profile.local      Fast author feedback
@@ -113,6 +149,9 @@ Run \`flaker run --help\` for gate mapping and advanced run options.
 Run \`flaker status --help\` or \`flaker doctor --help\` for user-facing commands.
 
 Management and advanced categories:
+  gate       Gate review and readiness        (review)
+  ops        Operator cadence artifacts       (weekly)
+  quarantine Read-only quarantine planning    (suggest)
   collect    Import history and calibration (ci, local, coverage, commit-changes, calibrate)
   import     Ingest external reports        (report, parquet)
   report     Normalize and diff reports     (summary, diff, aggregate)

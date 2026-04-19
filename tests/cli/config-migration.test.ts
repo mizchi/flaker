@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { loadConfig, validateConfigRanges, type FlakerConfig } from "../../src/cli/config.js";
+import { loadConfig, validateConfigRanges, DEFAULT_PROMOTION, type FlakerConfig } from "../../src/cli/config.js";
 
 // These tests are intentionally skipped until Task 18 rewrites the config loader.
 // Remove the `.skip` in Task 18 when the loader throws on legacy keys.
@@ -40,6 +40,7 @@ describe("validateConfigRanges", () => {
     affected: { resolver: "workspace", config: "" },
     quarantine: { auto: true, flaky_rate_threshold_percentage: 30, min_runs: 5 },
     flaky: { window_days: 14, detection_threshold_ratio: 0.02 },
+    promotion: DEFAULT_PROMOTION,
   };
 
   it("accepts in-range values", () => {

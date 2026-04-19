@@ -210,7 +210,7 @@ max_duration_seconds = 60  # 時間制約内で優先度の高いテストを選
 | やりたいこと | コマンド |
 |------------|---------|
 | flaky テストの一覧を見る | `flaker analyze flaky` |
-| サンプリングの品質を評価する | `flaker kpi` |
+| サンプリングの品質を評価する | `flaker analyze kpi` |
 | テストを実行せず選択だけ見る | `flaker run --dry-run` |
 | SQL で直接データを分析する | `flaker analyze query "SELECT ..."` |
 

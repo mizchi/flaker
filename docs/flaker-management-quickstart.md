@@ -60,9 +60,9 @@ Run this at the repo root:
 
 ```bash
 mkdir -p .artifacts
-pnpm flaker analyze kpi
-pnpm flaker analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
-pnpm flaker analyze flaky-tag --json > .artifacts/flaky-tag-triage.json
+pnpm flaker status
+pnpm flaker gate review merge --json --output .artifacts/gate-review-merge.json
+pnpm flaker ops weekly --output .artifacts/flaker-weekly.md
 ```
 
 Look at:
@@ -84,26 +84,33 @@ Run this nightly or once per day:
 mkdir -p .artifacts
 export GITHUB_TOKEN=$(gh auth token)
 pnpm flaker collect ci --days 1
-pnpm flaker run --gate release
-pnpm flaker analyze flaky-tag --json > .artifacts/flaky-tag-triage.json
-pnpm flaker analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
+pnpm flaker ops daily --output .artifacts/flaker-daily.md
+pnpm flaker quarantine suggest --json --output .artifacts/quarantine-plan.json
 ```
 
 Update quarantine too when needed:
 
 ```bash
-pnpm flaker policy quarantine --auto --create-issues
+pnpm flaker quarantine apply --from .artifacts/quarantine-plan.json --create-issues
 ```
 
 This loop does three things:
 
 - grows history via full execution
-- emits add / remove suggestions for `@flaky`
-- leaves markdown artifacts for weekly review
+- leaves a reviewed quarantine plan artifact
+- leaves a daily release snapshot artifact
 
 ## 3. Weekly review
 
-Fill this once a week:
+First refresh the weekly artifacts:
+
+```bash
+mkdir -p .artifacts
+pnpm flaker gate review merge --json --output .artifacts/gate-review-merge.json
+pnpm flaker ops weekly --output .artifacts/flaker-weekly.md
+```
+
+Then fill this once a week:
 
 ```md
 ## Week YYYY-MM-DD
@@ -165,18 +172,20 @@ For per-test contracts, use [skills/flaker-management/assets/test-contract-templ
 Re-check a CI failure:
 
 ```bash
-pnpm flaker debug retry --run <workflow-run-id>
+pnpm flaker ops incident --run <workflow-run-id> --output .artifacts/flaker-incident.md
 ```
 
 Confirm a specific test:
 
 ```bash
-pnpm flaker debug confirm "path/to/spec.ts:test name" --runner local
+pnpm flaker ops incident --suite path/to/spec.ts --test "test name" --output .artifacts/flaker-incident.md
 ```
 
-Run mutation-based diagnosis:
+If you need finer control, drop to the raw debug primitives:
 
 ```bash
+pnpm flaker debug retry --run <workflow-run-id>
+pnpm flaker debug confirm "path/to/spec.ts:test name" --runner local
 pnpm flaker debug diagnose --suite path/to/spec.ts --test "test name"
 ```
 

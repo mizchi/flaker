@@ -41,6 +41,22 @@ export interface ProfileConfig {
   fallback_strategy?: string;
 }
 
+export interface PromotionThresholds {
+  matched_commits_min: number;
+  false_negative_rate_max_percentage: number;
+  pass_correlation_min_percentage: number;
+  holdout_fnr_max_percentage: number;
+  data_confidence_min: "low" | "moderate" | "high";
+}
+
+export const DEFAULT_PROMOTION: PromotionThresholds = {
+  matched_commits_min: 20,
+  false_negative_rate_max_percentage: 5,
+  pass_correlation_min_percentage: 95,
+  holdout_fnr_max_percentage: 10,
+  data_confidence_min: "moderate",
+};
+
 export interface FlakerConfig {
   repo: { owner: string; name: string };
   storage: { path: string };
@@ -60,6 +76,7 @@ export interface FlakerConfig {
   coverage?: CoverageConfig;
   sampling?: SamplingConfig;
   profile?: Record<string, ProfileConfig>;
+  promotion: PromotionThresholds;
 }
 
 export type ConfigWarningCode =
@@ -87,6 +104,7 @@ const DEFAULT_CONFIG: FlakerConfig = {
   affected: { resolver: "git", config: "" },
   quarantine: { auto: true, flaky_rate_threshold_percentage: 30, min_runs: 5 },
   flaky: { window_days: 14, detection_threshold_ratio: 0.02 },
+  promotion: DEFAULT_PROMOTION,
 };
 
 function looksLikeWorkflowPath(value?: string): boolean {
@@ -222,7 +240,7 @@ export function resolveActrunWorkflowPath(config: FlakerConfig): string {
 
 export interface ConfigRangeError {
   path: string;
-  value: number;
+  value: number | string;
   expected: string;
 }
 
@@ -254,6 +272,20 @@ export function validateConfigRanges(config: FlakerConfig): ConfigRangeError[] {
       check(`profile.${name}.adaptive_fnr_high_ratio`, p.adaptive_fnr_high_ratio, 0, 1, "0.0-1.0");
       check(`profile.${name}.adaptive_min_percentage`, p.adaptive_min_percentage, 0, 100, "0-100");
     }
+  }
+
+  check("promotion.matched_commits_min", config.promotion.matched_commits_min, 0, Number.MAX_SAFE_INTEGER, ">=0");
+  check("promotion.false_negative_rate_max_percentage", config.promotion.false_negative_rate_max_percentage, 0, 100, "0-100");
+  check("promotion.pass_correlation_min_percentage", config.promotion.pass_correlation_min_percentage, 0, 100, "0-100");
+  check("promotion.holdout_fnr_max_percentage", config.promotion.holdout_fnr_max_percentage, 0, 100, "0-100");
+
+  const validConfidence = new Set(["low", "moderate", "high"]);
+  if (!validConfidence.has(config.promotion.data_confidence_min)) {
+    errors.push({
+      path: "promotion.data_confidence_min",
+      value: config.promotion.data_confidence_min,
+      expected: "one of low|moderate|high",
+    });
   }
 
   return errors;

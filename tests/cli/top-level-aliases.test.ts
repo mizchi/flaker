@@ -37,9 +37,58 @@ describe("top-level aliases", () => {
     expect(help).toContain("--json");
   });
 
+  it("flaker gate review --help shows gate review options", () => {
+    const help = execSync(`node ${cliPath} gate review --help`, { encoding: "utf-8" });
+    expect(help).toContain("--window-days");
+    expect(help).toContain("--json");
+  });
+
+  it("flaker gate explain --help shows gate explain options", () => {
+    const help = execSync(`node ${cliPath} gate explain --help`, { encoding: "utf-8" });
+    expect(help).toContain("--json");
+  });
+
+  it("flaker gate history --help shows gate history options", () => {
+    const help = execSync(`node ${cliPath} gate history --help`, { encoding: "utf-8" });
+    expect(help).toContain("--window-days");
+    expect(help).toContain("--json");
+  });
+
+  it("flaker quarantine suggest --help shows quarantine suggest options", () => {
+    const help = execSync(`node ${cliPath} quarantine suggest --help`, { encoding: "utf-8" });
+    expect(help).toContain("--window-days");
+    expect(help).toContain("--output");
+    expect(help).toContain("--json");
+  });
+
+  it("flaker quarantine apply --help shows quarantine apply options", () => {
+    const help = execSync(`node ${cliPath} quarantine apply --help`, { encoding: "utf-8" });
+    expect(help).toContain("--from");
+    expect(help).toContain("--create-issues");
+  });
+
+  it("flaker ops weekly --help shows ops weekly options", () => {
+    const help = execSync(`node ${cliPath} ops weekly --help`, { encoding: "utf-8" });
+    expect(help).toContain("--window-days");
+    expect(help).toContain("--json");
+  });
+
+  it("flaker ops daily --help shows ops daily options", () => {
+    const help = execSync(`node ${cliPath} ops daily --help`, { encoding: "utf-8" });
+    expect(help).toContain("--window-days");
+    expect(help).toContain("--json");
+  });
+
+  it("flaker ops incident --help shows ops incident options", () => {
+    const help = execSync(`node ${cliPath} ops incident --help`, { encoding: "utf-8" });
+    expect(help).toContain("--suite");
+    expect(help).toContain("--test");
+    expect(help).toContain("--run");
+  });
+
   it("flaker doctor --help shows the top-level doctor alias", () => {
     const help = execSync(`node ${cliPath} doctor --help`, { encoding: "utf-8" });
-    expect(help).toContain("User-facing environment check");
+    expect(help).toContain("DEPRECATED alias for `flaker debug doctor`");
   });
 
   it("flaker collect --help shows collect subcommands and ci options", () => {

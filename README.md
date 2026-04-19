@@ -229,9 +229,9 @@ The current CLI and config already fit this model:
 | Iteration Gate | `profile.local` |
 | Merge Gate | `profile.ci` |
 | Release Gate | usually a full run, often backed by `profile.scheduled` or a dedicated release workflow |
-| Observation loop | `flaker collect` + `flaker run --gate release` + `flaker analyze eval` |
-| Triage loop | `flaker analyze flaky-tag` + `flaker policy quarantine` + weekly review |
-| Incident loop | `flaker debug retry` + `flaker debug confirm` + `flaker debug diagnose` |
+| Observation loop | `flaker collect` + `flaker ops daily` |
+| Triage loop | `flaker gate review merge` + `flaker ops weekly` + `flaker quarantine suggest/apply` |
+| Incident loop | `flaker ops incident` |
 
 If you describe flaker this way, the surface area becomes smaller:
 
@@ -239,13 +239,49 @@ If you describe flaker this way, the surface area becomes smaller:
 - operators run loops and maintain policies
 - flaker chooses strategies such as `affected`, `hybrid`, or `full`
 
+The older primitives such as `analyze eval`, `analyze flaky-tag`, and `policy quarantine` still exist, but they are now advanced/internal surfaces rather than the primary operator entrypoints.
+
 ## Quick Start
 
-1. **Initialize**: `flaker init` — creates `flaker.toml`, auto-detects repo from git remote
-2. **Calibrate**: `flaker collect calibrate` — analyzes history and writes optimal sampling config
-3. **Check environment**: `flaker doctor` — verifies DuckDB, MoonBit, and config
-4. **Run a gate**: `flaker run --gate iteration` — fast local feedback
-5. **Inspect health**: `flaker status` — KPI dashboard for sampling, flaky tests, and data quality
+Pick the path that matches the repo's CI history on Day 1. `flaker calibrate` only produces useful output once there are enough CI runs to analyze (it emits an `insufficient` warning on empty history), so it belongs in Path 2, not Path 1.
+
+### Path 1 — New repo, no CI history yet
+
+The first `flaker run` self-seeds a history from the runner's listed tests (cold-start fallback; see below). Run `collect` / `calibrate` later on Day 2–3 once CI has accumulated enough data.
+
+1. `flaker init` — creates `flaker.toml`, auto-detects repo from git remote
+2. `flaker doctor`[^doctor-canonical] — verifies DuckDB, MoonBit, and config
+3. `flaker run --gate iteration` — runs tests and records the first local history
+4. `flaker status` — user-facing summary dashboard
+5. (Day 2–3) `flaker collect --days 30 && flaker collect calibrate` — once CI has accumulated runs, pull them in and tune sampling
+
+[^doctor-canonical]: `flaker doctor` is the onboarding-friendly alias; the canonical form is `flaker debug doctor` (see canonical command forms table below).
+
+### Path 2 — Existing repo, CI history already present
+
+Calibrate on Day 1 using the existing history.
+
+1. `flaker init` — creates `flaker.toml`, auto-detects repo from git remote
+2. `flaker doctor`[^doctor-canonical] — verifies DuckDB, MoonBit, and config
+3. `flaker collect --days 30` — pulls recent CI runs from GitHub Actions (requires `GITHUB_TOKEN`)
+4. `flaker collect calibrate` — analyzes the collected history and writes optimal sampling config back into `flaker.toml`
+5. `flaker run --gate iteration` — fast local feedback
+6. `flaker status` — user-facing summary dashboard (sampling, flaky tests, data quality)
+
+The staged onboarding checklist at [docs/new-project-checklist.ja.md](docs/new-project-checklist.ja.md) expands Path 1 across Day 0 → Week 4.
+
+For users who want a single idempotent entrypoint instead of the step-by-step flow above, `flaker plan` / `flaker apply` (introduced in 0.6.0) treat `flaker.toml` as desired state and automatically sequence `collect` / `calibrate` / `quarantine apply` based on current DB state. Run `flaker plan` first to preview what will happen, then `flaker apply` to converge. Path 2 above remains fully supported for operators who prefer explicit control.
+
+> **Canonical command forms**
+>
+> | Canonical | Legacy form (accepted but avoid in new docs) |
+> |---|---|
+> | `flaker collect --days N` | `flaker collect ci --days N` |
+> | `flaker collect calibrate` | (there is no top-level `flaker calibrate`) |
+> | `flaker analyze kpi` | `flaker kpi` — DEPRECATED in 0.6.0 |
+> | `flaker debug doctor` | `flaker doctor` — DEPRECATED in 0.6.0 |
+>
+> `flaker collect` and `flaker collect ci` are aliases — both call the same action (pull from GitHub Actions). New docs standardize on `flaker collect` (no `ci` subcommand). `flaker status` (top-level) and `flaker analyze kpi` are **different** commands: `status` is the summary-only dashboard for daily use; `analyze kpi` is the detailed KPI view for operators. Use `flaker gate review merge --json` — not `status` — when you need the authoritative numbers for advisory-to-required promotion decisions.
 
 ### Initialize
 
@@ -296,19 +332,21 @@ trust = true
 # job = "e2e"
 ```
 
-### Inspect flakiness
+### Inspect health and operator state
+
+```bash
+flaker status
+flaker gate review merge
+flaker gate history merge --json
+flaker quarantine suggest --json
+flaker ops weekly --json
+```
+
+Advanced/internal analysis primitives still exist when you need lower-level detail:
 
 ```bash
 flaker analyze flaky
-flaker analyze flaky-tag --json
 flaker analyze reason
-flaker analyze eval
-flaker analyze bundle --output .artifacts/flaker-analysis.json
-```
-
-Useful evaluation outputs:
-
-```bash
 flaker analyze eval --json
 flaker analyze eval --markdown --window 7
 flaker analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
@@ -404,7 +442,7 @@ This supports a simple Playwright workflow:
 
 - `release` / `scheduled` runs all E2E tests and accumulates history
 - `merge` / `iteration` exclude tests tagged with `@flaky`
-- `flaker analyze flaky-tag --json` emits add/remove suggestions for a daily AI triage agent
+- `flaker ops weekly --json` carries both quarantine and flaky-tag suggestions for operator review
 
 Recommended `@flaky` loop:
 
@@ -413,17 +451,23 @@ Recommended `@flaky` loop:
    `flaker` detects both Playwright tags and `@flaky` embedded in the test title.
 3. Keep `release` / `scheduled` as full execution, and use `merge` / `iteration` with `skip_flaky_tagged = true`.
    For Playwright, flaker passes `--grep-invert @flaky` to normal runs.
-4. Run daily triage and let an AI agent update test sources based on the report:
+4. Run weekly triage and let an AI agent update test sources based on the artifact:
 
 ```bash
-flaker analyze flaky-tag --json > .artifacts/flaky-tag-triage.json
+flaker ops weekly --json > .artifacts/flaker-weekly.json
 ```
 
-The triage report contains:
+The weekly artifact contains flaky-tag suggestions:
 
 - `suggestions.add`: untagged tests that are unstable enough to move into `@flaky`
 - `suggestions.remove`: currently tagged tests that have enough consecutive clean passes to return to normal execution
 - `suggestions.keep`: currently tagged tests that should remain excluded from normal execution
+
+If you want the raw primitive instead of the bundled operator artifact:
+
+```bash
+flaker analyze flaky-tag --json > .artifacts/flaky-tag-triage.json
+```
 
 By default, add-thresholds come from `[quarantine]`:
 
@@ -473,10 +517,11 @@ Post test results directly on pull requests:
 When flaky tests are auto-quarantined, create tracking issues:
 
 ```bash
-flaker policy quarantine --auto --create-issues
+flaker quarantine suggest --json --output .artifacts/quarantine-plan.json
+flaker quarantine apply --from .artifacts/quarantine-plan.json --create-issues
 ```
 
-This creates a GitHub Issue per quarantined test via `gh` CLI, with flaky rate, run count, and fix instructions. Requires `gh` to be installed and authenticated.
+This creates a reviewed plan first, then applies it and optionally opens GitHub Issues via `gh` CLI. Requires `gh` to be installed and authenticated.
 
 ### Self-Host Rollout
 
@@ -487,13 +532,13 @@ The repo now ships two GitHub-native self-host lanes:
 
 Both lanes render the same promotion-readiness summary from `scripts/self-host-review.mjs`. The current default is still advisory: the PR job is non-blocking, and the nightly workflow carries the long-form trend.
 
-Promote `flaker run --gate merge` to a required check only after the nightly issue shows:
+Promote `flaker run --gate merge` to a required check only after the nightly issue shows **all five** of the following. Check the current values with `flaker gate review merge --json` (authoritative for promotion) — `flaker status` is a summary-only dashboard and should not be used for promotion.
 
-- `matched commits >= 20`
-- `false negative rate <= 5%`
-- `pass correlation >= 95%`
-- `holdout FNR <= 10%`
-- `data confidence` reaches `moderate` or `high`
+- `matched commits >= 20` — commits where both a gated local/CI run and a release/full run exist in the same window, so that local sampling outcomes can be compared against a ground-truth full run. Increases as the nightly `--gate release` accumulates history.
+- `false negative rate <= 5%` — share of commits where the `merge` gate passed but the full run failed (sampling missed a real regression). Measured over the same matched-commit window.
+- `pass correlation >= 95%` — `P(full run passes | merge gate passes)` on matched commits. Same metric referenced elsewhere in this README as `P(CI pass | local pass)`.
+- `holdout FNR <= 10%` — FNR measured on the holdout slice defined by `[sampling] holdout_ratio`. Tests in the holdout slice are excluded from the sampled run so that their outcomes can be used to audit whether the sampler's verdict generalizes. Guards against sampler overfitting to the visible slice.
+- `data confidence` reaches `moderate` or `high` — derived signal combining matched-commit count, history window coverage, and flaky-noise level. Rough rule of thumb: `low` until ~10 matched commits, `moderate` around 20–40 with FNR/correlation green, `high` beyond 40 with stable noise. Exact boundaries come from the `gate review merge` output, not from config.
 
 ## Recommended Usage Model
 
@@ -504,7 +549,7 @@ The most practical rollout looks like this:
 1. `flaker run --gate release` in a nightly scheduled workflow (full test + data accumulation)
 2. `flaker run --gate merge` on PR push (selective execution, posts PR comment)
 3. `flaker run --gate iteration` during development (fast feedback)
-4. Review `flaker status` and `flaker analyze eval` weekly
+4. Review `flaker status`, `flaker gate review merge`, and `flaker ops weekly` weekly
 5. Only tighten the workflow after local-to-CI correlation looks strong
 
 This works best in repositories with:
@@ -573,9 +618,15 @@ flaker debug confirm "tests/api.test.ts:handles timeout" --repeat 10
 flaker debug confirm "tests/api.test.ts:handles timeout" --runner local
 ```
 
-Output: `BROKEN` (regression), `FLAKY` (intermittent), or `TRANSIENT` (not reproducible).
+Output classification (based on `--repeat N` runs, default `N=5`):
 
-Requires `.github/workflows/flaker-confirm.yml` for remote mode — generated by `flaker init`.
+- `BROKEN` — fails on **every** repeat (`failures == N`). Treat as a real regression.
+- `FLAKY` — fails on **some but not all** repeats (`0 < failures < N`). Candidate for `@flaky` tag or quarantine.
+- `TRANSIENT` — passes on every repeat (`failures == 0`). The original CI failure did not reproduce here; either CI-environment specific or a one-shot noise event.
+
+Use `--repeat 10` (or higher) when you suspect a low-rate flake that the default `N=5` might miss. Higher `N` trades wall time for classification confidence.
+
+Requires `.github/workflows/flaker-confirm.yml` for remote mode — generated by `flaker init`. If your repo predates this file, re-run `flaker init --force` or copy the template from `templates/flaker-confirm.yml` in this repo.
 
 ### Retry CI failures locally
 
@@ -592,8 +643,8 @@ Fetches the test result artifact from the failed CI run, identifies failed tests
 ### Policy and ownership
 
 ```bash
-flaker policy quarantine
-flaker policy quarantine --auto --create-issues
+flaker quarantine suggest --json --output .artifacts/quarantine-plan.json
+flaker quarantine apply --from .artifacts/quarantine-plan.json --create-issues
 flaker policy check
 flaker exec affected --changed src/foo.ts
 ```

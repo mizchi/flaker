@@ -45,33 +45,34 @@
 ### Observation loop
 
 - `flaker collect`
-- `flaker run --gate release`
-- `flaker analyze eval`
+- `flaker ops daily`
 - `flaker status`
 
 役割:
 
 - history を増やす
-- holdout / KPI を更新する
+- release gate の日次 snapshot を残す
 - gate の信頼度を測る
 
 ### Triage loop
 
-- `flaker analyze flaky-tag`
-- `flaker policy quarantine`
+- `flaker gate review merge`
+- `flaker ops weekly`
+- `flaker quarantine suggest`
+- `flaker quarantine apply`
 - 週次の promote / keep / demote review
 
 役割:
 
 - flaky を gate から隔離する
-- `@flaky` の add / remove 候補を管理する
+- promote / keep / demote の判断を artifact に残す
+- review 済みの quarantine plan だけを適用する
 - required check の信頼を保つ
 
 ### Incident loop
 
-- `flaker debug retry`
-- `flaker debug confirm`
-- `flaker debug diagnose`
+- `flaker ops incident`
+- 必要なら `flaker debug retry / confirm / diagnose`
 
 役割:
 
@@ -83,13 +84,24 @@
 ### 毎日
 
 ```bash
-pnpm flaker collect ci --days 1
-pnpm flaker run --gate release
-pnpm flaker analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
-pnpm flaker analyze flaky-tag --json > .artifacts/flaky-tag-triage.json
+mkdir -p .artifacts
+export GITHUB_TOKEN=$(gh auth token)
+pnpm flaker apply
+pnpm flaker ops daily --output .artifacts/flaker-daily.md
+pnpm flaker quarantine suggest --json --output .artifacts/quarantine-plan.json
 ```
 
+`flaker apply` は `flaker.toml` を desired state として現状を収束させる idempotent コマンド。従来の `collect` / `calibrate` / `quarantine apply` を順に手で呼ぶ必要はない。詳細な dry-run が欲しいときは `flaker plan`。
+
 ### 毎週
+
+```bash
+mkdir -p .artifacts
+pnpm flaker gate review merge --json --output .artifacts/gate-review-merge.json
+pnpm flaker ops weekly --output .artifacts/flaker-weekly.md
+```
+
+次を見て `promote / keep / demote` を決める。
 
 - `matched commits`
 - `false negative rate`
@@ -98,23 +110,26 @@ pnpm flaker analyze flaky-tag --json > .artifacts/flaky-tag-triage.json
 - `saved test minutes`
 - `flaky` / `quarantined` test 数
 
-を見て `promote / keep / demote` を決める。
+`status` は summary-only なので、昇格判断は `gate review merge` を使う。
 
 ### 失敗時
 
 ```bash
-pnpm flaker debug retry --run <workflow-run-id>
-pnpm flaker debug confirm "path/to/spec.ts:test name" --runner local
+pnpm flaker ops incident --run <workflow-run-id> --output .artifacts/flaker-incident.md
+pnpm flaker ops incident --suite path/to/spec.ts --test "test name" --output .artifacts/flaker-incident.md
 ```
+
+より細かい切り分けが必要なときだけ `flaker debug retry / confirm / diagnose` に降りる。
 
 ## 昇格・降格の目安
 
-`merge` gate を required に上げる前に、少なくとも次を満たす。
+`merge` gate を required に上げる前に、**次の 5 項目を全て満たす**。値は `flaker gate review merge --json` で確認する (昇格判断の一次ソース。`flaker status` は summary 専用で昇格判断には使わない)。
 
-- `matched commits >= 20`
-- `false negative rate <= 5%`
-- `pass correlation >= 95%`
-- `data confidence` が `moderate` 以上
+- `matched commits >= 20` — `merge` gate 実行と release/full 実行の両方が揃ったコミット数。nightly `--gate release` の積み上げで増える。
+- `false negative rate <= 5%` — matched commit のうち「`merge` gate は pass、full 実行は fail」の割合。つまり sampling が regression を見落とした比率。
+- `pass correlation >= 95%` — `P(full run passes | merge gate passes)`。README 他所で `P(CI pass | local pass)` と呼んでいるものと同じ。
+- `holdout FNR <= 10%` — `[sampling] holdout_ratio` で取り分けた holdout 集合に対する FNR。holdout は sampling 対象から除外しておき、その結果で「sampler が見ていない領域でも判断が再現するか」を監査する。sampler の overfit 検知用。
+- `data confidence` が `moderate` 以上 — matched commit 数 / 履歴 window / flaky ノイズ水準から算出される合成シグナル。大まかな目安は `low` = 10 matched commit 未満、`moderate` = 20–40 で FNR / correlation 緑、`high` = 40 超でノイズ安定。厳密な境界は `gate review merge` 出力側に従う。
 
 逆に次のどれかなら advisory または quarantine に戻す。
 

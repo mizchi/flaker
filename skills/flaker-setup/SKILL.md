@@ -1,11 +1,11 @@
 ---
 name: flaker-setup
-description: Set up @mizchi/flaker on a new repository. Use when the user asks to introduce flaker, configure flaker.toml, integrate flaker into GitHub Actions, or "start using flaker on this project". Encodes the Day 0 → Week 4 onboarding flow with the right order, decision points, and pitfalls.
+description: Set up @mizchi/flaker on a new repository. Use when the user asks to introduce flaker, configure flaker.toml, integrate flaker into GitHub Actions, or "start using flaker on this project". Encodes the declarative apply-based onboarding flow (flaker apply as the single convergence command) with the right decision points and pitfalls.
 ---
 
 # flaker setup skill
 
-`@mizchi/flaker` is a test-intelligence CLI: sampling, flaky detection, CI/local correlation. Version 0.3.0+ uses a two-level category hierarchy (`flaker setup init`, `flaker exec run`, `flaker analyze kpi`, etc.) and suffix-per-unit config keys (`sample_percentage`, `detection_threshold_ratio`, ...).
+`@mizchi/flaker` (0.6.0+) is a test-intelligence CLI with a declarative apply model: `flaker.toml` describes the desired state, and `flaker apply` reconciles the repo to that state by running `collect` / `calibrate` / `cold-start run` / `quarantine apply` in the right order based on current DB state and repo probe. Callers do not memorize the sequence.
 
 **Always read the canonical checklist first.** It lives next to this skill in the plugin:
 
@@ -22,6 +22,64 @@ If both are unreachable, fall back to the procedure below.
 - "this project should use flaker"
 - "flaker のセットアップ手順を教えて"
 
+## Mental model: desired state + reconciler
+
+1. User writes `flaker.toml` (gates, profiles, `[promotion]` thresholds, `[quarantine].auto`).
+2. `flaker plan` shows what `apply` would do right now.
+3. `flaker apply` executes the plan (idempotent; safe to re-run).
+4. `flaker status` shows drift vs `[promotion]` thresholds.
+
+The old sequence (`init → collect → calibrate → run`) still works and is documented, but `apply` is the default entrypoint from 0.6.0 onward. Use raw commands only when debugging a specific step.
+
+### Minimal declarative `flaker.toml`
+
+```toml
+[repo]
+owner = "your-org"
+name = "your-repo"
+
+[adapter]
+type = "playwright"
+
+[runner]
+type = "playwright"
+command = "pnpm exec playwright test"
+flaky_tag_pattern = "@flaky"
+
+[affected]
+resolver = "workspace"
+
+[quarantine]
+auto = false              # Day 1 recommended: keep false until history accumulates;
+                          # flip to true in Week 1-2 once `flaker status` drift shows moderate+ confidence.
+flaky_rate_threshold_percentage = 30
+min_runs = 10
+
+[profile.local]
+strategy = "affected"
+max_duration_seconds = 60
+fallback_strategy = "weighted"
+skip_flaky_tagged = true
+
+[profile.ci]
+strategy = "hybrid"
+sample_percentage = 30
+adaptive = true
+skip_flaky_tagged = true
+
+[profile.scheduled]
+strategy = "full"
+
+# [promotion] is OPTIONAL — defaults (matched_commits_min=20, FNR<=5%, correlation>=95%,
+# holdout_fnr<=10%, data_confidence_min="moderate") apply when omitted.
+# Override only with explicit justification. Example:
+# [promotion]
+# matched_commits_min = 30
+# data_confidence_min = "high"
+```
+
+`flaker init` generates a starter toml; expect to edit `[affected].resolver` and the `[profile.*]` blocks before the first `flaker apply`.
+
 ## Decision points to confirm before touching files
 
 Ask the user (or infer from `package.json` / `pnpm-workspace.yaml` / repo layout) — do NOT guess silently:
@@ -29,25 +87,24 @@ Ask the user (or infer from `package.json` / `pnpm-workspace.yaml` / repo layout
 1. **Adapter** — `playwright | vitest | jest | junit`. Look at `package.json` `devDependencies` and existing test files. Default to vitest for TS libraries, playwright for e2e, junit for non-Node.
 2. **Runner** — `vitest | playwright | jest | actrun`. Usually matches the adapter. `actrun` wraps a GitHub Actions workflow file when local execution should mirror CI exactly.
 3. **Resolver** — `workspace | glob | bitflow | git`. Pick `workspace` if `pnpm-workspace.yaml` or `package.json` `workspaces` exists. Pick `glob` for legacy single-package repos (then create `flaker.affected.toml`). Pick `bitflow` only if the repo already uses bitflow.
-4. **CI history availability** — does the repo already have GitHub Actions runs? If no, skip `collect ci` on Day 1 and revisit after the first PR lands.
+4. **CI history availability** — does the repo already have GitHub Actions runs? Either way, `flaker apply` handles it: with no history it skips calibrate and runs a cold-start gate; with history it pulls + calibrates + applies quarantine.
 5. **GITHUB_TOKEN scope** — `gh auth status` must show `actions:read`. If missing, the user runs `gh auth refresh -s actions:read` themselves.
 
-## Phase order (do NOT reorder)
-
-The order matters because each step exposes errors that would cascade if deferred.
+## Phase order
 
 ```
-Day 0  prerequisites           5 min   node>=24, pnpm>=10, gh auth, git remote
-Day 1  install + init          15 min  pnpm add -D @mizchi/flaker → init → doctor → resolver
-Day 1  local dry-run smoke      5 min  flaker run --gate iteration --dry-run --explain
-Day 2  collect ci + calibrate  30 min  collect ci --days 30 → collect calibrate → analyze kpi
-Day 3  package.json scripts     5 min  flaker:run:local, flaker:eval:markdown, etc.
-Day 5  Actions integration     15 min  PR advisory job (continue-on-error: true) + nightly history
-Week 1 daily observation        5/day  analyze kpi / flaky / insights
-Week 2-4 promote to required    -      gate on matched ≥20, FNR ≤5%, pass corr ≥95%
+Day 0   prerequisites           5 min   node>=24, pnpm>=10, gh auth, git remote
+Day 1   install + init          10 min  pnpm add -D @mizchi/flaker → init → doctor
+Day 1   first apply              5 min   flaker plan → flaker apply (handles history/no-history)
+Day 3   package.json scripts     5 min   flaker:plan, flaker:apply, flaker:status
+Day 5   Actions integration     15 min  cron calls `flaker apply` + PR advisory job
+Week 1  daily observation        -      flaker status (drift section tells you when to promote)
+Week 2-4 promote to required     -      [promotion] thresholds all green, remove continue-on-error
 ```
 
-**Never skip the `continue-on-error: true` on the first PR job.** The CI job becomes a required check ONLY after the metrics in Week 2-4 are stable. Promoting too early causes false negatives that erode developer trust.
+Day 2 and Day 4 are intentionally empty — apply is idempotent, so there is no forced action between the Day 1 bootstrap and the Day 3 / Day 5 integration steps. Run `flaker apply` whenever you want (manually or in cron); skip days if nothing changed.
+
+**Never skip the `continue-on-error: true` on the first PR job.** The CI job becomes a required check ONLY after `flaker status` drift reports `ready` (all 5 `[promotion]` thresholds met). Promoting too early causes false negatives that erode developer trust.
 
 ## Day 1 commands (copy-paste ready)
 
@@ -61,28 +118,33 @@ pnpm add -D @mizchi/flaker
 # 2. init (pick adapter/runner per the decision above)
 pnpm flaker init --adapter <adapter> --runner <runner>
 
-# 3. doctor
-pnpm flaker doctor
+# 3. doctor (canonical: flaker debug doctor — 'flaker doctor' still works with a deprecation warning)
+pnpm flaker debug doctor
 
 # 4. set resolver in flaker.toml — edit [affected] section manually
 #    workspace: resolver = "workspace"
 #    glob:      resolver = "glob",  config = "flaker.affected.toml"
 #    bitflow:   resolver = "bitflow"
 
-# 5. dry-run smoke
-pnpm flaker run --gate iteration --dry-run --explain --changed "$(git diff --name-only main | tr '\n' ',')"
+# 5. preview and converge (single command replaces the old collect → calibrate → run chain)
+export GITHUB_TOKEN=$(gh auth token)   # only needed if the repo has CI history
+pnpm flaker plan                       # see what apply will do
+pnpm flaker apply                      # idempotent; re-run anytime
+pnpm flaker status                     # shows drift vs [promotion] thresholds
 ```
 
-## Day 2 commands
+## What `flaker apply` does
 
-```bash
-export GITHUB_TOKEN=$(gh auth token)
-pnpm flaker collect ci --days 30
-pnpm flaker collect calibrate
-pnpm flaker analyze kpi
-```
+The planner produces a `PlannedAction[]` based on current state:
 
-If `collect ci` reports 0 runs, the most likely cause is GITHUB_TOKEN missing the `actions:read` scope or the workflow has no completed runs in the last 30 days. Tell the user to refresh the token or extend the window.
+| Action | Condition |
+|---|---|
+| `collect_ci --days 30` | `GITHUB_TOKEN` present. Pulls new CI runs. |
+| `calibrate` | `data.confidence` is `moderate` or `high`. Tunes `[sampling]`. |
+| `cold_start_run` (iteration gate) | No local history yet. Seeds the first local sample. |
+| `quarantine_apply` | `[quarantine].auto = true` AND history is usable. Applies the current quarantine plan. |
+
+When actions don't apply (e.g. no `GITHUB_TOKEN` on a brand-new repo), apply silently skips them. It is safe to run anywhere in the lifecycle.
 
 ## package.json scripts to add
 
@@ -90,21 +152,22 @@ If `collect ci` reports 0 runs, the most likely cause is GITHUB_TOKEN missing th
 {
   "scripts": {
     "flaker": "flaker",
+    "flaker:plan": "flaker plan",
+    "flaker:apply": "flaker apply",
+    "flaker:status": "flaker status",
     "flaker:run:iteration": "flaker run --gate iteration",
     "flaker:run:release": "flaker run --gate release",
-    "flaker:collect:ci": "flaker collect ci --days 7",
-    "flaker:collect:local": "flaker collect local --last 1",
     "flaker:eval:markdown": "flaker analyze eval --markdown --window 7",
-    "flaker:doctor": "flaker doctor"
+    "flaker:doctor": "flaker debug doctor"
   }
 }
 ```
 
-Note: `flaker collect local --last 1` keeps the legacy `--last` flag — only `flaker collect ci` was renamed to `--days`.
+Note: `flaker kpi` and `flaker doctor` top-level aliases are DEPRECATED in 0.6.0 (still work, emit stderr warning; removed in 0.7.0). Use `flaker analyze kpi` and `flaker debug doctor`.
 
 ## GitHub Actions snippets
 
-PR advisory (advisory mode, MUST be `continue-on-error: true` for the first 2-4 weeks):
+PR advisory (MUST be `continue-on-error: true` for the first 2-4 weeks):
 
 ```yaml
 - name: Run tests via flaker (advisory)
@@ -114,24 +177,26 @@ PR advisory (advisory mode, MUST be `continue-on-error: true` for the first 2-4 
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-Nightly history (separate workflow, scheduled cron):
+Nightly apply (single scheduled cron replaces the old collect + run pair):
 
 ```yaml
-- run: pnpm flaker collect ci --days 1
-- run: pnpm flaker run --gate release
+- run: pnpm flaker apply
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 - run: pnpm flaker analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
 ```
 
 ## Promotion criteria for required check
 
-Only promote `flaker run --gate merge` from advisory to required when `analyze kpi` shows ALL of:
+Only promote `flaker run --gate merge` from advisory to required when `flaker status` drift shows `ready` (all 5 `[promotion]` thresholds met), or equivalently when `flaker gate review merge --json` reports:
 
 - `Matched commits ≥ 20`
-- `Recall ≥ 90%` (CI failures caught by local sampling)
 - `False negative rate ≤ 5%`
 - `Pass correlation ≥ 95%`
-- `Co-failure ready: yes`
+- `Holdout FNR ≤ 10%`
 - `Data confidence: moderate` or `high`
+
+The thresholds live in `[promotion]` of `flaker.toml`; defaults match the above. Override in config if the project needs stricter or looser gating.
 
 If the user wants to gate sooner, push back: empirically less than 20 matched commits gives unstable readings.
 
@@ -141,10 +206,11 @@ If the user wants to gate sooner, push back: empirically less than 20 matched co
 |---|---|---|
 | `flaker.toml uses deprecated keys` | Config from 0.1.x or earlier | Apply rename table from `docs/how-to-use.md#config-migration` |
 | `Config file not found` | Wrong cwd | `cd` to repo root containing `flaker.toml` |
+| `flaker apply` aborts with `GITHUB_TOKEN` missing | Planner included `collect_ci` but env var absent | `export GITHUB_TOKEN=$(gh auth token)` and re-run |
 | `actrun runner requires [runner.actrun] workflow` | Missing actrun config | Add `[runner.actrun] workflow = ".github/workflows/<file>.yml"` |
 | `hybrid` selects 0 tests | Resolver not configured | Set `[affected].resolver` |
-| `collect ci` returns 0 runs | Token / scope / window | Refresh token, widen `--days`, check workflow exists |
-| `analyze kpi` shows `insufficient data` | < 5 commits | Wait, or run more `collect ci` |
+| `flaker apply` stops after `collect_ci` | Calibrate or cold-start failed | Inspect the `ok/fail` lines; fix and re-run apply (idempotent) |
+| `flaker status` drift: `data_confidence` unmet | < ~10 matched commits | Wait, or run more `flaker apply` after CI accumulates |
 | Tests timeout in parallel | DuckDB single-writer | Serialize commands sharing the same `data.duckdb` |
 | `dist/moonbit/flaker.js` missing | Custom build environment | Should not happen with npm install — investigate package.json `files:` |
 
@@ -153,17 +219,18 @@ If the user wants to gate sooner, push back: empirically less than 20 matched co
 - **Do not** edit config keys to old names ("looks cleaner") — the loader hard-fails on legacy keys.
 - **Do not** enable `[profile.ci] adaptive = true` until at least 30 commits of history exist. Adaptive sampling needs FNR data to converge.
 - **Do not** set `holdout_ratio > 0.2` — wastes runner time.
-- **Do not** skip `collect calibrate` — manual `[sampling]` settings underperform calibrated ones in 90% of cases.
-- **Do not** make the PR job required before Week 2-4 metrics are met.
+- **Do not** skip `flaker apply` and hand-tune `[sampling]` — the calibrated values outperform manual settings in 90% of cases.
+- **Do not** make the PR job required before `flaker status` drift reports `ready`.
+- **Do not** use `flaker kpi` or `flaker doctor` top-level aliases in new scripts — they print a deprecation warning and will be removed in 0.7.0.
 
 ## Reference docs (in this plugin)
 
 All paths relative to `${CLAUDE_PLUGIN_ROOT}` of the installed plugin, or in the [flaker repo on GitHub](https://github.com/mizchi/flaker).
 
-- `README.md` — feature overview, install
+- `README.md` — feature overview, install, Quick Start (Path 1 / Path 2), canonical command forms table
 - `docs/new-project-checklist.ja.md` / `docs/new-project-checklist.md` — the canonical full checklist (this skill is its action-oriented summary)
 - `docs/usage-guide.ja.md` / `docs/usage-guide.md` — user-facing entrypoint after setup
 - `docs/operations-guide.ja.md` / `docs/operations-guide.md` — maintainer / CI owner entrypoint
-- `docs/how-to-use.md` / `docs/how-to-use.ja.md` — full command reference and `#config-migration` table
+- `docs/how-to-use.md` / `docs/how-to-use.ja.md` — full command reference including the `flaker plan` / `flaker apply` chapter and `#config-migration` table
 - `docs/contributing.md` — sibling dogfood, MoonBit/TS fallback, build internals
 - `CHANGELOG.md` — version history, breaking changes per release

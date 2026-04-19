@@ -81,6 +81,6 @@ pnpm flaker status
 
 - detailed command reference: [how-to-use.md](how-to-use.md)
 - runner / adapter details: [runner-adapters.md](runner-adapters.md), [test-result-adapters.md](test-result-adapters.md)
-- failure investigation: [diagnose.md](diagnose.md), `flaker debug confirm`, `flaker debug retry`
+- failure investigation: [diagnose.md](diagnose.md), `flaker ops incident`, `flaker debug confirm`, `flaker debug retry`
 - initial onboarding: [new-project-checklist.md](new-project-checklist.md)
 - operations and rollout: [operations-guide.md](operations-guide.md)

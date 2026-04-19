@@ -45,33 +45,34 @@ Most teams only need three.
 ### Observation loop
 
 - `flaker collect`
-- `flaker run --gate release`
-- `flaker analyze eval`
+- `flaker ops daily`
 - `flaker status`
 
 Purpose:
 
 - grow history
-- refresh holdout / KPI signals
+- leave a daily release-gate snapshot
 - measure whether gates are still trustworthy
 
 ### Triage loop
 
-- `flaker analyze flaky-tag`
-- `flaker policy quarantine`
+- `flaker gate review merge`
+- `flaker ops weekly`
+- `flaker quarantine suggest`
+- `flaker quarantine apply`
 - weekly promote / keep / demote review
 
 Purpose:
 
 - keep flaky tests out of the gate path
-- manage `@flaky` add / remove suggestions
+- preserve a stable artifact for promote / keep / demote review
+- apply only reviewed quarantine plans
 - preserve trust in required checks
 
 ### Incident loop
 
-- `flaker debug retry`
-- `flaker debug confirm`
-- `flaker debug diagnose`
+- `flaker ops incident`
+- drop to `flaker debug retry / confirm / diagnose` only when needed
 
 Purpose:
 
@@ -83,13 +84,20 @@ Purpose:
 ### Daily
 
 ```bash
+mkdir -p .artifacts
+export GITHUB_TOKEN=$(gh auth token)
 pnpm flaker collect ci --days 1
-pnpm flaker run --gate release
-pnpm flaker analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
-pnpm flaker analyze flaky-tag --json > .artifacts/flaky-tag-triage.json
+pnpm flaker ops daily --output .artifacts/flaker-daily.md
+pnpm flaker quarantine suggest --json --output .artifacts/quarantine-plan.json
 ```
 
 ### Weekly
+
+```bash
+mkdir -p .artifacts
+pnpm flaker gate review merge --json --output .artifacts/gate-review-merge.json
+pnpm flaker ops weekly --output .artifacts/flaker-weekly.md
+```
 
 Review:
 
@@ -102,12 +110,16 @@ Review:
 
 and decide `promote / keep / demote`.
 
+`status` is summary-only. Use `gate review merge` for the actual promotion decision.
+
 ### During an incident
 
 ```bash
-pnpm flaker debug retry --run <workflow-run-id>
-pnpm flaker debug confirm "path/to/spec.ts:test name" --runner local
+pnpm flaker ops incident --run <workflow-run-id> --output .artifacts/flaker-incident.md
+pnpm flaker ops incident --suite path/to/spec.ts --test "test name" --output .artifacts/flaker-incident.md
 ```
+
+Drop to raw `debug retry / confirm / diagnose` only if you need finer investigation control.
 
 ## Promotion and demotion
 

@@ -1,26 +1,44 @@
 import { resolve } from "node:path";
 import type { Command } from "commander";
 import { Octokit } from "@octokit/rest";
-import { loadConfig, writeSamplingConfig } from "../config.js";
+import { loadConfig, writeSamplingConfig, type FlakerConfig } from "../config.js";
 import {
   collectWorkflowRuns,
   formatCollectSummary,
   resolveCollectExitCode,
   writeCollectSummary,
+  type CollectResult,
   type GitHubClient,
 } from "../commands/collect/ci.js";
 import { runCollectLocal } from "../commands/collect/local.js";
 import { DuckDBStore } from "../storage/duckdb.js";
+import type { MetricStore } from "../storage/types.js";
 
-export async function collectCiAction(opts: { days: string; branch?: string; json?: boolean; output?: string; failOnErrors?: boolean }): Promise<void> {
-  const config = loadConfig(process.cwd());
-  const store = new DuckDBStore(resolve(config.storage.path));
-  await store.initialize();
+export interface RunCollectCiOpts {
+  store: MetricStore;
+  config: FlakerConfig;
+  cwd: string;
+  days: number;
+  branch?: string;
+  failOnErrors?: boolean;
+}
+
+export interface RunCollectCiResult {
+  result: CollectResult;
+  exitCode: number;
+}
+
+/**
+ * Core collect-ci logic that throws on fatal errors (e.g. missing GITHUB_TOKEN)
+ * instead of calling process.exit. Suitable for use by applyAction and other
+ * programmatic callers that need clean error propagation.
+ */
+export async function runCollectCi(opts: RunCollectCiOpts): Promise<RunCollectCiResult> {
+  const { store, config, cwd: _cwd, days, branch, failOnErrors } = opts;
 
   const token = process.env.GITHUB_TOKEN;
   if (!token) {
-    console.error("Error: GITHUB_TOKEN environment variable is required");
-    process.exit(1);
+    throw new Error("GITHUB_TOKEN environment variable is required");
   }
 
   const octokit = new Octokit({ auth: token });
@@ -30,11 +48,11 @@ export async function collectCiAction(opts: { days: string; branch?: string; jso
   const github: GitHubClient = {
     async listWorkflowRuns() {
       const created = new Date();
-      created.setDate(created.getDate() - Number(opts.days));
+      created.setDate(created.getDate() - days);
       const response = await octokit.actions.listWorkflowRunsForRepo({
         owner,
         repo,
-        ...(opts.branch ? { branch: opts.branch } : {}),
+        ...(branch ? { branch } : {}),
         created: `>=${created.toISOString().split("T")[0]}`,
         per_page: 100,
       });
@@ -82,26 +100,46 @@ export async function collectCiAction(opts: { days: string; branch?: string; jso
     },
   };
 
+  const result = await collectWorkflowRuns({
+    store,
+    github,
+    repo: `${owner}/${repo}`,
+    adapterType: config.adapter.type,
+    artifactName: config.adapter.artifact_name,
+    customCommand: config.adapter.command,
+    storagePath: config.storage.path,
+    workflowPaths: config.collect?.workflow_paths,
+  });
+
+  const exitCode = resolveCollectExitCode(result, { failOnErrors });
+  return { result, exitCode };
+}
+
+export async function collectCiAction(opts: { days: string; branch?: string; json?: boolean; output?: string; failOnErrors?: boolean }): Promise<void> {
+  const config = loadConfig(process.cwd());
+  const store = new DuckDBStore(resolve(config.storage.path));
+  await store.initialize();
+
   try {
-    const result = await collectWorkflowRuns({
+    const { result, exitCode } = await runCollectCi({
       store,
-      github,
-      repo: `${owner}/${repo}`,
-      adapterType: config.adapter.type,
-      artifactName: config.adapter.artifact_name,
-      customCommand: config.adapter.command,
-      storagePath: config.storage.path,
-      workflowPaths: config.collect?.workflow_paths,
+      config,
+      cwd: process.cwd(),
+      days: Number(opts.days),
+      branch: opts.branch,
+      failOnErrors: opts.failOnErrors,
     });
     const formatted = formatCollectSummary(result, opts.json ? "json" : "text");
     console.log(formatted);
     if (opts.output) {
       writeCollectSummary(resolve(process.cwd(), opts.output), formatted);
     }
-    const exitCode = resolveCollectExitCode(result, { failOnErrors: opts.failOnErrors });
     if (exitCode !== 0) {
       process.exitCode = exitCode;
     }
+  } catch (err) {
+    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
   } finally {
     await store.close();
   }
