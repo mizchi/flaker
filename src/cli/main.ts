@@ -7,7 +7,9 @@ import { registerExecCommands, execRunAction, RUN_COMMAND_HELP } from "./categor
 import { registerCollectCommands } from "./categories/collect.js";
 import { registerImportCommands } from "./categories/import.js";
 import { registerReportCommands } from "./categories/report.js";
-import { registerAnalyzeCommands, analyzeKpiAction } from "./categories/analyze.js";
+import { registerAnalyzeCommands, analyzeKpiAction, statusAction } from "./categories/analyze.js";
+import { registerGateCommands } from "./categories/gate.js";
+import { registerQuarantineCommands } from "./categories/quarantine.js";
 import { registerDebugCommands, debugDoctorAction } from "./categories/debug.js";
 import { registerPolicyCommands } from "./categories/policy.js";
 import { registerDevCommands } from "./categories/dev.js";
@@ -24,6 +26,8 @@ export function createProgram(): Command {
   registerCollectCommands(program);
   registerImportCommands(program);
   registerReportCommands(program);
+  registerGateCommands(program);
+  registerQuarantineCommands(program);
   registerAnalyzeCommands(program);
   registerDebugCommands(program);
   registerPolicyCommands(program);
@@ -77,10 +81,10 @@ export function createProgram(): Command {
 
   program
     .command("status")
-    .description("User-facing status dashboard (alias for `flaker analyze kpi`)")
+    .description("User-facing summary dashboard (summary-only, no promotion decision)")
     .option("--window-days <days>", "Analysis window in days", "30")
     .option("--json", "Output as JSON")
-    .action(analyzeKpiAction);
+    .action(statusAction);
 
   program
     .command("doctor")
@@ -103,6 +107,8 @@ Primary commands:
   run         Run the selected gate or profile
   status      Show the user-facing health dashboard
   doctor      Check local runtime requirements
+  gate        Review gate readiness and sampling health
+  quarantine  Suggest quarantine add/remove plans
 
 Gate model:
   iteration   -> profile.local      Fast author feedback
@@ -113,6 +119,8 @@ Run \`flaker run --help\` for gate mapping and advanced run options.
 Run \`flaker status --help\` or \`flaker doctor --help\` for user-facing commands.
 
 Management and advanced categories:
+  gate       Gate review and readiness        (review)
+  quarantine Read-only quarantine planning    (suggest)
   collect    Import history and calibration (ci, local, coverage, commit-changes, calibrate)
   import     Ingest external reports        (report, parquet)
   report     Normalize and diff reports     (summary, diff, aggregate)

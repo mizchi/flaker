@@ -26,6 +26,7 @@ import {
   runFlakyTagTriage,
 } from "../commands/analyze/flaky-tag-triage.js";
 import { createRunner } from "../runners/index.js";
+import { formatStatusSummary, runStatusSummary } from "../commands/status/summary.js";
 
 export async function analyzeKpiAction(opts: { windowDays: string; json?: boolean }): Promise<void> {
   const config = loadConfig(process.cwd());
@@ -38,6 +39,26 @@ export async function analyzeKpiAction(opts: { windowDays: string; json?: boolea
       console.log(JSON.stringify(kpi, null, 2));
     } else {
       console.log(formatKpi(kpi));
+    }
+  } finally {
+    await store.close();
+  }
+}
+
+export async function statusAction(opts: { windowDays: string; json?: boolean }): Promise<void> {
+  const config = loadConfig(process.cwd());
+  const store = new DuckDBStore(resolve(config.storage.path));
+  await store.initialize();
+  try {
+    const summary = await runStatusSummary({
+      store,
+      config,
+      windowDays: parseInt(opts.windowDays, 10),
+    });
+    if (opts.json) {
+      console.log(JSON.stringify(summary, null, 2));
+    } else {
+      console.log(formatStatusSummary(summary));
     }
   } finally {
     await store.close();

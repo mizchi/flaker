@@ -37,6 +37,30 @@ describe("top-level aliases", () => {
     expect(help).toContain("--json");
   });
 
+  it("flaker gate review --help shows gate review options", () => {
+    const help = execSync(`node ${cliPath} gate review --help`, { encoding: "utf-8" });
+    expect(help).toContain("--window-days");
+    expect(help).toContain("--json");
+  });
+
+  it("flaker gate explain --help shows gate explain options", () => {
+    const help = execSync(`node ${cliPath} gate explain --help`, { encoding: "utf-8" });
+    expect(help).toContain("--json");
+  });
+
+  it("flaker gate history --help shows gate history options", () => {
+    const help = execSync(`node ${cliPath} gate history --help`, { encoding: "utf-8" });
+    expect(help).toContain("--window-days");
+    expect(help).toContain("--json");
+  });
+
+  it("flaker quarantine suggest --help shows quarantine suggest options", () => {
+    const help = execSync(`node ${cliPath} quarantine suggest --help`, { encoding: "utf-8" });
+    expect(help).toContain("--window-days");
+    expect(help).toContain("--output");
+    expect(help).toContain("--json");
+  });
+
   it("flaker doctor --help shows the top-level doctor alias", () => {
     const help = execSync(`node ${cliPath} doctor --help`, { encoding: "utf-8" });
     expect(help).toContain("User-facing environment check");

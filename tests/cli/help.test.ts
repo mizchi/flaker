@@ -12,6 +12,7 @@ describe("CLI help", () => {
     expect(help).toContain("flaker init");
     expect(help).toContain("flaker doctor");
     expect(help).toContain("flaker run --gate merge");
+    expect(help).toContain("gate");
     expect(help).toContain("Primary commands");
     expect(help).toContain("Management and advanced categories");
   });
@@ -21,6 +22,12 @@ describe("CLI help", () => {
     const execCmd = program.commands.find((command) => command.name() === "exec");
     const runCmd = execCmd?.commands.find((command) => command.name() === "run");
     const runHelp = runCmd?.helpInformation();
+    const gateCmd = program.commands.find((command) => command.name() === "gate");
+    const gateReviewHelp = gateCmd?.commands.find((command) => command.name() === "review")?.helpInformation();
+    const gateExplainHelp = gateCmd?.commands.find((command) => command.name() === "explain")?.helpInformation();
+    const gateHistoryHelp = gateCmd?.commands.find((command) => command.name() === "history")?.helpInformation();
+    const quarantineCmd = program.commands.find((command) => command.name() === "quarantine");
+    const quarantineSuggestHelp = quarantineCmd?.commands.find((command) => command.name() === "suggest")?.helpInformation();
     const analyzeCmd = program.commands.find((command) => command.name() === "analyze");
     const evalHelp = analyzeCmd?.commands.find((command) => command.name() === "eval")?.helpInformation();
     const bundleHelp = analyzeCmd?.commands.find((command) => command.name() === "bundle")?.helpInformation();
@@ -33,6 +40,12 @@ describe("CLI help", () => {
     expect(runHelp).toContain("--gate");
     expect(runHelp).toContain("--cluster-mode");
     expect(runHelp).toContain("--skip-flaky-tagged");
+    expect(gateReviewHelp).toContain("--window-days");
+    expect(gateReviewHelp).toContain("--json");
+    expect(gateExplainHelp).toContain("--json");
+    expect(gateHistoryHelp).toContain("--window-days");
+    expect(quarantineSuggestHelp).toContain("--window-days");
+    expect(quarantineSuggestHelp).toContain("--output");
     expect(evalHelp).toContain("Measure whether local sampled runs predict CI");
     expect(bundleHelp).toContain("AI consumers");
     expect(bundleHelp).toContain("--window-days");
