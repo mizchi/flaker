@@ -14,6 +14,7 @@ import { registerQuarantineCommands } from "./categories/quarantine.js";
 import { registerDebugCommands, debugDoctorAction } from "./categories/debug.js";
 import { registerPolicyCommands } from "./categories/policy.js";
 import { registerDevCommands } from "./categories/dev.js";
+import { registerApplyCommands } from "./categories/apply.js";
 
 function isDirectCliExecution(): boolean {
   return process.argv[1] != null
@@ -23,6 +24,7 @@ function isDirectCliExecution(): boolean {
 export function createProgram(): Command {
   const program = new Command();
   registerSetupCommands(program);
+  registerApplyCommands(program);
   registerExecCommands(program);
   registerCollectCommands(program);
   registerImportCommands(program);
