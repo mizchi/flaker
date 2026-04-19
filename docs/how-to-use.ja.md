@@ -412,6 +412,53 @@ Notes:
 
 `--count` と `--percentage` を同時に指定した場合は `--count` が優先されます。`--changed` は git の自動検出を上書きします。`--dry-run` は実行を抑制しますが、選択結果はテレメトリに記録されます。`--explain` は dry-run でも実際の実行でも併用できます。
 
+### co-failure クラスタリング (`[sampling].cluster_mode`)
+
+同じ run で同時に失敗するテスト群をクラスタとして扱い、sampling 時に**代表 1 本**だけ選ぶことで多様な失敗パターンを少ない枠でカバーする仕組み。VRT で数万の scenario をサンプリングするような用途向け。
+
+#### 設定
+
+```toml
+[sampling]
+cluster_mode = "spread"   # "off" (既定) | "spread" | "pack"
+co_failure_window_days = 90
+```
+
+| mode | 挙動 |
+|---|---|
+| `off` | クラスタを無視。通常の `weighted` / `hybrid` sampling。 |
+| `spread` | 各クラスタから **1 本だけ** 選び、残りの枠は通常 weighted で埋める。多様性優先。 |
+| `pack` | 同一クラスタ内のテストを**まとめて**取る。同根原因の確認を深堀りしたいとき。 |
+
+`cluster_mode` は `weighted` / `hybrid` strategy に対してのみ有効。`affected` / `full` では無視される。
+
+#### クラスタ検出の閾値
+
+`queryTestCoFailures` が `test_results` を集計して共起率を出し、`buildFailureClusters` がクラスタを組む。既定閾値:
+
+- `windowDays`: 90 日
+- `minCoFailures`: 2 (最低共起回数)
+- `minCoRate`: 0.8 (共起率 80% 以上)
+
+CLI では `flaker explain cluster` で個別に調整できる:
+
+```bash
+flaker explain cluster                                   # 既定 (window=90, min-co=2, min-rate=0.8, top=20)
+flaker explain cluster --min-co-rate 0.9                 # 共起率 90% 以上のタイトなクラスタのみ
+flaker explain cluster --window-days 30 --top 50         # 直近 30 日、上位 50 クラスタ
+flaker explain cluster --json                            # 機械可読出力
+```
+
+#### 既存の `co_failure_boost` との違い
+
+| | `co_failure_boost` | cluster_mode |
+|---|---|---|
+| 相関 | ファイル変更 ↔ テスト失敗 | テスト失敗 ↔ テスト失敗 |
+| 用途 | affected sampling で「変更に関連するテスト」を優先 | sampling 枠に多様性を持たせる / 深堀りする |
+| データ | `commit_changes` + `test_results` | `test_results` のみ |
+
+両方を同時に設定しても矛盾せず、cluster_mode は `weighted` / `hybrid` の最終段で適用される (boost で並べ替え後にクラスタ代表を選ぶ)。
+
 ### `flaker collect coverage` — Coverage edge の取り込み
 
 ```bash
