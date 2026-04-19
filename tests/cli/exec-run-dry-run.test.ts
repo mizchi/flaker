@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-describe("flaker exec run --dry-run", () => {
+describe("flaker run --dry-run", () => {
   it("prints selection without executing the runner", () => {
     const dir = mkdtempSync(join(tmpdir(), "flaker-dryrun-"));
     try {
@@ -33,7 +33,7 @@ sample_percentage = 30
       const cliPath = join(process.cwd(), "dist/cli/main.js");
       // Should succeed and not attempt to run any tests
       const out = execSync(
-        `node ${cliPath} exec run --dry-run --strategy random --count 0`,
+        `node ${cliPath} run --dry-run --strategy random --count 0`,
         { cwd: dir, encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"] },
       );
       expect(typeof out).toBe("string");

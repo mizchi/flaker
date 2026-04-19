@@ -25,11 +25,7 @@ describe("top-level aliases", () => {
     expect(help).toContain("release");
   });
 
-  it("flaker kpi --help shows analyze kpi options", () => {
-    const help = execSync(`node ${cliPath} kpi --help`, { encoding: "utf-8" });
-    expect(help).toContain("--window-days");
-    expect(help).toContain("--json");
-  });
+  // flaker kpi removed in 0.8.0 — test deleted.
 
   it("flaker status --help shows user-facing status options", () => {
     const help = execSync(`node ${cliPath} status --help`, { encoding: "utf-8" });

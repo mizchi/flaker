@@ -15,12 +15,11 @@ describe("flaker report flag-based API", () => {
     expect(res.stdout).toMatch(/--aggregate/);
   });
 
-  it("deprecated subcommands warn", () => {
+  // report summary/diff/aggregate removed in 0.8.0 — tombstone exits non-zero.
+  it("removed subcommands exit non-zero", () => {
     for (const sub of ["summary", "diff", "aggregate"]) {
-      const res = spawnSync("node", [CLI, "report", sub, "--help"], { encoding: "utf8" });
-      expect(res.status).toBe(0);
-      expect(res.stderr).toContain("deprecated");
-      expect(res.stderr).toContain(`flaker report`);
+      const res = spawnSync("node", [CLI, "report", sub], { encoding: "utf8" });
+      expect(res.status).not.toBe(0);
     }
   });
 });

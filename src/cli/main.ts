@@ -2,17 +2,16 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
-import { registerSetupCommands, setupInitAction } from "./categories/setup.js";
-import { registerExecCommands, execRunAction, RUN_COMMAND_HELP } from "./categories/exec.js";
+import { setupInitAction } from "./commands/setup/init.js";
+import { execRunAction, RUN_COMMAND_HELP } from "./commands/run.js";
 import { registerImportCommands } from "./categories/import.js";
 import { registerReportCommands } from "./categories/report.js";
-import { analyzeKpiAction, statusAction, analyzeQueryAction } from "./categories/analyze.js";
+import { statusAction, analyzeQueryAction } from "./categories/analyze.js";
 import { registerExplainCommands } from "./categories/explain.js";
 import { registerOpsCommands } from "./categories/ops.js";
 import { registerDebugCommands, debugDoctorAction } from "./categories/debug.js";
 import { registerDevCommands } from "./categories/dev.js";
 import { registerApplyCommands } from "./categories/apply.js";
-import { deprecate } from "./deprecation.js";
 
 function isDirectCliExecution(): boolean {
   return process.argv[1] != null
@@ -21,9 +20,7 @@ function isDirectCliExecution(): boolean {
 
 export function createProgram(): Command {
   const program = new Command();
-  registerSetupCommands(program);
   registerApplyCommands(program);
-  registerExecCommands(program);
   registerImportCommands(program);
   registerReportCommands(program);
   registerOpsCommands(program);
@@ -70,14 +67,6 @@ export function createProgram(): Command {
     .option("--explain", "Print per-test selection tier, score, and reason")
     .addHelpText("after", RUN_COMMAND_HELP)
     .action(execRunAction);
-
-  const kpiCmd = program
-    .command("kpi")
-    .description("KPI dashboard (sampling effectiveness, flaky, data quality)")
-    .option("--window-days <days>", "Analysis window in days", "30")
-    .option("--json", "Output as JSON")
-    .action(analyzeKpiAction);
-  deprecate(kpiCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker analyze kpi" });
 
   program
     .command("status")

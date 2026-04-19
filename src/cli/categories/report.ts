@@ -13,7 +13,6 @@ import {
   createReportSummaryArtifact,
   loadReportSummaryArtifactsFromDir,
 } from "../commands/report/index.js";
-import { deprecate } from "../deprecation.js";
 
 function parseKeyValuePairs(input?: string): Record<string, string> | undefined {
   if (!input) return undefined;
@@ -248,53 +247,18 @@ export function registerReportCommands(program: Command): void {
       },
     );
 
-  deprecate(
+  // Tombstone subcommands removed in 0.8.0 — exit non-zero with migration hint.
+  for (const [sub, canonical] of [
+    ["summary", "flaker report <file> --summary --adapter <type>"],
+    ["diff", "flaker report --diff <base> <head>"],
+    ["aggregate", "flaker report --aggregate <dir>"],
+  ] as const) {
     reportCmd
-      .command("summary")
-      .description("Summarize a raw adapter report")
-      .requiredOption("--adapter <type>", "Adapter type (playwright, junit, vrt-migration, vrt-bench)")
-      .requiredOption("--input <file>", "Raw adapter report file")
-      .option("--bundle", "Wrap summary with shard metadata for aggregation")
-      .option("--shard <name>", "Shard name")
-      .option("--module <name>", "Module name")
-      .option("--offset <n>", "Shard offset")
-      .option("--limit <n>", "Shard limit")
-      .option("--matrix <pairs>", "Comma-separated matrix metadata (key=value)")
-      .option("--variant <pairs>", "Comma-separated variant metadata (key=value)")
-      .option("--meta <pairs>", "Comma-separated extra metadata (key=value)")
-      .option("--json", "Output JSON report")
-      .option("--markdown", "Output Markdown report")
-      .option("--pr-comment", "Output compact Markdown for PR comments")
-      .action(async (opts: SummaryOpts) => {
-        await runSummaryAction(opts);
-      }),
-    { since: "0.7.0", remove: "0.8.0", canonical: "flaker report --summary" },
-  );
-
-  deprecate(
-    reportCmd
-      .command("diff")
-      .description("Diff two normalized summaries or raw adapter reports")
-      .requiredOption("--base <file>", "Base summary or raw report file")
-      .requiredOption("--head <file>", "Head summary or raw report file")
-      .option("--adapter <type>", "Adapter type when diffing raw reports")
-      .option("--json", "Output JSON report")
-      .option("--markdown", "Output Markdown report")
-      .action(async (opts: DiffOpts) => {
-        await runDiffAction(opts);
-      }),
-    { since: "0.7.0", remove: "0.8.0", canonical: "flaker report --diff <base>" },
-  );
-
-  deprecate(
-    reportCmd
-      .command("aggregate <dir>")
-      .description("Aggregate shard-aware summary artifacts")
-      .option("--json", "Output JSON report")
-      .option("--markdown", "Output Markdown report")
-      .action(async (dir: string, opts: AggregateOpts) => {
-        await runAggregateAction(dir, opts);
-      }),
-    { since: "0.7.0", remove: "0.8.0", canonical: "flaker report --aggregate <dir>" },
-  );
+      .command(`${sub} [args...]`, { hidden: true })
+      .description(`(removed in 0.8.0) Use: ${canonical}`)
+      .action(() => {
+        process.stderr.write(`error: 'report ${sub}' was removed in 0.8.0. Use: ${canonical}\n`);
+        process.exit(1);
+      });
+  }
 }

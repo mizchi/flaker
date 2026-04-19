@@ -13,17 +13,14 @@ describe("flaker import (top-level)", () => {
     expect(res.stdout).toMatch(/file/i);
   });
 
-  it("deprecated: `flaker import report --help` warns", () => {
-    const res = spawnSync("node", [CLI, "import", "report", "--help"], { encoding: "utf8" });
-    expect(res.status).toBe(0);
-    expect(res.stderr).toContain("deprecated");
-    expect(res.stderr).toContain("flaker import");
+  // import report / import parquet removed in 0.8.0 — subcommands no longer registered.
+  it("removed: `flaker import report <file>` exits non-zero", () => {
+    const res = spawnSync("node", [CLI, "import", "report", "/tmp/x.json"], { encoding: "utf8" });
+    expect(res.status).not.toBe(0);
   });
 
-  it("deprecated: `flaker import parquet --help` warns", () => {
-    const res = spawnSync("node", [CLI, "import", "parquet", "--help"], { encoding: "utf8" });
-    expect(res.status).toBe(0);
-    expect(res.stderr).toContain("deprecated");
-    expect(res.stderr).toContain("flaker import");
+  it("removed: `flaker import parquet <dir>` exits non-zero", () => {
+    const res = spawnSync("node", [CLI, "import", "parquet", "/tmp/x"], { encoding: "utf8" });
+    expect(res.status).not.toBe(0);
   });
 });

@@ -25,7 +25,8 @@ describe("flaker --help", () => {
     expect(top).toContain("Deprecated (removed in 0.8.0):");
   });
 
-  for (const category of ["setup", "exec", "collect", "import", "report", "analyze", "debug", "policy", "dev"]) {
+  // setup, exec, collect, policy categories removed in 0.8.0 — checks dropped.
+  for (const category of ["import", "report", "analyze", "debug", "dev"]) {
     it(`lists ${category} category`, () => {
       expect(top).toContain(category);
     });

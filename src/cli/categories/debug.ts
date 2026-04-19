@@ -1,5 +1,4 @@
 import type { Command } from "commander";
-import { deprecate } from "../deprecation.js";
 import { runDoctor, formatDoctorReport } from "../commands/debug/doctor.js";
 import { runBisect } from "../commands/debug/bisect.js";
 import { runRetry, formatRetryReport } from "../commands/debug/retry.js";
@@ -206,9 +205,4 @@ With --json, prints: {"verdict": "BROKEN|FLAKY|TRANSIENT", "runs": {...}}
       },
     );
 
-  const debugDoctorCmd = debug
-    .command("doctor")
-    .description("Check local flaker runtime requirements")
-    .action(debugDoctorAction);
-  deprecate(debugDoctorCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker doctor" });
 }
