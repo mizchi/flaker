@@ -3,7 +3,7 @@ import { executePlan } from "../../src/cli/commands/apply/executor.js";
 import type { PlannedAction } from "../../src/cli/commands/apply/planner.js";
 
 describe("executePlan", () => {
-  it("calls each dep in order and collects ok results", async () => {
+  it("calls each dep and collects ok results (DAG: independent actions run concurrently)", async () => {
     const collectCi = vi.fn(async () => ({ runsCollected: 5 }));
     const calibrate = vi.fn(async () => ({ written: true }));
     const coldStartRun = vi.fn(async () => ({ exitCode: 0 }));
@@ -25,14 +25,18 @@ describe("executePlan", () => {
     expect(coldStartRun).toHaveBeenCalledOnce();
     expect(quarantineApply).toHaveBeenCalledOnce();
     expect(result.executed).toHaveLength(4);
-    expect(result.executed.map((e) => e.kind)).toEqual([
-      "collect_ci", "calibrate", "cold_start_run", "quarantine_apply",
-    ]);
+    // DAG runs collect_ci + cold_start_run concurrently (wave 1),
+    // then calibrate (wave 2, depends on collect_ci),
+    // then quarantine_apply (wave 3, depends on calibrate).
+    // Order within a wave is not guaranteed; use a set-based check.
+    expect(new Set(result.executed.map((e) => e.kind))).toEqual(
+      new Set(["collect_ci", "calibrate", "cold_start_run", "quarantine_apply"]),
+    );
     expect(result.executed.every((e) => e.ok)).toBe(true);
     expect(result.aborted).toBe(false);
   });
 
-  it("stops on first failure and marks aborted", async () => {
+  it("legacy wrapper: failed action aborts; dependent actions appear as skipped (ok:false)", async () => {
     const collectCi = vi.fn(async () => { throw new Error("network"); });
     const calibrate = vi.fn();
     const coldStartRun = vi.fn();
@@ -46,10 +50,13 @@ describe("executePlan", () => {
       { collectCi, calibrate, coldStartRun, quarantineApply },
     );
 
+    // calibrate depends on collect_ci → skipped (not called), mapped to ok:false
     expect(calibrate).not.toHaveBeenCalled();
-    expect(result.executed).toHaveLength(1);
+    expect(result.executed).toHaveLength(2);
     expect(result.executed[0].ok).toBe(false);
     expect(result.executed[0].error).toBe("network");
+    // calibrate is skipped → ok: false with skippedReason surfaced as error
+    expect(result.executed.find((e) => e.kind === "calibrate")?.ok).toBe(false);
     expect(result.aborted).toBe(true);
   });
 
