@@ -60,9 +60,9 @@ repo root で次を実行する。
 
 ```bash
 mkdir -p .artifacts
-pnpm flaker analyze kpi
-pnpm flaker analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
-pnpm flaker analyze flaky-tag --json > .artifacts/flaky-tag-triage.json
+pnpm flaker status
+pnpm flaker gate review merge --json --output .artifacts/gate-review-merge.json
+pnpm flaker ops weekly --output .artifacts/flaker-weekly.md
 ```
 
 ここで見るもの:
@@ -84,26 +84,33 @@ nightly または 1 日 1 回、次を回す。
 mkdir -p .artifacts
 export GITHUB_TOKEN=$(gh auth token)
 pnpm flaker collect ci --days 1
-pnpm flaker run --gate release
-pnpm flaker analyze flaky-tag --json > .artifacts/flaky-tag-triage.json
-pnpm flaker analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
+pnpm flaker ops daily --output .artifacts/flaker-daily.md
+pnpm flaker quarantine suggest --json --output .artifacts/quarantine-plan.json
 ```
 
 必要なら quarantine も更新する。
 
 ```bash
-pnpm flaker policy quarantine --auto --create-issues
+pnpm flaker quarantine apply --from .artifacts/quarantine-plan.json --create-issues
 ```
 
 この loop の役割:
 
 - full run で history を増やす
-- `@flaky` の add / remove 候補を出す
-- 週次レビュー用の markdown を残す
+- quarantine の add / remove 候補を plan として残す
+- 日次の release snapshot を残す
 
 ## 3. 毎週のレビュー
 
-週 1 回、次の表を埋める。
+週 1 回、まず次を更新する。
+
+```bash
+mkdir -p .artifacts
+pnpm flaker gate review merge --json --output .artifacts/gate-review-merge.json
+pnpm flaker ops weekly --output .artifacts/flaker-weekly.md
+```
+
+その上で次の表を埋める。
 
 ```md
 ## Week YYYY-MM-DD
@@ -165,18 +172,20 @@ test ごとの契約テンプレートは [skills/flaker-management/assets/test-
 CI failure の再確認:
 
 ```bash
-pnpm flaker debug retry --run <workflow-run-id>
+pnpm flaker ops incident --run <workflow-run-id> --output .artifacts/flaker-incident.md
 ```
 
 特定 test の confirm:
 
 ```bash
-pnpm flaker debug confirm "path/to/spec.ts:test name" --runner local
+pnpm flaker ops incident --suite path/to/spec.ts --test "test name" --output .artifacts/flaker-incident.md
 ```
 
-mutation-based diagnose:
+より細かくやるなら raw debug primitives を使う。
 
 ```bash
+pnpm flaker debug retry --run <workflow-run-id>
+pnpm flaker debug confirm "path/to/spec.ts:test name" --runner local
 pnpm flaker debug diagnose --suite path/to/spec.ts --test "test name"
 ```
 

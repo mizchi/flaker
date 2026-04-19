@@ -81,6 +81,6 @@ pnpm flaker status
 
 - 詳細なコマンドリファレンス: [how-to-use.ja.md](how-to-use.ja.md)
 - runner / adapter の詳細: [runner-adapters.md](runner-adapters.md), [test-result-adapters.md](test-result-adapters.md)
-- 失敗の調査: [diagnose.md](diagnose.md), `flaker debug confirm`, `flaker debug retry`
+- 失敗の調査: [diagnose.md](diagnose.md), `flaker ops incident`, `flaker debug confirm`, `flaker debug retry`
 - 導入手順: [new-project-checklist.ja.md](new-project-checklist.ja.md)
 - 運用設計: [operations-guide.ja.md](operations-guide.ja.md)

@@ -73,6 +73,19 @@ describe("top-level aliases", () => {
     expect(help).toContain("--json");
   });
 
+  it("flaker ops daily --help shows ops daily options", () => {
+    const help = execSync(`node ${cliPath} ops daily --help`, { encoding: "utf-8" });
+    expect(help).toContain("--window-days");
+    expect(help).toContain("--json");
+  });
+
+  it("flaker ops incident --help shows ops incident options", () => {
+    const help = execSync(`node ${cliPath} ops incident --help`, { encoding: "utf-8" });
+    expect(help).toContain("--suite");
+    expect(help).toContain("--test");
+    expect(help).toContain("--run");
+  });
+
   it("flaker doctor --help shows the top-level doctor alias", () => {
     const help = execSync(`node ${cliPath} doctor --help`, { encoding: "utf-8" });
     expect(help).toContain("User-facing environment check");

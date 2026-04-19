@@ -229,15 +229,17 @@ The current CLI and config already fit this model:
 | Iteration Gate | `profile.local` |
 | Merge Gate | `profile.ci` |
 | Release Gate | usually a full run, often backed by `profile.scheduled` or a dedicated release workflow |
-| Observation loop | `flaker collect` + `flaker run --gate release` + `flaker analyze eval` |
-| Triage loop | `flaker analyze flaky-tag` + `flaker policy quarantine` + weekly review |
-| Incident loop | `flaker debug retry` + `flaker debug confirm` + `flaker debug diagnose` |
+| Observation loop | `flaker collect` + `flaker ops daily` |
+| Triage loop | `flaker gate review merge` + `flaker ops weekly` + `flaker quarantine suggest/apply` |
+| Incident loop | `flaker ops incident` |
 
 If you describe flaker this way, the surface area becomes smaller:
 
 - users choose gates and budgets
 - operators run loops and maintain policies
 - flaker chooses strategies such as `affected`, `hybrid`, or `full`
+
+The older primitives such as `analyze eval`, `analyze flaky-tag`, and `policy quarantine` still exist, but they are now advanced/internal surfaces rather than the primary operator entrypoints.
 
 ## Quick Start
 
@@ -296,19 +298,21 @@ trust = true
 # job = "e2e"
 ```
 
-### Inspect flakiness
+### Inspect health and operator state
+
+```bash
+flaker status
+flaker gate review merge
+flaker gate history merge --json
+flaker quarantine suggest --json
+flaker ops weekly --json
+```
+
+Advanced/internal analysis primitives still exist when you need lower-level detail:
 
 ```bash
 flaker analyze flaky
-flaker analyze flaky-tag --json
 flaker analyze reason
-flaker analyze eval
-flaker analyze bundle --output .artifacts/flaker-analysis.json
-```
-
-Useful evaluation outputs:
-
-```bash
 flaker analyze eval --json
 flaker analyze eval --markdown --window 7
 flaker analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
@@ -404,7 +408,7 @@ This supports a simple Playwright workflow:
 
 - `release` / `scheduled` runs all E2E tests and accumulates history
 - `merge` / `iteration` exclude tests tagged with `@flaky`
-- `flaker analyze flaky-tag --json` emits add/remove suggestions for a daily AI triage agent
+- `flaker ops weekly --json` carries both quarantine and flaky-tag suggestions for operator review
 
 Recommended `@flaky` loop:
 
@@ -413,17 +417,23 @@ Recommended `@flaky` loop:
    `flaker` detects both Playwright tags and `@flaky` embedded in the test title.
 3. Keep `release` / `scheduled` as full execution, and use `merge` / `iteration` with `skip_flaky_tagged = true`.
    For Playwright, flaker passes `--grep-invert @flaky` to normal runs.
-4. Run daily triage and let an AI agent update test sources based on the report:
+4. Run weekly triage and let an AI agent update test sources based on the artifact:
 
 ```bash
-flaker analyze flaky-tag --json > .artifacts/flaky-tag-triage.json
+flaker ops weekly --json > .artifacts/flaker-weekly.json
 ```
 
-The triage report contains:
+The weekly artifact contains flaky-tag suggestions:
 
 - `suggestions.add`: untagged tests that are unstable enough to move into `@flaky`
 - `suggestions.remove`: currently tagged tests that have enough consecutive clean passes to return to normal execution
 - `suggestions.keep`: currently tagged tests that should remain excluded from normal execution
+
+If you want the raw primitive instead of the bundled operator artifact:
+
+```bash
+flaker analyze flaky-tag --json > .artifacts/flaky-tag-triage.json
+```
 
 By default, add-thresholds come from `[quarantine]`:
 
@@ -473,10 +483,11 @@ Post test results directly on pull requests:
 When flaky tests are auto-quarantined, create tracking issues:
 
 ```bash
-flaker policy quarantine --auto --create-issues
+flaker quarantine suggest --json --output .artifacts/quarantine-plan.json
+flaker quarantine apply --from .artifacts/quarantine-plan.json --create-issues
 ```
 
-This creates a GitHub Issue per quarantined test via `gh` CLI, with flaky rate, run count, and fix instructions. Requires `gh` to be installed and authenticated.
+This creates a reviewed plan first, then applies it and optionally opens GitHub Issues via `gh` CLI. Requires `gh` to be installed and authenticated.
 
 ### Self-Host Rollout
 
@@ -504,7 +515,7 @@ The most practical rollout looks like this:
 1. `flaker run --gate release` in a nightly scheduled workflow (full test + data accumulation)
 2. `flaker run --gate merge` on PR push (selective execution, posts PR comment)
 3. `flaker run --gate iteration` during development (fast feedback)
-4. Review `flaker status` and `flaker analyze eval` weekly
+4. Review `flaker status`, `flaker gate review merge`, and `flaker ops weekly` weekly
 5. Only tighten the workflow after local-to-CI correlation looks strong
 
 This works best in repositories with:
@@ -592,8 +603,8 @@ Fetches the test result artifact from the failed CI run, identifies failed tests
 ### Policy and ownership
 
 ```bash
-flaker policy quarantine
-flaker policy quarantine --auto --create-issues
+flaker quarantine suggest --json --output .artifacts/quarantine-plan.json
+flaker quarantine apply --from .artifacts/quarantine-plan.json --create-issues
 flaker policy check
 flaker exec affected --changed src/foo.ts
 ```

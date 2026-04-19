@@ -21,10 +21,12 @@ import {
 import { ActrunRunner } from "../runners/actrun.js";
 import { DuckDBStore } from "../storage/duckdb.js";
 import { createRunner } from "../runners/index.js";
-import { createResolver, type ResolverConfig } from "../resolvers/index.js";
-import { resolveCurrentCommitSha, detectChangedFiles } from "../core/git.js";
+import { createResolver } from "../resolvers/index.js";
+import { detectChangedFiles } from "../core/git.js";
 import { loadQuarantineManifestIfExists } from "../quarantine-manifest.js";
 import { runSamplingKpi } from "../commands/analyze/eval.js";
+import { createConfiguredResolver } from "./shared-resolver.js";
+import { executePreparedLocalRun } from "../commands/exec/execute-prepared-local-run.js";
 
 type SamplingCliOpts = RunCliOpts;
 
@@ -53,19 +55,6 @@ Gate names:
 Use --gate for the normal workflow.
 Use --profile only when you need an advanced or custom profile name.
 `;
-
-function createConfiguredResolver(
-  affectedConfig: ResolverConfig,
-  cwd: string,
-) {
-  return createResolver(
-    {
-      resolver: affectedConfig.resolver ?? "simple",
-      config: affectedConfig.config ? resolve(cwd, affectedConfig.config) : undefined,
-    },
-    cwd,
-  );
-}
 
 async function listRunnerTests(
   cwd: string,
@@ -139,29 +128,17 @@ export async function execRunAction(rawOpts: SamplingCliOpts & { runner: string;
       return;
     }
 
-    const commitSha = resolveCurrentCommitSha(cwd) ?? `local-${Date.now()}`;
     const kpi = await runSamplingKpi({ store });
-
-    const runResult = await runTests({
+    const execution = await executePreparedLocalRun({
       store,
-      runner: createRunner(config.runner),
-      mode: opts.mode,
-      fallbackMode: opts.fallbackMode,
-      count: opts.count,
-      percentage: opts.percentage,
-      resolver: opts.resolver,
-      changedFiles: opts.changedFiles,
-      skipQuarantined: opts.skipQuarantined,
-      skipFlakyTagged: opts.skipFlakyTagged,
-      flakyTagPattern: config.runner.flaky_tag_pattern ?? "@flaky",
-      quarantineManifestEntries: opts.quarantineManifestEntries,
+      config,
       cwd,
-      coFailureDays: opts.coFailureDays,
-      holdoutRatio: opts.holdoutRatio,
-      clusterMode: opts.clusterMode,
+      prepared: opts,
       dryRun: rawOpts.dryRun,
       explain: rawOpts.explain,
+      runner: createRunner(config.runner),
     });
+    const runResult = execution.runResult;
     console.log(formatSamplingSummary(runResult.samplingSummary, {
       ciPassWhenLocalPassRate: kpi.passSignal.rate,
     }));
@@ -171,14 +148,6 @@ export async function execRunAction(rawOpts: SamplingCliOpts & { runner: string;
     if (rawOpts.dryRun) {
       return;
     }
-    await recordLocalRun({
-      store,
-      repoSlug: `${config.repo.owner}/${config.repo.name}`,
-      commitSha,
-      cwd,
-      runResult,
-      storagePath: config.storage.path,
-    });
     if (runResult.exitCode !== 0) {
       process.exit(1);
     }

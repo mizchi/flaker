@@ -30,6 +30,8 @@ describe("CLI help", () => {
     const quarantineSuggestHelp = quarantineCmd?.commands.find((command) => command.name() === "suggest")?.helpInformation();
     const quarantineApplyHelp = quarantineCmd?.commands.find((command) => command.name() === "apply")?.helpInformation();
     const opsCmd = program.commands.find((command) => command.name() === "ops");
+    const opsDailyHelp = opsCmd?.commands.find((command) => command.name() === "daily")?.helpInformation();
+    const opsIncidentHelp = opsCmd?.commands.find((command) => command.name() === "incident")?.helpInformation();
     const opsWeeklyHelp = opsCmd?.commands.find((command) => command.name() === "weekly")?.helpInformation();
     const analyzeCmd = program.commands.find((command) => command.name() === "analyze");
     const evalHelp = analyzeCmd?.commands.find((command) => command.name() === "eval")?.helpInformation();
@@ -51,6 +53,11 @@ describe("CLI help", () => {
     expect(quarantineSuggestHelp).toContain("--output");
     expect(quarantineApplyHelp).toContain("--from");
     expect(quarantineApplyHelp).toContain("--create-issues");
+    expect(opsDailyHelp).toContain("--window-days");
+    expect(opsDailyHelp).toContain("--json");
+    expect(opsIncidentHelp).toContain("--suite");
+    expect(opsIncidentHelp).toContain("--test");
+    expect(opsIncidentHelp).toContain("--run");
     expect(opsWeeklyHelp).toContain("--window-days");
     expect(opsWeeklyHelp).toContain("--json");
     expect(evalHelp).toContain("Measure whether local sampled runs predict CI");

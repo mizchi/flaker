@@ -45,33 +45,34 @@
 ### Observation loop
 
 - `flaker collect`
-- `flaker run --gate release`
-- `flaker analyze eval`
+- `flaker ops daily`
 - `flaker status`
 
 役割:
 
 - history を増やす
-- holdout / KPI を更新する
+- release gate の日次 snapshot を残す
 - gate の信頼度を測る
 
 ### Triage loop
 
-- `flaker analyze flaky-tag`
-- `flaker policy quarantine`
+- `flaker gate review merge`
+- `flaker ops weekly`
+- `flaker quarantine suggest`
+- `flaker quarantine apply`
 - 週次の promote / keep / demote review
 
 役割:
 
 - flaky を gate から隔離する
-- `@flaky` の add / remove 候補を管理する
+- promote / keep / demote の判断を artifact に残す
+- review 済みの quarantine plan だけを適用する
 - required check の信頼を保つ
 
 ### Incident loop
 
-- `flaker debug retry`
-- `flaker debug confirm`
-- `flaker debug diagnose`
+- `flaker ops incident`
+- 必要なら `flaker debug retry / confirm / diagnose`
 
 役割:
 
@@ -83,13 +84,22 @@
 ### 毎日
 
 ```bash
+mkdir -p .artifacts
+export GITHUB_TOKEN=$(gh auth token)
 pnpm flaker collect ci --days 1
-pnpm flaker run --gate release
-pnpm flaker analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
-pnpm flaker analyze flaky-tag --json > .artifacts/flaky-tag-triage.json
+pnpm flaker ops daily --output .artifacts/flaker-daily.md
+pnpm flaker quarantine suggest --json --output .artifacts/quarantine-plan.json
 ```
 
 ### 毎週
+
+```bash
+mkdir -p .artifacts
+pnpm flaker gate review merge --json --output .artifacts/gate-review-merge.json
+pnpm flaker ops weekly --output .artifacts/flaker-weekly.md
+```
+
+次を見て `promote / keep / demote` を決める。
 
 - `matched commits`
 - `false negative rate`
@@ -98,14 +108,16 @@ pnpm flaker analyze flaky-tag --json > .artifacts/flaky-tag-triage.json
 - `saved test minutes`
 - `flaky` / `quarantined` test 数
 
-を見て `promote / keep / demote` を決める。
+`status` は summary-only なので、昇格判断は `gate review merge` を使う。
 
 ### 失敗時
 
 ```bash
-pnpm flaker debug retry --run <workflow-run-id>
-pnpm flaker debug confirm "path/to/spec.ts:test name" --runner local
+pnpm flaker ops incident --run <workflow-run-id> --output .artifacts/flaker-incident.md
+pnpm flaker ops incident --suite path/to/spec.ts --test "test name" --output .artifacts/flaker-incident.md
 ```
+
+より細かい切り分けが必要なときだけ `flaker debug retry / confirm / diagnose` に降りる。
 
 ## 昇格・降格の目安
 
