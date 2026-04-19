@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.7.1
+
+Runner-agnostic docs fix. Resolves the Vitest/Jest overfit issue surfaced by the Iter 6.5 hold-out evaluation (closes #53).
+
+### Fixed
+
+- `flaker init` now defaults to `resolver = "simple"` instead of the misleading `"git"` alias. Both resolve to `SimpleResolver`, but `"simple"` is self-documenting. The generated TOML includes an inline comment enumerating all 5 supported resolver values.
+- Docs: `how-to-use.ja.md` Vitest example now writes `[adapter] type = "vitest"` (not `"playwright"`). The previous note claiming "vitest --reporter json is Playwright-compatible" was misleading — `vitest` is a first-class adapter.
+
+### Docs
+
+- New Jest section and JUnit XML (runner-agnostic) section in `how-to-use.ja.md`.
+- New `[runner.actrun]` examples now cover both Playwright and Vitest.
+- New runner-by-runner `flaky_tag_pattern` / `skip_flaky_tagged` behavior matrix: `@flaky` grep is Playwright-only. For Vitest and Jest, `skip_flaky_tagged = true` is a documented no-op; workarounds (`test.skipIf`, `--testNamePattern`) are listed.
+- Unified resolver selection table across `how-to-use.ja.md` and `new-project-checklist.ja.md`: all 5 values (`simple` / `workspace` / `glob` / `bitflow` / `moon`) with usage guidance. `git` documented as alias of `simple`.
+- `vitest run --reporter=json --outputFile=report.json` → `flaker import <file>` / `flaker report <file> --summary --adapter vitest` flow now documented end-to-end.
+
+### Evaluation
+
+Iter 6.5 hold-out scenario (Vitest single-package library) re-ran against the updated docs:
+
+- **Accuracy**: 42% → **91.7%** (+49.7pt)
+- **[critical] 1 (Vitest flaker.toml)**: 部分的 → ○
+- **[critical] 2 (resolver selection)**: 部分的 → ○
+
+Target was ≥82% (Iter 6 A/B/C average − 15pt); cleared by 9.7pt. Overfit resolved.
+
 ## 0.7.0
 
 ### Deprecated (removed in 0.8.0)
