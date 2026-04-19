@@ -594,12 +594,14 @@ Defaults emitted by `flaker init --adapter <type> --runner <type>` are shown bel
 
 ```toml
 [adapter]
-type = "playwright"    # vitest --reporter json is Playwright-compatible
+type = "vitest"
 
 [runner]
 type = "vitest"
 command = "pnpm exec vitest run"
 ```
+
+To feed Vitest JSON reports into `flaker import <file>`, generate them with `vitest run --reporter=json --outputFile=report.json`. `flaker report <file> --summary --adapter vitest` takes the same JSON input.
 
 ### Playwright Test
 

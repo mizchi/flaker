@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.10.3
+
+Docs patch + Tier-1 audit results.
+
+### Docs
+
+- `docs/how-to-use.md` Vitest adapter example now writes `type = "vitest"` (was `"playwright"` with a misleading "vitest --reporter json is Playwright-compatible" comment). JA was corrected in 0.7.1; EN parallel fix was missed until now. Also adds the `vitest run --reporter=json --outputFile=report.json` incantation alongside `flaker import`.
+
+### Audit surfaced but deferred
+
+- ~20 other SQL sites (`CO_FAILURE_QUERY`, status activity query, analyze/{bundle,context,eval,insights,kpi}.ts) still use `CURRENT_TIMESTAMP - INTERVAL`, the same pattern 0.10.2 fixed in `FLAKY_QUERY`. Tests currently pass because window sizes are generous; latent bug tracked as #64 for a future minor.
+
 ## 0.10.2
 
 Bug fix: `queryFlakyTests` window cutoff is now computed from a caller-supplied `now` (or wall clock) in JS, not from DuckDB's `CURRENT_TIMESTAMP`. Resolves a timezone-dependent flake that surfaced as a failing `tests/commands/ops-daily.test.ts` whenever wall clock advanced past the test's injected `now`.
