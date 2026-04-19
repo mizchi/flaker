@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.7.0-next.0 (prerelease)
+## 0.7.0
 
 ### Deprecated (removed in 0.8.0)
 
@@ -28,7 +28,7 @@ the 0.7.0 canonical replacement.
 
 ### New
 
-- `flaker plan` / `flaker apply` (declarative reconciler; shipped in 0.6.0)
+- `flaker plan` / `flaker apply` — declarative reconciler (shipped in 0.6.0, promoted to primary in 0.7.0)
 - `flaker status` gained `--markdown`, `--list flaky|quarantined`, `--detail`, `--gate <name>`
 - `flaker query <sql>` top-level
 - `flaker explain <topic>` umbrella for AI-assisted analysis
@@ -36,16 +36,32 @@ the 0.7.0 canonical replacement.
 - `flaker report <file>` uses `--summary` / `--diff` / `--aggregate` flags
 - `[promotion]` config section with documented defaults
 - `[promotion].data_confidence_min` validated against the `low|moderate|high` enum
+- `flaker init` now writes `[profile.local]` / `[profile.ci]` / `[profile.scheduled]` defaults
+- `flaker apply` prints actionable stderr hints when the plan is empty or cold-start discovered 0 tests
 
 ### Changed
 
 - `flaker --help` reorganized into three tiers: Primary (11), Advanced, Deprecated
 - Primary command surface reduced from 53 to 11 user-facing entries (hidden `dev *` subtree retained)
+- `flaker doctor` is now the canonical form; `flaker debug doctor` is the deprecated alias (reversed from pre-0.7 polarity)
+- `flaker ops daily` is Advanced, not Deprecated — the aspirational "apply absorbs daily" did not actually ship yet
 
 ### Fixed
 
 - `flaker apply` now aborts cleanly when `GITHUB_TOKEN` is missing (previously `process.exit(1)` bypassed the executor's abort handler)
 - `probeRepo.hasLocalHistory` now queries `workflow_runs` instead of being hardcoded `false`
+- `flaker --version` prints a single line (was leaking `flaker core CLI 0.1.0 (js)` from an eager moonbit bridge import)
+- `flaker status --gate <name>` no longer crashes on the filtered gates object (text formatter was hardcoded to iterate all three gate names)
+- Deprecation warnings now reference the full command path (`flaker analyze kpi`) instead of just the leaf (`flaker kpi`), fixing 18 misleading or self-referential warnings
+
+### Docs
+
+- New `docs/migration-0.6-to-0.7.md` with full deprecation matrix + upgrade recipe + grep checklist
+- `skills/flaker-setup/SKILL.md` and `skills/flaker-management/SKILL.md` rewritten for the 10-command surface
+- `docs/new-project-checklist.{ja,md}` unified on apply+status flow
+- `docs/operations-guide.ja.md` daily loop simplified to `apply + status`
+- `README.md` Quick Start collapsed from Path 1/Path 2 split into a single 6-command block
+- Canonical command forms table moved to README and kept as single-source-of-truth
 
 ## [0.5.0](https://github.com/mizchi/flaker/compare/flaker-v0.4.0...flaker-v0.5.0) (2026-04-18)
 

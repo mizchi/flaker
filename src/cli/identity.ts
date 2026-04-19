@@ -139,31 +139,38 @@ function resolveTestIdentityFallback(
   };
 }
 
-const identityCore = await (async (): Promise<IdentityCoreExports> => {
-  const mod = await importOptionalMoonBitBridge<IdentityCoreExports>(
+const tsFallbackCore: IdentityCoreExports = {
+  create_stable_test_id_json(inputJson: string): string {
+    return JSON.stringify(
+      createStableTestIdFallback(
+        JSON.parse(inputJson) as CoreStableTestIdentityInput,
+      ),
+    );
+  },
+  resolve_test_identity_json(inputJson: string): string {
+    return JSON.stringify(
+      resolveTestIdentityFallback(
+        JSON.parse(inputJson) as CoreStableTestIdentityInput,
+      ),
+    );
+  },
+};
+
+let identityCore: IdentityCoreExports = tsFallbackCore;
+let bridgeLoadStarted = false;
+
+function ensureBridgeLoad(): void {
+  if (bridgeLoadStarted) return;
+  bridgeLoadStarted = true;
+  importOptionalMoonBitBridge<IdentityCoreExports>(
     MOONBIT_JS_BRIDGE_URL,
     isIdentityCoreExports,
-  );
-  if (mod) {
-    return mod;
-  }
-  return {
-    create_stable_test_id_json(inputJson: string): string {
-      return JSON.stringify(
-        createStableTestIdFallback(
-          JSON.parse(inputJson) as CoreStableTestIdentityInput,
-        ),
-      );
-    },
-    resolve_test_identity_json(inputJson: string): string {
-      return JSON.stringify(
-        resolveTestIdentityFallback(
-          JSON.parse(inputJson) as CoreStableTestIdentityInput,
-        ),
-      );
-    },
-  };
-})();
+  ).then((mod) => {
+    if (mod) identityCore = mod;
+  }).catch(() => {
+    // bridge unavailable — keep using the TS fallback
+  });
+}
 
 export function normalizeVariant(
   variant?: Record<string, string> | null,
@@ -172,6 +179,7 @@ export function normalizeVariant(
 }
 
 export function createStableTestId(input: TestIdentityFields): string {
+  ensureBridgeLoad();
   return JSON.parse(
     identityCore.create_stable_test_id_json(JSON.stringify(toCoreInput(input))),
   ) as string;
@@ -180,6 +188,7 @@ export function createStableTestId(input: TestIdentityFields): string {
 export function resolveTestIdentity<T extends TestIdentityFields>(
   input: T,
 ): T & ResolvedTestIdentity {
+  ensureBridgeLoad();
   const resolved = JSON.parse(
     identityCore.resolve_test_identity_json(JSON.stringify(toCoreInput(input))),
   ) as CoreResolvedStableTestIdentityOutput;

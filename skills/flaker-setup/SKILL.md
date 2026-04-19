@@ -1,11 +1,11 @@
 ---
 name: flaker-setup
-description: Set up @mizchi/flaker on a new repository. Use when the user asks to introduce flaker, configure flaker.toml, integrate flaker into GitHub Actions, or "start using flaker on this project". Encodes the declarative apply-based onboarding flow (flaker apply as the single convergence command) with the right decision points and pitfalls.
+description: Set up @mizchi/flaker on a new repository. Use when the user asks to introduce flaker, configure flaker.toml, integrate flaker into GitHub Actions, or "start using flaker on this project". Encodes the declarative apply-based onboarding flow for @mizchi/flaker 0.7.0+ (declarative apply model).
 ---
 
 # flaker setup skill
 
-`@mizchi/flaker` (0.6.0+) is a test-intelligence CLI with a declarative apply model: `flaker.toml` describes the desired state, and `flaker apply` reconciles the repo to that state by running `collect` / `calibrate` / `cold-start run` / `quarantine apply` in the right order based on current DB state and repo probe. Callers do not memorize the sequence.
+`@mizchi/flaker` (0.7.0+) is a test-intelligence CLI with a declarative apply model: `flaker.toml` describes the desired state, and `flaker apply` reconciles the repo to that state by running `collect` / `calibrate` / `cold-start run` / `quarantine apply` in the right order based on current DB state and repo probe. Callers do not memorize the sequence.
 
 **Always read the canonical checklist first.** It lives next to this skill in the plugin:
 
@@ -29,7 +29,7 @@ If both are unreachable, fall back to the procedure below.
 3. `flaker apply` executes the plan (idempotent; safe to re-run).
 4. `flaker status` shows drift vs `[promotion]` thresholds.
 
-The old sequence (`init → collect → calibrate → run`) still works and is documented, but `apply` is the default entrypoint from 0.6.0 onward. Use raw commands only when debugging a specific step.
+The Day 1 flow is `flaker init → flaker doctor → flaker apply → flaker status`. The deprecated imperative chain (`init → collect → calibrate → run`) still works via compat shims but is a migration-only concern — do not use it in new projects.
 
 ### Minimal declarative `flaker.toml`
 
@@ -78,7 +78,7 @@ strategy = "full"
 # data_confidence_min = "high"
 ```
 
-`flaker init` generates a starter toml; expect to edit `[affected].resolver` and the `[profile.*]` blocks before the first `flaker apply`.
+`flaker init` generates a starter toml including `[profile.*]` defaults; expect to edit `[affected].resolver` before the first `flaker apply`.
 
 ## Decision points to confirm before touching files
 
@@ -95,11 +95,11 @@ Ask the user (or infer from `package.json` / `pnpm-workspace.yaml` / repo layout
 ```
 Day 0   prerequisites           5 min   node>=24, pnpm>=10, gh auth, git remote
 Day 1   install + init          10 min  pnpm add -D @mizchi/flaker → init → doctor
-Day 1   first apply              5 min   flaker plan → flaker apply (handles history/no-history)
-Day 3   package.json scripts     5 min   flaker:plan, flaker:apply, flaker:status
-Day 5   Actions integration     15 min  cron calls `flaker apply` + PR advisory job
-Week 1  daily observation        -      flaker status (drift section tells you when to promote)
-Week 2-4 promote to required     -      [promotion] thresholds all green, remove continue-on-error
+Day 1   first apply              5 min   flaker plan → flaker apply → flaker status
+Day 3   package.json scripts     5 min   flaker:plan, flaker:apply, flaker:status, flaker:run:*
+Day 5   Actions integration     15 min   cron `flaker apply` + PR advisory `flaker run --gate merge`
+Week 1  daily observation        -      flaker status (drift → promotion-ready signal)
+Week 2-4 promote to required     -      drift == ready, remove continue-on-error
 ```
 
 Day 2 and Day 4 are intentionally empty — apply is idempotent, so there is no forced action between the Day 1 bootstrap and the Day 3 / Day 5 integration steps. Run `flaker apply` whenever you want (manually or in cron); skip days if nothing changed.
@@ -115,22 +115,19 @@ node --version && pnpm --version && git remote -v && gh auth status
 # 1. install
 pnpm add -D @mizchi/flaker
 
-# 2. init (pick adapter/runner per the decision above)
+# 2. init (init now writes [profile.*] defaults)
 pnpm flaker init --adapter <adapter> --runner <runner>
 
-# 3. doctor (canonical: flaker debug doctor — 'flaker doctor' still works with a deprecation warning)
-pnpm flaker debug doctor
+# 3. doctor
+pnpm flaker doctor
 
-# 4. set resolver in flaker.toml — edit [affected] section manually
-#    workspace: resolver = "workspace"
-#    glob:      resolver = "glob",  config = "flaker.affected.toml"
-#    bitflow:   resolver = "bitflow"
+# 4. edit [affected].resolver in flaker.toml (workspace | glob | bitflow)
 
-# 5. preview and converge (single command replaces the old collect → calibrate → run chain)
-export GITHUB_TOKEN=$(gh auth token)   # only needed if the repo has CI history
-pnpm flaker plan                       # see what apply will do
-pnpm flaker apply                      # idempotent; re-run anytime
-pnpm flaker status                     # shows drift vs [promotion] thresholds
+# 5. preview + converge
+export GITHUB_TOKEN=$(gh auth token)   # optional if no CI history yet
+pnpm flaker plan
+pnpm flaker apply
+pnpm flaker status
 ```
 
 ## What `flaker apply` does
@@ -157,13 +154,11 @@ When actions don't apply (e.g. no `GITHUB_TOKEN` on a brand-new repo), apply sil
     "flaker:status": "flaker status",
     "flaker:run:iteration": "flaker run --gate iteration",
     "flaker:run:release": "flaker run --gate release",
-    "flaker:eval:markdown": "flaker analyze eval --markdown --window 7",
-    "flaker:doctor": "flaker debug doctor"
+    "flaker:eval": "flaker status --markdown",
+    "flaker:doctor": "flaker doctor"
   }
 }
 ```
-
-Note: `flaker kpi` and `flaker doctor` top-level aliases are DEPRECATED in 0.6.0 (still work, emit stderr warning; removed in 0.7.0). Use `flaker analyze kpi` and `flaker debug doctor`.
 
 ## GitHub Actions snippets
 
@@ -183,12 +178,12 @@ Nightly apply (single scheduled cron replaces the old collect + run pair):
 - run: pnpm flaker apply
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-- run: pnpm flaker analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
+- run: pnpm flaker status --markdown > .artifacts/flaker-status.md
 ```
 
 ## Promotion criteria for required check
 
-Only promote `flaker run --gate merge` from advisory to required when `flaker status` drift shows `ready` (all 5 `[promotion]` thresholds met), or equivalently when `flaker gate review merge --json` reports:
+Only promote `flaker run --gate merge` from advisory to required when `flaker status` drift shows `ready` (all 5 `[promotion]` thresholds met), or equivalently when `flaker status --gate merge --detail --json` reports:
 
 - `Matched commits ≥ 20`
 - `False negative rate ≤ 5%`
@@ -197,6 +192,8 @@ Only promote `flaker run --gate merge` from advisory to required when `flaker st
 - `Data confidence: moderate` or `high`
 
 The thresholds live in `[promotion]` of `flaker.toml`; defaults match the above. Override in config if the project needs stricter or looser gating.
+
+The simplest readout is `flaker status` — the drift section shows `ready` or lists unmet thresholds.
 
 If the user wants to gate sooner, push back: empirically less than 20 matched commits gives unstable readings.
 
@@ -221,7 +218,7 @@ If the user wants to gate sooner, push back: empirically less than 20 matched co
 - **Do not** set `holdout_ratio > 0.2` — wastes runner time.
 - **Do not** skip `flaker apply` and hand-tune `[sampling]` — the calibrated values outperform manual settings in 90% of cases.
 - **Do not** make the PR job required before `flaker status` drift reports `ready`.
-- **Do not** use `flaker kpi` or `flaker doctor` top-level aliases in new scripts — they print a deprecation warning and will be removed in 0.7.0.
+- **Do not** use deprecated aliases in new scripts — `setup init`, `exec run`, `collect ci`, `collect calibrate`, `analyze kpi`, `analyze eval`, `debug doctor`, `quarantine suggest/apply`, `policy quarantine/check/report`, `gate review/history/explain` all print deprecation warnings in 0.7.0 and will be removed in 0.8.0. Use the primary commands: `flaker init`, `flaker run`, `flaker apply`, `flaker status`, `flaker doctor`, `flaker explain`, `flaker query`, etc.
 
 ## Reference docs (in this plugin)
 

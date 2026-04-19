@@ -243,45 +243,40 @@ The older primitives such as `analyze eval`, `analyze flaky-tag`, and `policy qu
 
 ## Quick Start
 
-Pick the path that matches the repo's CI history on Day 1. `flaker calibrate` only produces useful output once there are enough CI runs to analyze (it emits an `insufficient` warning on empty history), so it belongs in Path 2, not Path 1.
+`flaker.toml` is the **desired state**. `flaker apply` reconciles the repo to it, idempotently. Works on fresh repos (no history) and mature repos alike — the reconciler handles the branching.
 
-### Path 1 — New repo, no CI history yet
+```bash
+pnpm add -D @mizchi/flaker
+pnpm flaker init --adapter <playwright|vitest|jest|junit> --runner <same or actrun>
+# edit [affected].resolver in flaker.toml (workspace | glob | bitflow)
+pnpm flaker doctor
+pnpm flaker plan          # preview what apply will do
+pnpm flaker apply         # converge (safe to re-run)
+pnpm flaker status        # dashboard + promotion drift
+```
 
-The first `flaker run` self-seeds a history from the runner's listed tests (cold-start fallback; see below). Run `collect` / `calibrate` later on Day 2–3 once CI has accumulated enough data.
+`flaker init` generates `[profile.local]` / `[profile.ci]` / `[profile.scheduled]` defaults out of the box. `flaker apply` detects missing CI history, runs a cold-start iteration gate, collects CI runs when `GITHUB_TOKEN` is set, and tunes sampling via calibrate when there are enough matched commits — in that order, skipping whatever isn't applicable.
 
-1. `flaker init` — creates `flaker.toml`, auto-detects repo from git remote
-2. `flaker doctor`[^doctor-canonical] — verifies DuckDB, MoonBit, and config
-3. `flaker run --gate iteration` — runs tests and records the first local history
-4. `flaker status` — user-facing summary dashboard
-5. (Day 2–3) `flaker collect --days 30 && flaker collect calibrate` — once CI has accumulated runs, pull them in and tune sampling
+The full Day 0 → Week 4 onboarding checklist lives at [docs/new-project-checklist.ja.md](docs/new-project-checklist.ja.md) / [.md](docs/new-project-checklist.md).
 
-[^doctor-canonical]: `flaker doctor` is the onboarding-friendly alias; the canonical form is `flaker debug doctor` (see canonical command forms table below).
-
-### Path 2 — Existing repo, CI history already present
-
-Calibrate on Day 1 using the existing history.
-
-1. `flaker init` — creates `flaker.toml`, auto-detects repo from git remote
-2. `flaker doctor`[^doctor-canonical] — verifies DuckDB, MoonBit, and config
-3. `flaker collect --days 30` — pulls recent CI runs from GitHub Actions (requires `GITHUB_TOKEN`)
-4. `flaker collect calibrate` — analyzes the collected history and writes optimal sampling config back into `flaker.toml`
-5. `flaker run --gate iteration` — fast local feedback
-6. `flaker status` — user-facing summary dashboard (sampling, flaky tests, data quality)
-
-The staged onboarding checklist at [docs/new-project-checklist.ja.md](docs/new-project-checklist.ja.md) expands Path 1 across Day 0 → Week 4.
-
-For users who want a single idempotent entrypoint instead of the step-by-step flow above, `flaker plan` / `flaker apply` (introduced in 0.6.0) treat `flaker.toml` as desired state and automatically sequence `collect` / `calibrate` / `quarantine apply` based on current DB state. Run `flaker plan` first to preview what will happen, then `flaker apply` to converge. Path 2 above remains fully supported for operators who prefer explicit control.
-
-> **Canonical command forms**
+> **Canonical command forms (0.7.0)**
 >
-> | Canonical | Legacy form (accepted but avoid in new docs) |
+> The primary surface is 11 commands: `init`, `plan`, `apply`, `status`, `run`, `doctor`, `debug`, `query`, `explain`, `import`, `report`. Everything else is either Advanced (`gate`, `ops`, `dev`) or Deprecated (removed in 0.8.0). The legacy aliases below still work and emit a stderr warning pointing at the canonical form.
+>
+> | Canonical (0.7.0) | Legacy form |
 > |---|---|
-> | `flaker collect --days N` | `flaker collect ci --days N` |
-> | `flaker collect calibrate` | (there is no top-level `flaker calibrate`) |
-> | `flaker analyze kpi` | `flaker kpi` — DEPRECATED in 0.6.0 |
-> | `flaker debug doctor` | `flaker doctor` — DEPRECATED in 0.6.0 |
->
-> `flaker collect` and `flaker collect ci` are aliases — both call the same action (pull from GitHub Actions). New docs standardize on `flaker collect` (no `ci` subcommand). `flaker status` (top-level) and `flaker analyze kpi` are **different** commands: `status` is the summary-only dashboard for daily use; `analyze kpi` is the detailed KPI view for operators. Use `flaker gate review merge --json` — not `status` — when you need the authoritative numbers for advisory-to-required promotion decisions.
+> | `flaker apply` | `flaker collect ci / local / coverage / calibrate`, `flaker quarantine suggest / apply`, `flaker policy quarantine`, `flaker analyze flaky-tag` |
+> | `flaker status` | `flaker analyze kpi`, `flaker kpi` |
+> | `flaker status --markdown` | `flaker analyze eval --markdown` |
+> | `flaker status --list flaky` | `flaker analyze flaky` |
+> | `flaker status --gate <name> --detail --json` | `flaker gate review <name> --json`, `flaker gate history`, `flaker gate explain` |
+> | `flaker run --gate <name>` | `flaker exec run`, `flaker exec affected` |
+> | `flaker init` | `flaker setup init` |
+> | `flaker doctor` | `flaker debug doctor` |
+> | `flaker query <sql>` | `flaker analyze query` |
+> | `flaker explain <topic>` | `flaker analyze reason / insights / cluster / bundle / context` |
+> | `flaker import <file>` (adapter auto-detect) | `flaker import report / parquet` |
+> | `flaker report <file> --summary \| --diff <base> \| --aggregate <dir>` | `flaker report summary / diff / aggregate` |
 
 ### Initialize
 
@@ -532,13 +527,13 @@ The repo now ships two GitHub-native self-host lanes:
 
 Both lanes render the same promotion-readiness summary from `scripts/self-host-review.mjs`. The current default is still advisory: the PR job is non-blocking, and the nightly workflow carries the long-form trend.
 
-Promote `flaker run --gate merge` to a required check only after the nightly issue shows **all five** of the following. Check the current values with `flaker gate review merge --json` (authoritative for promotion) — `flaker status` is a summary-only dashboard and should not be used for promotion.
+Promote `flaker run --gate merge` to a required check only after the nightly issue shows **all five** of the following. The primary signal is `flaker status` (the `Promotion drift` section reports `ready` when all five thresholds are met). For the exact numeric values, use `flaker status --gate merge --detail --json` — this is the authoritative output. (`flaker gate review merge --json` is the legacy alias, DEPRECATED in 0.7.0, removed in 0.8.0.)
 
 - `matched commits >= 20` — commits where both a gated local/CI run and a release/full run exist in the same window, so that local sampling outcomes can be compared against a ground-truth full run. Increases as the nightly `--gate release` accumulates history.
 - `false negative rate <= 5%` — share of commits where the `merge` gate passed but the full run failed (sampling missed a real regression). Measured over the same matched-commit window.
 - `pass correlation >= 95%` — `P(full run passes | merge gate passes)` on matched commits. Same metric referenced elsewhere in this README as `P(CI pass | local pass)`.
 - `holdout FNR <= 10%` — FNR measured on the holdout slice defined by `[sampling] holdout_ratio`. Tests in the holdout slice are excluded from the sampled run so that their outcomes can be used to audit whether the sampler's verdict generalizes. Guards against sampler overfitting to the visible slice.
-- `data confidence` reaches `moderate` or `high` — derived signal combining matched-commit count, history window coverage, and flaky-noise level. Rough rule of thumb: `low` until ~10 matched commits, `moderate` around 20–40 with FNR/correlation green, `high` beyond 40 with stable noise. Exact boundaries come from the `gate review merge` output, not from config.
+- `data confidence` reaches `moderate` or `high` — derived signal combining matched-commit count, history window coverage, and flaky-noise level. Rough rule of thumb: `low` until ~10 matched commits, `moderate` around 20–40 with FNR/correlation green, `high` beyond 40 with stable noise. Exact boundaries come from the `status --gate merge --detail --json` output, not from config.
 
 ## Recommended Usage Model
 

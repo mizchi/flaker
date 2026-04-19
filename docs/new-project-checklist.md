@@ -2,9 +2,9 @@
 
 [日本語版](new-project-checklist.ja.md)
 
-The checklist for introducing flaker to a new repository and getting value from it across the first day, first week, and first month. Assumes `0.3.0+`.
+The checklist for introducing flaker to a new repository and getting value from it across the first day, first week, and first month. Assumes `0.7.0+`.
 
-If you follow it in order, initial setup takes about 30 minutes, your measurement baseline is in place within a week, and the repository is ready to promote CI gating in 2-4 weeks.
+Day 1 converges in five steps: `init -> doctor -> plan -> apply -> status`. If you follow it in order, initial setup takes about 30 minutes, your measurement baseline is in place within a week, and the repository is ready to promote CI gating in 2-4 weeks.
 
 ---
 
@@ -14,16 +14,18 @@ If you follow it in order, initial setup takes about 30 minutes, your measuremen
 node --version    # >= 24
 pnpm --version    # >= 10
 git remote -v     # origin should point at GitHub
-gh auth status    # logged in (needed for collect ci)
+gh auth status    # logged in (needed for flaker apply when pulling CI history)
 ```
 
-If the repository does not use GitHub Actions yet or has no history, skip `collect ci` on Day 1 and use a “local first -> collect later” flow.
+Repositories with no GitHub Actions history are still fine. `flaker apply` detects an empty history and picks the cold-start path (self-seed from a local run). Real CI history accumulates naturally after Day 1.
 
 You do not need `moon` (MoonBit). flaker ships a bundled `dist/moonbit/flaker.js`, and falls back to TypeScript (`src/cli/core/loader.ts`) when needed.
 
 ---
 
-## Day 1: Install and initialize (15 minutes)
+## Day 1: Install through convergence (15 minutes)
+
+Day 1 is a single five-step flow. `flaker apply` handles collect / calibrate / quarantine sequencing internally, so you do not have to memorize the order.
 
 ### 1. Install
 
@@ -51,6 +53,8 @@ pnpm flaker init --adapter playwright --runner actrun
 
 `owner` and `name` are auto-detected from the git remote. Override with `--owner` / `--name` if needed.
 
+As of 0.7.0, `flaker init` also writes default `[profile.scheduled]` / `[profile.ci]` / `[profile.local]` blocks so that gates resolve immediately.
+
 ### 3. Check the environment with doctor
 
 ```bash
@@ -61,7 +65,7 @@ Expected output looks like:
 
 ```text
 OK  config    flaker.toml is readable
-OK  config rangesall values within expected ranges
+OK  config ranges all values within expected ranges
 OK  duckdb    DuckDB initialized successfully
 OK  moonbit   MoonBit JS build detected (or fallback)
 
@@ -93,37 +97,56 @@ config = ""
 
 If you do not configure a resolver, `hybrid` still works through `weighted` / `random` fallback, but you lose the best change-aware behavior. Start with `workspace` if possible.
 
-### 5. Dry-run locally
+### 5. Preview with `flaker plan`
 
 ```bash
-git diff --name-only main | tr '\n' ',' > /tmp/changed.txt
-pnpm flaker run --gate iteration --dry-run --explain --changed "$(cat /tmp/changed.txt)"
+export GITHUB_TOKEN=$(gh auth token)
+pnpm flaker plan
 ```
 
-If `Selected tests:` shows a count, the pipeline is working. If the `Sampling Summary` is empty, that usually means either there are no matching tests yet or the resolver config does not match the project layout.
+`flaker plan` reads `flaker.toml` as desired state and reports what the DB is currently missing. An empty-history repository usually plans `collect_ci` + `cold_start_run`; if `[quarantine].auto = true`, a `quarantine_apply` action shows up too.
+
+### 6. Converge with `flaker apply`
+
+```bash
+pnpm flaker apply
+```
+
+`flaker apply` is idempotent and runs `collect` / `calibrate` / `quarantine apply` on demand based on current state. It is safe to re-run from cron or nightly — repeated executions do not break anything.
+
+### 7. Inspect with `flaker status`
+
+```bash
+pnpm flaker status
+```
+
+A one-screen summary dashboard. On Day 1 you usually see `data confidence: insufficient`, which is expected. After a week of `flaker apply`, it lifts to `moderate` naturally.
 
 ---
 
-## Day 2-3: Build the first dataset (30 minutes)
+## Day 2-3: Keep applying
 
-### 1. Collect CI history if it exists
+Because `flaker apply` is idempotent, "run it once a day" is the whole Day 2 story. You do not have to call `collect` or `calibrate` manually.
+
+```bash
+export GITHUB_TOKEN=$(gh auth token)
+pnpm flaker apply
+pnpm flaker status                 # daily dashboard
+pnpm flaker status --detail        # KPI view (formerly analyze kpi)
+```
+
+<details><summary>Drilling down into the individual steps</summary>
+
+`flaker apply` internally invokes the commands below on demand. They remain callable directly if you want to inspect one stage in isolation, but in 0.7.0+ all of them are deprecated or hidden — `flaker apply` is canonical.
+
+**Collect CI history:**
 
 ```bash
 export GITHUB_TOKEN=$(gh auth token)
 pnpm flaker collect ci --days 30
 ```
 
-Expected output looks like:
-
-```text
-Exported to Parquet: 12 test results, 4 commit changes
-...
-Collected N runs, N*X test results, ...
-```
-
-It is fine if some failed runs are skipped. `pending artifact runs` usually just means retention timing; rerun later.
-
-### 2. Calibrate
+**Calibrate:**
 
 ```bash
 pnpm flaker collect calibrate
@@ -131,35 +154,32 @@ pnpm flaker collect calibrate
 
 This writes the recommended strategy and sampling percentage into `[sampling]` in `flaker.toml`. Add `--dry-run` if you want to preview without writing.
 
-If data is still thin (`commits < 20`), you may get `confidence: insufficient` or `low`. That is acceptable at this stage; recalibrate again after a week.
+If data is still thin (`commits < 20`), you may get `confidence: insufficient` or `low`. That is acceptable at this stage; `flaker apply` will recalibrate itself as history grows over the next week.
 
-### 3. Check the KPI dashboard
-
-```bash
-pnpm flaker analyze kpi
-```
-
-At first, `Sampling Effectiveness` may be mostly empty (`matched commits = 0`). By the end of Week 1, local/CI correlation starts to become meaningful.
+</details>
 
 ---
 
 ## Day 3: Add package.json scripts
 
+Apply-first script layout for 0.7.0+:
+
 ```jsonc
 {
   "scripts": {
     "flaker": "flaker",
+    "flaker:plan": "flaker plan",
+    "flaker:apply": "flaker apply",
+    "flaker:status": "flaker status",
     "flaker:run:iteration": "flaker run --gate iteration",
     "flaker:run:release": "flaker run --gate release",
-    "flaker:collect:ci": "flaker collect ci --days 7",
-    "flaker:collect:local": "flaker collect local --last 1",
-    "flaker:eval:markdown": "flaker analyze eval --markdown --window 7",
+    "flaker:eval": "flaker status --markdown",
     "flaker:doctor": "flaker doctor"
   }
 }
 ```
 
-`pnpm flaker:run:iteration` works well from a pre-push hook via lefthook or husky.
+`pnpm flaker:run:iteration` works well from a pre-push hook via lefthook or husky. `pnpm flaker:apply` is a good target for a daily cron / launchd job.
 
 ---
 
@@ -187,10 +207,10 @@ Add this to `.github/workflows/ci.yml`:
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-- name: Post sampling KPI as PR comment
+- name: Post status as PR comment
   if: github.event_name == 'pull_request'
   run: |
-    pnpm flaker analyze kpi > .artifacts/kpi.md
+    pnpm flaker status --markdown > .artifacts/status.md
     pnpm flaker report summary --adapter vitest --input report.json --pr-comment \
       | gh pr comment ${{ github.event.pull_request.number }} --body-file -
   env:
@@ -209,7 +229,7 @@ on:
   schedule: [{ cron: "0 18 * * *" }]
   workflow_dispatch:
 jobs:
-  collect:
+  apply:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -217,18 +237,17 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
       - run: pnpm install --frozen-lockfile
-      - run: pnpm flaker collect ci --days 1
+      - run: pnpm flaker apply
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: pnpm flaker run --gate release
-      - run: pnpm flaker analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
+      - run: pnpm flaker status --markdown > .artifacts/flaker-status.md
       - uses: actions/upload-artifact@v6
         with:
           name: flaker-nightly
           path: .artifacts/
 ```
 
-This collects one day of CI history, runs the release gate, and writes weekly review material.
+Every night, `flaker apply` converges state and `flaker status --markdown` emits a weekly review artifact.
 
 ---
 
@@ -237,9 +256,9 @@ This collects one day of CI history, runs the release gate, and writes weekly re
 Spend five minutes each morning on:
 
 ```bash
-pnpm flaker analyze kpi
-pnpm flaker analyze flaky
-pnpm flaker analyze insights
+pnpm flaker status                 # one-screen summary
+pnpm flaker status --list flaky    # top flaky tests
+pnpm flaker explain insights       # AI commentary on CI vs local drift
 ```
 
 When something looks suspicious:
@@ -259,15 +278,15 @@ pnpm flaker debug bisect --test "tests/api.test.ts:handles timeout"
 
 ## Week 2-4: When to promote to required
 
-Switch the merge gate from advisory to required only after `pnpm flaker analyze kpi` shows at least:
+Switch the merge gate from advisory to required when `pnpm flaker status` shows `ready` in its drift section. If you want the detailed actual values, use `pnpm flaker status --gate merge --detail`. The rough targets:
 
 | Metric | Target |
 |---|---|
-| Matched commits | ≥ 20 |
-| Recall (CI failures caught) | ≥ 90% |
-| False negative rate | ≤ 5% |
-| Pass correlation | ≥ 95% |
-| Holdout FNR (if enabled) | ≤ 10% |
+| Matched commits | >= 20 |
+| Recall (CI failures caught) | >= 90% |
+| False negative rate | <= 5% |
+| Pass correlation | >= 95% |
+| Holdout FNR (if enabled) | <= 10% |
 | Co-failure data | `ready` |
 | Data confidence | `moderate` or `high` |
 
@@ -275,8 +294,10 @@ At that point, remove `continue-on-error: true` from the CI job.
 
 ### Re-run calibration as data grows
 
+As long as you run `flaker apply` regularly, calibration re-runs itself when the data warrants it. If you want to confirm explicitly:
+
 ```bash
-pnpm flaker collect calibrate
+pnpm flaker apply
 git diff flaker.toml
 ```
 
@@ -290,8 +311,8 @@ git diff flaker.toml
 | `Config file not found` | You are not at the project root. `cd` there and start with `pnpm flaker init`. |
 | `actrun runner requires [runner.actrun] workflow` | Add `[runner.actrun]` to `flaker.toml`. |
 | `hybrid` selects 0 tests | Resolver not configured. Fill in `[affected].resolver`. |
-| `collect ci` returns 0 runs | Missing or under-scoped `GITHUB_TOKEN`, often without `actions:read`. |
-| `analyze kpi` shows `insufficient data` | Fewer than 5 commits. Keep collecting for about a week. |
+| `flaker apply` returns 0 runs | Missing or under-scoped `GITHUB_TOKEN`, often without `actions:read`. |
+| `flaker status` shows `data confidence: insufficient` | Fewer than 5 commits of history. Keep running `flaker apply`; usually resolves within a week. |
 | Parallel tests time out | DuckDB is single-writer. Serialize processes using the same `.flaker/data.duckdb`. |
 | `dist/moonbit/flaker.js` is missing | It should already be bundled by the npm package. If not, inspect the package build. |
 
@@ -300,10 +321,10 @@ git diff flaker.toml
 ## The ideal shape after one month
 
 - `flaker run --gate merge` is a required PR check
-- nightly keeps history fresh every day
-- weekly reports (`analyze eval --markdown`) are posted to Slack or issues
+- nightly `flaker apply` keeps history fresh every day
+- weekly reports (`flaker status --markdown`) are posted to Slack or issues
 - developers use `pnpm flaker:run:iteration` locally
-- flaky tests are quarantined and tracked with `policy quarantine --auto --create-issues`
+- flaky tests are auto-quarantined via `[quarantine].auto = true` + `flaker apply`
 
 At that point, many repositories can cut CI time by 30-70% while keeping missed failures under 5%.
 
@@ -315,5 +336,6 @@ At that point, many repositories can cut CI time by 30-70% while keeping missed 
 - [usage-guide.md](usage-guide.md) — user-facing entrypoint
 - [operations-guide.md](operations-guide.md) — operator-facing entrypoint
 - [how-to-use.md](how-to-use.md) — detailed commands and configuration
+- [migration-0.6-to-0.7.md](migration-0.6-to-0.7.md) — upgrading from 0.6.x
 - [contributing.md](contributing.md) — development and dogfood workflow
 - [CHANGELOG.md](../CHANGELOG.md) — release history and breaking changes

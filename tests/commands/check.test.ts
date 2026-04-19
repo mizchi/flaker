@@ -10,8 +10,8 @@ import {
 } from "../../src/cli/commands/policy/check.js";
 
 describe("check command", () => {
-  it("detects duplicate ownership, allows filtered split ownership, and reports unmanaged specs", () => {
-    const report = runConfigCheck({
+  it("detects duplicate ownership, allows filtered split ownership, and reports unmanaged specs", async () => {
+    const report = await runConfigCheck({
       listedTests: [
         {
           suite: "tests/auth/login.spec.ts",
@@ -167,8 +167,8 @@ describe("check command", () => {
     }
   });
 
-  it("appends threshold unit warnings to the report", () => {
-    const base = runConfigCheck({
+  it("appends threshold unit warnings to the report", async () => {
+    const base = await runConfigCheck({
       listedTests: [],
       discoveredSpecs: [],
       taskDefinitions: [],

@@ -337,10 +337,21 @@ async function loadQuarantineSummaryBuilder(): Promise<
   return buildFlakerQuarantineSummaryFallback;
 }
 
-const buildFlakerQuarantineSummaryImpl = await loadQuarantineSummaryBuilder();
+let cachedQuarantineSummaryBuilder:
+  | ((inputs: BuildFlakerQuarantineSummaryInputs) => FlakerQuarantineSummary)
+  | undefined;
 
-export function buildFlakerQuarantineSummary(
+async function getBuildFlakerQuarantineSummary(): Promise<
+  (inputs: BuildFlakerQuarantineSummaryInputs) => FlakerQuarantineSummary
+> {
+  if (cachedQuarantineSummaryBuilder) return cachedQuarantineSummaryBuilder;
+  cachedQuarantineSummaryBuilder = await loadQuarantineSummaryBuilder();
+  return cachedQuarantineSummaryBuilder;
+}
+
+export async function buildFlakerQuarantineSummary(
   inputs: BuildFlakerQuarantineSummaryInputs,
-): FlakerQuarantineSummary {
-  return buildFlakerQuarantineSummaryImpl(inputs);
+): Promise<FlakerQuarantineSummary> {
+  const impl = await getBuildFlakerQuarantineSummary();
+  return impl(inputs);
 }

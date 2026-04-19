@@ -49,7 +49,7 @@ export async function executeWithRetry(
     const testsToRetry: TestId[] = [];
     for (const r of lastResult.results) {
       const resolved = resolveTestIdentity(r);
-      if (isBlockingFailure(resolved)) {
+      if (await isBlockingFailure(resolved)) {
         testsToRetry.push({
           suite: resolved.suite,
           testName: resolved.testName,
@@ -117,7 +117,8 @@ export async function executeWithRetry(
     }
   }
 
-  const exitCode = finalResults.some(isBlockingFailure) ? 1 : 0;
+  const blockingResults = await Promise.all(finalResults.map(isBlockingFailure));
+  const exitCode = blockingResults.some(Boolean) ? 1 : 0;
 
   return {
     exitCode,

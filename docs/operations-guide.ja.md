@@ -44,9 +44,9 @@
 
 ### Observation loop
 
-- `flaker collect`
-- `flaker ops daily`
+- `flaker apply` (history collect + calibrate を内包)
 - `flaker status`
+- `flaker ops daily` (release gate の日次 snapshot が必要なとき)
 
 役割:
 
@@ -56,10 +56,9 @@
 
 ### Triage loop
 
-- `flaker gate review merge`
+- `flaker status --gate merge --detail` (primary signal; drift を読む)
 - `flaker ops weekly`
-- `flaker quarantine suggest`
-- `flaker quarantine apply`
+- `flaker apply` (`[quarantine].auto=true` なら suggest + apply を内包)
 - 週次の promote / keep / demote review
 
 役割:
@@ -87,17 +86,17 @@
 mkdir -p .artifacts
 export GITHUB_TOKEN=$(gh auth token)
 pnpm flaker apply
-pnpm flaker ops daily --output .artifacts/flaker-daily.md
-pnpm flaker quarantine suggest --json --output .artifacts/quarantine-plan.json
+pnpm flaker status
 ```
 
-`flaker apply` は `flaker.toml` を desired state として現状を収束させる idempotent コマンド。従来の `collect` / `calibrate` / `quarantine apply` を順に手で呼ぶ必要はない。詳細な dry-run が欲しいときは `flaker plan`。
+`flaker apply` が `flaker.toml` を desired state として現状を収束させ (collect / calibrate / quarantine apply を idempotent に内包)、`flaker status` で drift と health を 1 画面で確認する。何が走るか事前に見たい場合は `flaker plan`。
 
 ### 毎週
 
 ```bash
 mkdir -p .artifacts
-pnpm flaker gate review merge --json --output .artifacts/gate-review-merge.json
+pnpm flaker status --markdown > .artifacts/flaker-status.md
+pnpm flaker status --gate merge --detail --json > .artifacts/merge-gate.json
 pnpm flaker ops weekly --output .artifacts/flaker-weekly.md
 ```
 
@@ -106,11 +105,11 @@ pnpm flaker ops weekly --output .artifacts/flaker-weekly.md
 - `matched commits`
 - `false negative rate`
 - `pass correlation`
-- `sample ratio`
-- `saved test minutes`
+- `holdout FNR`
+- `data confidence`
 - `flaky` / `quarantined` test 数
 
-`status` は summary-only なので、昇格判断は `gate review merge` を使う。
+primary signal は `flaker status` の drift セクション (`ready` / `not ready`)。詳細数値が必要なら `flaker status --gate merge --detail --json` を authoritative metric として使う。従来の `flaker gate review merge --json` は 0.7.0 で deprecated (0.8.0 で削除予定)、同じ情報が `--gate merge --detail --json` で取れる。
 
 ### 失敗時
 

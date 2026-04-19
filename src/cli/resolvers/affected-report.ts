@@ -324,14 +324,22 @@ function buildAffectedReportFallback(opts: {
   );
 }
 
-const affectedExplainCore = await importOptionalMoonBitBridge<AffectedExplainCoreExports>(
-  MOONBIT_JS_BRIDGE_URL,
-  isAffectedExplainCoreExports,
-);
+let cachedAffectedExplainCore: AffectedExplainCoreExports | null | undefined;
+
+async function getAffectedExplainCore(): Promise<AffectedExplainCoreExports | null> {
+  if (cachedAffectedExplainCore !== undefined) return cachedAffectedExplainCore;
+  const core = await importOptionalMoonBitBridge<AffectedExplainCoreExports>(
+    MOONBIT_JS_BRIDGE_URL,
+    isAffectedExplainCoreExports,
+  );
+  cachedAffectedExplainCore = core ?? null;
+  return cachedAffectedExplainCore;
+}
 
 export async function dedupeAffectedTargets(
   targets: AffectedTarget[],
 ): Promise<AffectedTarget[]> {
+  const affectedExplainCore = await getAffectedExplainCore();
   if (!affectedExplainCore) {
     return dedupeAffectedTargetsFallback(targets);
   }
@@ -354,6 +362,7 @@ export async function buildAffectedReportFromInputs(opts: {
   transitiveTasks?: AffectedTransitiveTaskInput[];
   unmatched: string[];
 }): Promise<AffectedReport> {
+  const affectedExplainCore = await getAffectedExplainCore();
   if (!affectedExplainCore) {
     return buildAffectedReportFallback(opts);
   }

@@ -48,7 +48,7 @@ type SummaryOpts = {
   prComment?: boolean;
 };
 
-function runSummaryAction(opts: SummaryOpts): void {
+async function runSummaryAction(opts: SummaryOpts): Promise<void> {
   const formatCount = [opts.json, opts.markdown, opts.prComment].filter(Boolean).length;
   if (formatCount > 1) {
     console.error("Error: choose one of --json, --markdown, or --pr-comment");
@@ -59,7 +59,7 @@ function runSummaryAction(opts: SummaryOpts): void {
     process.exit(1);
   }
 
-  const summary = runReportSummarize({
+  const summary = await runReportSummarize({
     adapter: opts.adapter,
     input: readFileSync(resolve(opts.input), "utf-8"),
   });
@@ -98,7 +98,7 @@ type DiffOpts = {
   markdown?: boolean;
 };
 
-function runDiffAction(opts: DiffOpts): void {
+async function runDiffAction(opts: DiffOpts): Promise<void> {
   if (opts.json && opts.markdown) {
     console.error("Error: choose either --json or --markdown");
     process.exit(1);
@@ -107,12 +107,12 @@ function runDiffAction(opts: DiffOpts): void {
   const baseInput = readFileSync(resolve(opts.base), "utf-8");
   const headInput = readFileSync(resolve(opts.head), "utf-8");
   const base = opts.adapter
-    ? runReportSummarize({ adapter: opts.adapter, input: baseInput })
+    ? await runReportSummarize({ adapter: opts.adapter, input: baseInput })
     : parseReportSummary(baseInput);
   const head = opts.adapter
-    ? runReportSummarize({ adapter: opts.adapter, input: headInput })
+    ? await runReportSummarize({ adapter: opts.adapter, input: headInput })
     : parseReportSummary(headInput);
-  const diff = runReportDiff({ base, head });
+  const diff = await runReportDiff({ base, head });
 
   console.log(formatReportDiff(diff, opts.json ? "json" : "markdown"));
 }
@@ -122,13 +122,13 @@ type AggregateOpts = {
   markdown?: boolean;
 };
 
-function runAggregateAction(dir: string, opts: AggregateOpts): void {
+async function runAggregateAction(dir: string, opts: AggregateOpts): Promise<void> {
   if (opts.json && opts.markdown) {
     console.error("Error: choose either --json or --markdown");
     process.exit(1);
   }
 
-  const aggregate = runReportAggregate({
+  const aggregate = await runReportAggregate({
     summaries: loadReportSummaryArtifactsFromDir(resolve(dir)),
   });
   console.log(
@@ -161,7 +161,7 @@ export function registerReportCommands(program: Command): void {
     // diff flags
     .option("--head <file>", "Head summary or raw report file (for --diff)")
     .action(
-      (
+      async (
         file: string | undefined,
         opts: {
           summary?: boolean;
@@ -184,7 +184,7 @@ export function registerReportCommands(program: Command): void {
           // diff opts
           head?: string;
         },
-      ) => {
+      ): Promise<void> => {
         const flagCount = [opts.summary, opts.diff !== undefined, opts.aggregate !== undefined].filter(Boolean).length;
         if (flagCount === 0) {
           reportCmd.help();
@@ -205,7 +205,7 @@ export function registerReportCommands(program: Command): void {
             console.error("Error: --summary requires --adapter <type>");
             process.exit(2);
           }
-          runSummaryAction({
+          await runSummaryAction({
             adapter: opts.adapter,
             input: inputFile,
             bundle: opts.bundle,
@@ -229,7 +229,7 @@ export function registerReportCommands(program: Command): void {
             console.error("Error: --diff requires a head file argument or --head <file>");
             process.exit(2);
           }
-          runDiffAction({
+          await runDiffAction({
             base: opts.diff,
             head: headFile,
             adapter: opts.adapter,
@@ -240,7 +240,7 @@ export function registerReportCommands(program: Command): void {
         }
 
         if (opts.aggregate !== undefined) {
-          runAggregateAction(opts.aggregate, {
+          await runAggregateAction(opts.aggregate, {
             json: opts.json,
             markdown: opts.markdown,
           });
@@ -265,8 +265,8 @@ export function registerReportCommands(program: Command): void {
       .option("--json", "Output JSON report")
       .option("--markdown", "Output Markdown report")
       .option("--pr-comment", "Output compact Markdown for PR comments")
-      .action((opts: SummaryOpts) => {
-        runSummaryAction(opts);
+      .action(async (opts: SummaryOpts) => {
+        await runSummaryAction(opts);
       }),
     { since: "0.7.0", remove: "0.8.0", canonical: "flaker report --summary" },
   );
@@ -280,8 +280,8 @@ export function registerReportCommands(program: Command): void {
       .option("--adapter <type>", "Adapter type when diffing raw reports")
       .option("--json", "Output JSON report")
       .option("--markdown", "Output Markdown report")
-      .action((opts: DiffOpts) => {
-        runDiffAction(opts);
+      .action(async (opts: DiffOpts) => {
+        await runDiffAction(opts);
       }),
     { since: "0.7.0", remove: "0.8.0", canonical: "flaker report --diff <base>" },
   );
@@ -292,8 +292,8 @@ export function registerReportCommands(program: Command): void {
       .description("Aggregate shard-aware summary artifacts")
       .option("--json", "Output JSON report")
       .option("--markdown", "Output Markdown report")
-      .action((dir: string, opts: AggregateOpts) => {
-        runAggregateAction(dir, opts);
+      .action(async (dir: string, opts: AggregateOpts) => {
+        await runAggregateAction(dir, opts);
       }),
     { since: "0.7.0", remove: "0.8.0", canonical: "flaker report --aggregate <dir>" },
   );

@@ -6,10 +6,11 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   formatQuarantineManifestReport,
   isManifestQuarantined,
+  loadQuarantineBridge,
   loadQuarantineManifest,
   validateQuarantineManifest,
   type QuarantineManifestEntry,
@@ -29,6 +30,10 @@ function writeManifest(
 
 describe("quarantine manifest", () => {
   const tempDirs: string[] = [];
+
+  beforeAll(async () => {
+    await loadQuarantineBridge();
+  });
 
   afterEach(() => {
     for (const dir of tempDirs.splice(0)) {

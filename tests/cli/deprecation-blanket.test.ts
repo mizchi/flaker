@@ -23,8 +23,6 @@ const cases: Array<{ cmd: string[]; canonical: string }> = [
   { cmd: ["exec", "run"], canonical: "flaker run" },
   // exec affected → flaker run --gate iteration --changed <paths>
   { cmd: ["exec", "affected"], canonical: "flaker run" },
-  // ops daily → flaker apply
-  { cmd: ["ops", "daily"], canonical: "flaker apply" },
   // collect (bare) → flaker apply
   { cmd: ["collect"], canonical: "flaker apply" },
   // collect ci → flaker apply

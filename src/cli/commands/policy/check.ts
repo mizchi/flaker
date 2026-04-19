@@ -227,25 +227,36 @@ function fromCoreReport(output: ConfigCheckCoreOutput): ConfigCheckReport {
   };
 }
 
-const runConfigCheckImpl = await (async (): Promise<(opts: RunConfigCheckOpts) => ConfigCheckReport> => {
-  const mod = (await import(MOONBIT_JS_BRIDGE_URL.href)) as ConfigCheckCoreExports;
-  if (typeof mod.run_config_check_json !== "function") {
-    throw new Error("MoonBit config_check bridge is missing. Run 'moon build --target js' first.");
-  }
-  return (opts) =>
-    fromCoreReport(
-      JSON.parse(
-        mod.run_config_check_json(
-          JSON.stringify(opts.listedTests.map(toCoreListedTest)),
-          JSON.stringify(opts.discoveredSpecs.map(normalizePath)),
-          JSON.stringify((opts.taskDefinitions ?? []).map(toCoreTaskDefinition)),
-        ),
-      ) as ConfigCheckCoreOutput,
-    );
-})();
+let cachedRunConfigCheckImpl: ((opts: RunConfigCheckOpts) => ConfigCheckReport) | undefined;
+let configCheckLoadPromise: Promise<(opts: RunConfigCheckOpts) => ConfigCheckReport> | undefined;
 
-export function runConfigCheck(opts: RunConfigCheckOpts): ConfigCheckReport {
-  return runConfigCheckImpl(opts);
+async function getRunConfigCheckImpl(): Promise<(opts: RunConfigCheckOpts) => ConfigCheckReport> {
+  if (cachedRunConfigCheckImpl) return cachedRunConfigCheckImpl;
+  if (configCheckLoadPromise) return configCheckLoadPromise;
+  configCheckLoadPromise = (async () => {
+    const mod = (await import(MOONBIT_JS_BRIDGE_URL.href)) as ConfigCheckCoreExports;
+    if (typeof mod.run_config_check_json !== "function") {
+      throw new Error("MoonBit config_check bridge is missing. Run 'moon build --target js' first.");
+    }
+    const fn = (opts: RunConfigCheckOpts): ConfigCheckReport =>
+      fromCoreReport(
+        JSON.parse(
+          mod.run_config_check_json(
+            JSON.stringify(opts.listedTests.map(toCoreListedTest)),
+            JSON.stringify(opts.discoveredSpecs.map(normalizePath)),
+            JSON.stringify((opts.taskDefinitions ?? []).map(toCoreTaskDefinition)),
+          ),
+        ) as ConfigCheckCoreOutput,
+      );
+    cachedRunConfigCheckImpl = fn;
+    return fn;
+  })();
+  return configCheckLoadPromise;
+}
+
+export async function runConfigCheck(opts: RunConfigCheckOpts): Promise<ConfigCheckReport> {
+  const impl = await getRunConfigCheckImpl();
+  return impl(opts);
 }
 
 function formatSummaryList(report: ConfigCheckReport): string[] {

@@ -29,6 +29,23 @@ function describeAction(action: PlannedAction): string {
   }
 }
 
+export function renderEmptyPlanHint(): string {
+  return "hint: run `flaker status` to inspect current health.";
+}
+
+export function renderZeroTestHint(): string {
+  return "hint: 0 tests discovered — check [runner].command and [affected].resolver";
+}
+
+export function isColdStartZeroTest(result: unknown): boolean {
+  if (result == null || typeof result !== "object") return false;
+  const r = result as Record<string, unknown>;
+  const runResult = r["runResult"];
+  if (runResult == null || typeof runResult !== "object") return false;
+  const sampledTests = (runResult as Record<string, unknown>)["sampledTests"];
+  return Array.isArray(sampledTests) && sampledTests.length === 0;
+}
+
 export async function planAction(opts: { json?: boolean }): Promise<void> {
   const cwd = process.cwd();
   const config = loadConfig(cwd);
@@ -44,6 +61,7 @@ export async function planAction(opts: { json?: boolean }): Promise<void> {
     }
     if (actions.length === 0) {
       console.log("No actions needed. Current state matches flaker.toml.");
+      process.stderr.write(renderEmptyPlanHint() + "\n");
       return;
     }
     console.log("Planned actions:");
@@ -104,6 +122,14 @@ export async function applyAction(opts: { json?: boolean }): Promise<void> {
       },
     };
 
+    if (actions.length === 0) {
+      console.log("No actions needed. Current state matches flaker.toml.");
+      if (!opts.json) {
+        process.stderr.write(renderEmptyPlanHint() + "\n");
+      }
+      return;
+    }
+
     const result = await executePlan(actions, deps);
     if (opts.json) {
       console.log(JSON.stringify(result, null, 2));
@@ -111,6 +137,9 @@ export async function applyAction(opts: { json?: boolean }): Promise<void> {
       for (const exec of result.executed) {
         const mark = exec.ok ? "ok  " : "fail";
         console.log(`${mark} ${exec.kind}${exec.error ? ` — ${exec.error}` : ""}`);
+        if (exec.ok && exec.kind === "cold_start_run" && isColdStartZeroTest(exec.result)) {
+          process.stderr.write(renderZeroTestHint() + "\n");
+        }
       }
       if (result.aborted) {
         process.exitCode = 1;

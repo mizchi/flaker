@@ -12,6 +12,7 @@ import {
 } from "../../core/loader.js";
 import {
   isManifestQuarantined,
+  loadQuarantineBridge,
   type QuarantineManifestEntry,
 } from "../../quarantine-manifest.js";
 import { extractFeatures, type GBDTModel } from "../../eval/gbdt.js";
@@ -249,6 +250,7 @@ async function filterQuarantinedTests(
   listedTests: TestId[],
   manifestEntries: QuarantineManifestEntry[],
 ): Promise<TestMeta[]> {
+  await loadQuarantineBridge();
   const quarantined = await store.queryQuarantined();
   const qSet = new Set(quarantined.map((q) => q.testId));
   const listedTestIndex = buildListedTestIndex(listedTests);

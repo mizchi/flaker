@@ -465,7 +465,13 @@ async function loadSamplingKpiBuilder(): Promise<
   return buildSamplingKpiFallback;
 }
 
-const buildSamplingKpi = await loadSamplingKpiBuilder();
+let cachedSamplingKpiBuilder: ((rows: CommitSignal[]) => SamplingKpiReport) | undefined;
+
+async function getBuildSamplingKpi(): Promise<(rows: CommitSignal[]) => SamplingKpiReport> {
+  if (cachedSamplingKpiBuilder) return cachedSamplingKpiBuilder;
+  cachedSamplingKpiBuilder = await loadSamplingKpiBuilder();
+  return cachedSamplingKpiBuilder;
+}
 
 export async function runSamplingKpi(
   opts: { store: MetricStore; windowDays?: number },
@@ -539,6 +545,7 @@ export async function runSamplingKpi(
      AND rs.commit_sha = ar.commit_sha
      AND rs.row_num = 1
   `, [windowDays.toString(), windowDays.toString()]);
+  const buildSamplingKpi = await getBuildSamplingKpi();
   return buildSamplingKpi(
     commitSignalRows.map((row) => ({
       commitSha: row.commit_sha,

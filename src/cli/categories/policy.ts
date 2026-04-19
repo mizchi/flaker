@@ -317,7 +317,7 @@ export function registerPolicyCommands(program: Command): void {
 
       const rangeErrors = validateConfigRanges(config);
       const report = appendConfigRangeErrors(
-        appendConfigWarnings(runConfigCheck({
+        appendConfigWarnings(await runConfigCheck({
           listedTests,
           discoveredSpecs,
           taskDefinitions,

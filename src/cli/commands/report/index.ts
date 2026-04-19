@@ -210,26 +210,41 @@ function fromCoreTotals(totals: ReportTotalsInput): ReportTotals {
   };
 }
 
-const reportBridge = await (async (): Promise<ReportDiffCoreExports> => {
-  const mod = (await import(MOONBIT_JS_BRIDGE_URL.href)) as Partial<ReportDiffCoreExports>;
-  if (
-    typeof mod.summarize_report_json === "function" &&
-    typeof mod.classify_report_diff_json === "function" &&
-    typeof mod.aggregate_report_json === "function"
-  ) {
-    return mod as ReportDiffCoreExports;
-  }
-  throw new Error("MoonBit report bridge is missing. Run 'moon build --target js' first.");
-})();
+let cachedReportBridge: ReportDiffCoreExports | undefined;
+let reportBridgeLoadPromise: Promise<ReportDiffCoreExports> | undefined;
 
-const classifyReportDiff = (inputs: ReportDiffStatusInput[]): ReportDiffBuckets =>
-  JSON.parse(reportBridge.classify_report_diff_json(JSON.stringify(inputs)));
+async function getReportBridge(): Promise<ReportDiffCoreExports> {
+  if (cachedReportBridge) return cachedReportBridge;
+  if (reportBridgeLoadPromise) return reportBridgeLoadPromise;
+  reportBridgeLoadPromise = (async () => {
+    const mod = (await import(MOONBIT_JS_BRIDGE_URL.href)) as Partial<ReportDiffCoreExports>;
+    if (
+      typeof mod.summarize_report_json === "function" &&
+      typeof mod.classify_report_diff_json === "function" &&
+      typeof mod.aggregate_report_json === "function"
+    ) {
+      cachedReportBridge = mod as ReportDiffCoreExports;
+      return cachedReportBridge;
+    }
+    throw new Error("MoonBit report bridge is missing. Run 'moon build --target js' first.");
+  })();
+  return reportBridgeLoadPromise;
+}
 
-const summarizeReport = (tests: ReportSummaryTestInput[]): ReportSummaryOutput =>
-  JSON.parse(reportBridge.summarize_report_json(JSON.stringify(tests)));
+async function classifyReportDiff(inputs: ReportDiffStatusInput[]): Promise<ReportDiffBuckets> {
+  const bridge = await getReportBridge();
+  return JSON.parse(bridge.classify_report_diff_json(JSON.stringify(inputs)));
+}
 
-const aggregateReport = (shards: ReportAggregateShardInput[]): ReportAggregateOutput =>
-  JSON.parse(reportBridge.aggregate_report_json(JSON.stringify(shards)));
+async function summarizeReport(tests: ReportSummaryTestInput[]): Promise<ReportSummaryOutput> {
+  const bridge = await getReportBridge();
+  return JSON.parse(bridge.summarize_report_json(JSON.stringify(tests)));
+}
+
+async function aggregateReport(shards: ReportAggregateShardInput[]): Promise<ReportAggregateOutput> {
+  const bridge = await getReportBridge();
+  return JSON.parse(bridge.aggregate_report_json(JSON.stringify(shards)));
+}
 
 function emptyTotals(): ReportTotals {
   return {
@@ -341,12 +356,12 @@ function summarizeTest(result: TestCaseResult): ReportTestSummary {
   };
 }
 
-export function summarizeResults(
+export async function summarizeResults(
   results: TestCaseResult[],
   adapter: string,
-): NormalizedReportSummary {
+): Promise<NormalizedReportSummary> {
   const tests = sortTests(results.map(summarizeTest));
-  const reduced = summarizeReport(
+  const reduced = await summarizeReport(
     tests.map((test) => ({
       test_id: test.testId,
       suite: test.suite,
@@ -386,10 +401,10 @@ function parseAdapterReport(
   return createTestResultAdapter(adapter).parse(input);
 }
 
-export function runReportSummarize(opts: {
+export async function runReportSummarize(opts: {
   adapter: string;
   input: string;
-}): NormalizedReportSummary {
+}): Promise<NormalizedReportSummary> {
   return summarizeResults(parseAdapterReport(opts.adapter, opts.input), opts.adapter);
 }
 
@@ -453,10 +468,10 @@ function toDiffEntry(
   };
 }
 
-export function runReportDiff(opts: {
+export async function runReportDiff(opts: {
   base: NormalizedReportSummary;
   head: NormalizedReportSummary;
-}): ReportDiff {
+}): Promise<ReportDiff> {
   const baseById = new Map(opts.base.tests.map((test) => [test.testId, test]));
   const headById = new Map(opts.head.tests.map((test) => [test.testId, test]));
   const allIds = [...new Set<string>([
@@ -464,7 +479,7 @@ export function runReportDiff(opts: {
     ...headById.keys(),
   ])].sort((a, b) => a.localeCompare(b));
 
-  const buckets = classifyReportDiff(
+  const buckets = await classifyReportDiff(
     allIds.map((testId) => {
       const base = baseById.get(testId);
       const head = headById.get(testId);
@@ -516,9 +531,9 @@ export function runReportDiff(opts: {
   };
 }
 
-export function runReportAggregate(opts: {
+export async function runReportAggregate(opts: {
   summaries: ReportSummaryArtifact[];
-}): ReportAggregate {
+}): Promise<ReportAggregate> {
   const shards = opts.summaries.map((artifact, index) => {
     const shardId = artifact.metadata.shard ?? `summary-${index + 1}`;
     return {
@@ -541,7 +556,7 @@ export function runReportAggregate(opts: {
     }
   }
 
-  const aggregate = aggregateReport(
+  const aggregate = await aggregateReport(
     shards.map((shard) => ({
       shard_id: shard.shardId,
       totals: toCoreTotals(shard.totals),

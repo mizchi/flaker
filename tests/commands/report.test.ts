@@ -36,8 +36,8 @@ const vrtBenchFixture = readFileSync(
 );
 
 describe("report summarize", () => {
-  it("normalizes playwright report into totals, file summaries, and unstable tests", () => {
-    const summary = runReportSummarize({
+  it("normalizes playwright report into totals, file summaries, and unstable tests", async () => {
+    const summary = await runReportSummarize({
       adapter: "playwright",
       input: playwrightFixture,
     });
@@ -78,8 +78,8 @@ describe("report summarize", () => {
     expect(markdown).toContain("should redirect after login");
   });
 
-  it("normalizes junit report into the same summary shape", () => {
-    const summary = runReportSummarize({
+  it("normalizes junit report into the same summary shape", async () => {
+    const summary = await runReportSummarize({
       adapter: "junit",
       input: junitFixture,
     });
@@ -112,8 +112,8 @@ describe("report summarize", () => {
     ]);
   });
 
-  it("normalizes vrt migration reports into the same summary shape", () => {
-    const summary = runReportSummarize({
+  it("normalizes vrt migration reports into the same summary shape", async () => {
+    const summary = await runReportSummarize({
       adapter: "vrt-migration",
       input: vrtMigrationFixture,
     });
@@ -143,8 +143,8 @@ describe("report summarize", () => {
     ]);
   });
 
-  it("normalizes vrt bench reports into the same summary shape", () => {
-    const summary = runReportSummarize({
+  it("normalizes vrt bench reports into the same summary shape", async () => {
+    const summary = await runReportSummarize({
       adapter: "vrt-bench",
       input: vrtBenchFixture,
     });
@@ -176,8 +176,8 @@ describe("report summarize", () => {
 });
 
 describe("report diff", () => {
-  it("classifies regressions, improvements, and persistent flaky tests", () => {
-    const base = summarizeResults(
+  it("classifies regressions, improvements, and persistent flaky tests", async () => {
+    const base = await summarizeResults(
       [
         resolveTestIdentity({
           suite: "tests/app.spec.ts",
@@ -211,7 +211,7 @@ describe("report diff", () => {
       "playwright",
     );
 
-    const head = summarizeResults(
+    const head = await summarizeResults(
       [
         resolveTestIdentity({
           suite: "tests/app.spec.ts",
@@ -259,7 +259,7 @@ describe("report diff", () => {
       "playwright",
     );
 
-    const diff = runReportDiff({ base, head });
+    const diff = await runReportDiff({ base, head });
 
     expect(diff.summary).toMatchObject({
       newFailureCount: 1,
@@ -308,62 +308,59 @@ describe("report diff", () => {
 });
 
 describe("report aggregate", () => {
-  it("aggregates shard bundles and preserves shard metadata", () => {
-    const shardA = createReportSummaryArtifact(
-      summarizeResults(
-        [
-          resolveTestIdentity({
-            suite: "tests/vrt.spec.ts",
-            testName: "renders header",
-            taskId: "vrt",
-            status: "passed",
-            durationMs: 10,
-            retryCount: 0,
-          }),
-          resolveTestIdentity({
-            suite: "tests/vrt.spec.ts",
-            testName: "renders footer",
-            taskId: "vrt",
-            status: "failed",
-            durationMs: 20,
-            retryCount: 0,
-          }),
-        ],
-        "playwright",
-      ),
-      {
-        shard: "shard-1",
-        module: "vrt",
-        offset: 0,
-        limit: 50,
-        matrix: { os: "ubuntu-latest" },
-        extra: { browser: "chromium" },
-      },
+  it("aggregates shard bundles and preserves shard metadata", async () => {
+    const shardASummary = await summarizeResults(
+      [
+        resolveTestIdentity({
+          suite: "tests/vrt.spec.ts",
+          testName: "renders header",
+          taskId: "vrt",
+          status: "passed",
+          durationMs: 10,
+          retryCount: 0,
+        }),
+        resolveTestIdentity({
+          suite: "tests/vrt.spec.ts",
+          testName: "renders footer",
+          taskId: "vrt",
+          status: "failed",
+          durationMs: 20,
+          retryCount: 0,
+        }),
+      ],
+      "playwright",
     );
-    const shardB = createReportSummaryArtifact(
-      summarizeResults(
-        [
-          resolveTestIdentity({
-            suite: "tests/vrt.spec.ts",
-            testName: "renders card",
-            taskId: "vrt",
-            status: "flaky",
-            durationMs: 30,
-            retryCount: 1,
-          }),
-        ],
-        "playwright",
-      ),
-      {
-        shard: "shard-2",
-        module: "vrt",
-        offset: 50,
-        limit: 50,
-        matrix: { os: "ubuntu-latest" },
-      },
-    );
+    const shardA = createReportSummaryArtifact(shardASummary, {
+      shard: "shard-1",
+      module: "vrt",
+      offset: 0,
+      limit: 50,
+      matrix: { os: "ubuntu-latest" },
+      extra: { browser: "chromium" },
+    });
 
-    const aggregate = runReportAggregate({
+    const shardBSummary = await summarizeResults(
+      [
+        resolveTestIdentity({
+          suite: "tests/vrt.spec.ts",
+          testName: "renders card",
+          taskId: "vrt",
+          status: "flaky",
+          durationMs: 30,
+          retryCount: 1,
+        }),
+      ],
+      "playwright",
+    );
+    const shardB = createReportSummaryArtifact(shardBSummary, {
+      shard: "shard-2",
+      module: "vrt",
+      offset: 50,
+      limit: 50,
+      matrix: { os: "ubuntu-latest" },
+    });
+
+    const aggregate = await runReportAggregate({
       summaries: [shardA, shardB],
     });
 
@@ -421,7 +418,7 @@ describe("report aggregate", () => {
     expect(markdown).toContain("meta:browser=chromium");
   });
 
-  it("merges unstable tests across shards by stable test id", () => {
+  it("merges unstable tests across shards by stable test id", async () => {
     const repeated = resolveTestIdentity({
       suite: "tests/vrt.spec.ts",
       testName: "renders card",
@@ -430,16 +427,12 @@ describe("report aggregate", () => {
       durationMs: 30,
       retryCount: 1,
     });
-    const shardA = createReportSummaryArtifact(
-      summarizeResults([{ ...repeated, status: "failed" }], "playwright"),
-      { shard: "shard-1" },
-    );
-    const shardB = createReportSummaryArtifact(
-      summarizeResults([{ ...repeated, status: "flaky" }], "playwright"),
-      { shard: "shard-2" },
-    );
+    const shardASummary = await summarizeResults([{ ...repeated, status: "failed" }], "playwright");
+    const shardA = createReportSummaryArtifact(shardASummary, { shard: "shard-1" });
+    const shardBSummary = await summarizeResults([{ ...repeated, status: "flaky" }], "playwright");
+    const shardB = createReportSummaryArtifact(shardBSummary, { shard: "shard-2" });
 
-    const aggregate = runReportAggregate({
+    const aggregate = await runReportAggregate({
       summaries: [shardB, shardA],
     });
 
@@ -456,10 +449,10 @@ describe("report aggregate", () => {
     ]);
   });
 
-  it("loads plain summaries and bundle artifacts from a directory", () => {
+  it("loads plain summaries and bundle artifacts from a directory", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "report-aggregate-"));
     try {
-      const plainSummary = summarizeResults(
+      const plainSummary = await summarizeResults(
         [
           resolveTestIdentity({
             suite: "tests/plain.spec.ts",
@@ -471,21 +464,22 @@ describe("report aggregate", () => {
         ],
         "junit",
       );
-      const bundledSummary = createReportSummaryArtifact(
-        summarizeResults(
-          [
-            resolveTestIdentity({
-              suite: "tests/bundled.spec.ts",
-              testName: "bundled test",
-              status: "failed",
-              durationMs: 7,
-              retryCount: 0,
-            }),
-          ],
-          "playwright",
-        ),
-        { shard: "bundle-a", module: "ui" },
+      const bundledSummarySrc = await summarizeResults(
+        [
+          resolveTestIdentity({
+            suite: "tests/bundled.spec.ts",
+            testName: "bundled test",
+            status: "failed",
+            durationMs: 7,
+            retryCount: 0,
+          }),
+        ],
+        "playwright",
       );
+      const bundledSummary = createReportSummaryArtifact(bundledSummarySrc, {
+        shard: "bundle-a",
+        module: "ui",
+      });
 
       writeFileSync(
         join(cwd, "plain-summary.json"),

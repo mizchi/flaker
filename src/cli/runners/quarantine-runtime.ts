@@ -3,6 +3,7 @@ import { MOONBIT_JS_BRIDGE_URL } from "../core/build-artifact.js";
 import { normalizeVariant, resolveTestIdentity } from "../identity.js";
 import {
   findMatchingManifestEntry,
+  loadQuarantineBridge,
   type QuarantineManifestEntry,
 } from "../quarantine-manifest.js";
 import type {
@@ -117,8 +118,9 @@ function resolveRuntimeIdentity(
   });
 }
 
-export function isBlockingFailure(result: TestCaseResult): boolean {
-  return quarantineRuntimeDecisions.isBlockingFailure(result);
+export async function isBlockingFailure(result: TestCaseResult): Promise<boolean> {
+  const decisions = await getQuarantineRuntimeDecisions();
+  return decisions.isBlockingFailure(result);
 }
 
 function toCoreRuntimeResultInput(
@@ -145,38 +147,51 @@ function annotateRuntimeResults(
   });
 }
 
-const quarantineRuntimeDecisions = await (async (): Promise<{
+interface QuarantineRuntimeDecisions {
   isBlockingFailure: (result: TestCaseResult) => boolean;
   computeExitCode: (results: TestCaseResult[], fallbackExitCode: number) => number;
-}> => {
-  const mod = (await import(MOONBIT_JS_BRIDGE_URL.href)) as QuarantineRuntimeCoreExports;
-  if (
-    typeof mod.is_blocking_failure_json !== "function" ||
-    typeof mod.compute_quarantine_exit_code_json !== "function"
-  ) {
-    throw new Error("MoonBit quarantine bridge is missing. Run 'moon build --target js' first.");
-  }
-  return {
-    isBlockingFailure(result) {
-      return JSON.parse(
-        mod.is_blocking_failure_json(
-          JSON.stringify(toCoreRuntimeResultInput(result)),
-        ),
-      ) as boolean;
-    },
-    computeExitCode(results, fallbackExitCode) {
-      return JSON.parse(
-        mod.compute_quarantine_exit_code_json(
-          JSON.stringify(results.map(toCoreRuntimeResultInput)),
-          fallbackExitCode,
-        ),
-      ) as number;
-    },
-  };
-})();
+}
 
-function computeExitCode(results: TestCaseResult[], fallbackExitCode: number): number {
-  return quarantineRuntimeDecisions.computeExitCode(results, fallbackExitCode);
+let cachedQuarantineRuntimeDecisions: QuarantineRuntimeDecisions | undefined;
+let quarantineRuntimeLoadPromise: Promise<QuarantineRuntimeDecisions> | undefined;
+
+async function getQuarantineRuntimeDecisions(): Promise<QuarantineRuntimeDecisions> {
+  if (cachedQuarantineRuntimeDecisions) return cachedQuarantineRuntimeDecisions;
+  if (quarantineRuntimeLoadPromise) return quarantineRuntimeLoadPromise;
+  quarantineRuntimeLoadPromise = (async () => {
+    const mod = (await import(MOONBIT_JS_BRIDGE_URL.href)) as QuarantineRuntimeCoreExports;
+    if (
+      typeof mod.is_blocking_failure_json !== "function" ||
+      typeof mod.compute_quarantine_exit_code_json !== "function"
+    ) {
+      throw new Error("MoonBit quarantine bridge is missing. Run 'moon build --target js' first.");
+    }
+    const decisions: QuarantineRuntimeDecisions = {
+      isBlockingFailure(result) {
+        return JSON.parse(
+          mod.is_blocking_failure_json(
+            JSON.stringify(toCoreRuntimeResultInput(result)),
+          ),
+        ) as boolean;
+      },
+      computeExitCode(results, fallbackExitCode) {
+        return JSON.parse(
+          mod.compute_quarantine_exit_code_json(
+            JSON.stringify(results.map(toCoreRuntimeResultInput)),
+            fallbackExitCode,
+          ),
+        ) as number;
+      },
+    };
+    cachedQuarantineRuntimeDecisions = decisions;
+    return decisions;
+  })();
+  return quarantineRuntimeLoadPromise;
+}
+
+async function computeExitCode(results: TestCaseResult[], fallbackExitCode: number): Promise<number> {
+  const decisions = await getQuarantineRuntimeDecisions();
+  return decisions.computeExitCode(results, fallbackExitCode);
 }
 
 export function withQuarantineRuntime(
@@ -191,6 +206,7 @@ export function withQuarantineRuntime(
     ...runner,
     name: `${runner.name}+quarantine`,
     async execute(tests: TestId[], opts?: ExecuteOpts): Promise<ExecuteResult> {
+      await loadQuarantineBridge();
       const runnable: TestId[] = [];
       const skipped: TestCaseResult[] = [];
 
@@ -222,7 +238,7 @@ export function withQuarantineRuntime(
       return {
         ...baseResult,
         results,
-        exitCode: computeExitCode(results, baseResult.exitCode),
+        exitCode: await computeExitCode(results, baseResult.exitCode),
       };
     },
     async listTests(opts?: ExecuteOpts): Promise<TestId[]> {

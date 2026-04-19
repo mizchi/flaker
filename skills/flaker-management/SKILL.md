@@ -1,6 +1,6 @@
 ---
 name: flaker-management
-description: Operate @mizchi/flaker after setup. Use when the user asks how to run flaker day-to-day, review sampling and flaky metrics, design advisory vs required CI gates, promote or demote Playwright E2E or VRT checks, tune PR time budgets, run nightly triage, or manage quarantine and `@flaky` tags in an OSS repository.
+description: Operate @mizchi/flaker after setup. Use when the user asks how to run flaker day-to-day, review sampling and flaky metrics, design advisory vs required CI gates, promote or demote Playwright E2E or VRT checks, tune PR time budgets, run nightly triage, or manage quarantine and `@flaky` tags in an OSS repository. Targets @mizchi/flaker 0.7.0+ (declarative apply model).
 ---
 
 # flaker management skill
@@ -28,14 +28,11 @@ If the repository does not have `flaker.toml` and no CI lane yet, use `flaker-se
 - `flaker.toml` is the **desired state** (gates, profiles, `[promotion]` thresholds, `[quarantine].auto`).
 - `flaker apply` is the **reconciler** — idempotent; safe to run hourly/daily/on-demand. It auto-runs `collect` / `calibrate` / `quarantine apply` as needed based on current DB state.
 - `flaker status` is the **drift detector** — reports which `[promotion]` thresholds are unmet, so promotion readiness is a boolean (`ready` / `not ready`), not a judgement call.
-- `flaker gate review merge --json` is the **authoritative metric source** when you need to inspect the exact numbers behind a drift item.
 
-Prefer this loop over hand-orchestrated commands:
+The canonical daily loop is:
 
 ```bash
-pnpm flaker apply          # converge to desired state
-pnpm flaker status         # read drift + health in one view
-# if drift points to a specific gap, drill down with gate review or ops weekly
+flaker apply && flaker status
 ```
 
 ## Read order
@@ -52,7 +49,7 @@ pnpm flaker status         # read drift + health in one view
 - `flaker.toml` — especially the `[promotion]` thresholds (defaults are documented; overriding signals intent)
 - current GitHub Actions topology: `pull_request`, `push`, `schedule`
 - latest `flaker status` output (drift + activity + health in one page)
-- `flaker gate review merge --json` when you need exact promotion metrics
+- `flaker status --gate merge --detail --json` when you need exact promotion metrics
 - `flaker ops weekly` for quarantine / flaky trend bundles
 - whether `@flaky` tagging or quarantine manifest is already in use
 - current PR runtime budget
@@ -65,7 +62,7 @@ When applying this skill, return:
 1. lane design: `learning` / `verdict` / `rebalance`
 2. promotion criteria (align with `[promotion]` in `flaker.toml`; override only with justification)
 3. demotion criteria
-4. review cadence: per-PR / daily / weekly (daily is usually just `flaker apply` + `flaker status`)
+4. review cadence: per-PR / daily / weekly (daily is usually just `flaker apply && flaker status`)
 5. exact `flaker` commands, config, and workflow snippets
 
 ## Guardrails
@@ -76,44 +73,34 @@ When applying this skill, return:
 - Keep a full scheduled lane even after PR gating starts.
 - For AI-generated code, require a short per-test contract so visual checks encode intent, not just pixels.
 - Do not promote `--gate merge` to required until `flaker status` drift reports `ready`.
-- Do not recommend `flaker kpi` or `flaker doctor` top-level aliases in new scripts — they print a deprecation warning and are removed in 0.7.0. Use `flaker analyze kpi` and `flaker debug doctor`.
+- Do not use deprecated aliases in new scripts — `analyze kpi`, `analyze eval`, `collect ci`, `debug doctor`, `quarantine suggest/apply`, `gate review/history/explain` all print deprecation warnings in 0.7.0 and will be removed in 0.8.0. Use the primary commands instead.
 
 ## flaker commands to prefer
 
-Daily loop (cron or local):
-
 ```bash
-flaker apply                           # idempotent; runs collect / calibrate / quarantine apply as needed
-flaker status                          # summary dashboard + [promotion] drift
-```
+# Daily
+flaker apply
+flaker status
 
-Weekly operator review:
-
-```bash
-flaker gate review merge --json --output .artifacts/gate-review-merge.json
+# Weekly operator review
+flaker status --markdown > .artifacts/status-weekly.md
 flaker ops weekly --output .artifacts/flaker-weekly.md
-flaker analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
+flaker status --gate merge --detail --json > .artifacts/merge-gate.json
+
+# Promotion snapshot (authoritative metrics)
+flaker gate review merge --json > .artifacts/gate-review-merge.json  # DEPRECATED in 0.7.0; use status --gate merge --detail --json
+
+# Incident
+flaker debug retry
+flaker debug confirm "<suite>:<test>" --repeat 10
+flaker debug bisect --test "<name>"
 ```
 
-Flaky / quarantine triage:
-
-```bash
-flaker analyze flaky-tag --json        # ad-hoc @flaky tag suggestions (raw primitive)
-flaker quarantine suggest --json --output .artifacts/quarantine-plan.json
-flaker quarantine apply --from .artifacts/quarantine-plan.json --create-issues
-```
-
-Gate execution (unchanged from 0.5.x):
-
-```bash
-flaker run --gate iteration            # fast local feedback (aliased profile.local)
-flaker run --gate merge                # PR / mainline gate (aliased profile.ci)
-flaker run --gate release              # full or near-full (aliased profile.scheduled)
-```
+Note: `ops daily / weekly / incident` are still first-class primary commands — apply does NOT emit the daily artifact yet. Use them directly.
 
 ## Promotion / demotion decision rule
 
-Promote `--gate merge` advisory → required **iff** `flaker status` drift reports `ready` (all 5 `[promotion]` thresholds met):
+Promote `--gate merge` advisory → required **iff** `flaker status` drift reports `ready` (all 5 `[promotion]` thresholds met). Primary signal is `flaker status` — the drift section shows `ready` or lists unmet thresholds:
 
 - `matched_commits ≥ [promotion].matched_commits_min` (default 20)
 - `false_negative_rate ≤ [promotion].false_negative_rate_max_percentage` (default 5%)
@@ -130,6 +117,7 @@ Demote back to advisory when ANY of the following holds for 1+ week:
 
 ## Anti-patterns
 
-- Using raw `flaker collect ci` / `flaker collect calibrate` in daily cron when `flaker apply` already handles the ordering and idempotency.
-- Basing promotion on `flaker status` numbers alone when they look close — `flaker gate review merge --json` is the authoritative source for exact values.
+- Using raw `flaker collect ci` / `flaker collect calibrate` (deprecated in 0.7.0) in daily cron when `flaker apply` already handles the ordering and idempotency.
+- Using `flaker analyze kpi` (deprecated) instead of `flaker status`, or `flaker analyze eval --markdown` (deprecated) instead of `flaker status --markdown`.
+- Basing promotion on `flaker status` numbers alone when they look close — `flaker status --gate merge --detail --json` is the authoritative source for exact values (the deprecated `flaker gate review merge --json` form also still works with a stderr warning).
 - Ignoring `flaker status` drift `holdout_fnr` when `holdout_ratio = 0`; if holdout isn't configured, the threshold cannot be evaluated and drift treats it as unmet. Either configure `[sampling].holdout_ratio` or accept that holdout FNR will gate promotion.

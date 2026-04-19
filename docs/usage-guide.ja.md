@@ -26,7 +26,7 @@
 ## まず覚える 4 コマンド
 
 ```bash
-pnpm flaker doctor   # canonical: flaker debug doctor
+pnpm flaker doctor
 pnpm flaker run --gate iteration
 pnpm flaker run --dry-run --gate iteration --explain
 pnpm flaker status
@@ -34,7 +34,7 @@ pnpm flaker status
 
 意味:
 
-- `doctor`: 実行環境の確認 (`flaker doctor` は onboarding 用エイリアス。正式形は `flaker debug doctor`)
+- `doctor`: 実行環境の確認 (0.7.0 以降は `flaker doctor` が canonical。`flaker debug doctor` は legacy alias)
 - `run --gate iteration`: 普段のローカル実行
 - `run --dry-run --explain`: 何が選ばれたかを確認
 - `status`: 現在の健全性をざっと見る
@@ -56,7 +56,7 @@ pnpm flaker status
 ### 変更前に確認
 
 ```bash
-pnpm flaker debug doctor
+pnpm flaker doctor
 ```
 
 ### push 前に preview

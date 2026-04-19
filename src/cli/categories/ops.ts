@@ -1,7 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import type { Command } from "commander";
-import { deprecate } from "../deprecation.js";
 import { loadConfig } from "../config.js";
 import { DuckDBStore } from "../storage/duckdb.js";
 import { prepareRunRequest } from "../commands/exec/prepare-run-request.js";
@@ -201,7 +200,6 @@ export function registerOpsCommands(program: Command): void {
     .option("--json", "Output as JSON")
     .option("--output <file>", "Write the rendered artifact to a file")
     .action(opsDailyAction);
-  deprecate(dailyCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker apply" });
 
   ops
     .command("weekly")
