@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.10.2
+
+Bug fix: `queryFlakyTests` window cutoff is now computed from a caller-supplied `now` (or wall clock) in JS, not from DuckDB's `CURRENT_TIMESTAMP`. Resolves a timezone-dependent flake that surfaced as a failing `tests/commands/ops-daily.test.ts` whenever wall clock advanced past the test's injected `now`.
+
+### Fixed
+
+- `DuckDBStore.queryFlakyTests(opts)` accepts a new optional `opts.now?: Date` parameter. The SQL `FLAKY_QUERY` now takes a pre-computed cutoff literal instead of `CURRENT_TIMESTAMP - INTERVAL (? || ' days')`. Same behavior at wall clock; deterministic under test injection.
+- `runQuarantineSuggest({ now })` threads `now` through to `queryFlakyTests`, so `runOpsDaily({ now, windowDays })` is fully deterministic end-to-end.
+
+### Impact
+
+Production users see no behavior change — the default path uses `new Date()` as the reference time. Tests that inject `now: new Date("2026-04-19T00:00:00Z")` and run later than that now correctly pick up test data within their configured window. The previous behavior silently dropped test data older than the wall-clock window.
+
+### Known limitations
+
+Other `queryFlakyTests` / `queryTestCoFailures` call sites in `src/cli/commands/analyze/*.ts` and `src/cli/commands/policy/quarantine.ts` still use the wall-clock default. They're production code paths where `now` isn't meaningful; left alone to scope the patch. If determinism becomes needed in those paths, extend them with the same `now?` parameter.
+
 ## 0.10.1
 
 Docs patch (closes #60). No code changes.

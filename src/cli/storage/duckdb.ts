@@ -250,7 +250,11 @@ export class DuckDBStore implements MetricStore {
 
   async queryFlakyTests(opts: FlakyQueryOpts): Promise<FlakyScore[]> {
     const windowDays = opts.windowDays ?? 30;
-    const rows = await this.all(FLAKY_QUERY, [windowDays.toString()]);
+    const now = opts.now ?? new Date();
+    const cutoff = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000);
+    // ISO 8601 trimmed to DuckDB TIMESTAMP shape (YYYY-MM-DD HH:MM:SS.sss)
+    const cutoffLiteral = cutoff.toISOString().replace("T", " ").replace("Z", "");
+    const rows = await this.all(FLAKY_QUERY, [cutoffLiteral]);
     return rows.map((row: any) => {
       const resolved = resolveTestIdentity({
         suite: row.suite,

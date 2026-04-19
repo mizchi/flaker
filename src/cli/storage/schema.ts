@@ -240,7 +240,7 @@ ORDER BY
 export const FLAKY_QUERY = `
 WITH recent AS (
   SELECT * FROM test_results
-  WHERE created_at > CURRENT_TIMESTAMP - INTERVAL (? || ' days')
+  WHERE created_at > ?::TIMESTAMP
 )
 SELECT
   COALESCE(test_id, '') AS test_id,

@@ -89,7 +89,7 @@ export async function runQuarantineSuggest(input: {
   const minRuns = input.minRuns ?? 5;
 
   const [flaky, quarantined] = await Promise.all([
-    input.store.queryFlakyTests({ windowDays }),
+    input.store.queryFlakyTests({ windowDays, now: input.now }),
     input.store.queryQuarantined(),
   ]);
 

@@ -100,6 +100,8 @@ export interface FlakyQueryOpts {
   suite?: string;
   testName?: string;
   windowDays?: number;
+  /** Reference time for the window cutoff. Defaults to the wall clock; set for deterministic queries in tests or multi-timezone contexts. */
+  now?: Date;
 }
 
 export interface TestSelector extends TestIdentityFields {
