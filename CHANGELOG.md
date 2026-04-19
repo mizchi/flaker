@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.10.4
+
+Docs patch. ADR audit follow-up.
+
+### Docs
+
+- `docs/adr/002-dependency-resolver-strategy.md`: pointer to ADR-006 added for unified `GraphAdapter` graph construction.
+- `docs/adr/003-runner-adapter-and-orchestration.md`: runner table row renamed from `MoonBit` to `moontest`; new `actrun` row added.
+- `docs/adr/005-actrun-integration.md`: "three paths" section rewritten to reflect the 0.10.0 apply-first flow (apply collects via `collect_ci`, `run --runner actrun` for local workflows, `import` for arbitrary reports).
+- `docs/adr/006-graph-analysis-ownership.md`: status line added — Phase 1 + 2 shipped (MoonBit core at `src/graph/graph_core.mbt`, `GraphResolver` delegates via `loadCore()`). Phase 3 (upstream bitflow takeover) remains open.
+
+### Deferred
+
+- **ADR-001 full rewrite** (tracked in #67) — still uses pre-rebrand "metrici" name + enumerates a 0.5-era CLI surface. Bigger than an in-place patch, needs a supersede ADR or a full rewrite.
+- **`MetriciCore` TypeScript rename** (tracked in #68) — rebrand leftover in `src/cli/core/loader.ts`.
+- **release-please decision** (tracked in #66) — workflow is dormant; manifest manually synced each release. Keep, adopt, or remove.
+
 ## 0.10.3
 
 Docs patch + Tier-1 audit results.
