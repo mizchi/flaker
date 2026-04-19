@@ -31,14 +31,20 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
-      - name: MoonBit deps
-        run: nix develop --command moon update
+      # The nix flake's moonbit-overlay pre-populates MOON_HOME with a
+      # buildCachedRegistry, so `moon update` is not needed (and fails
+      # because the baked registry's git remote is a Nix store path,
+      # not mooncakes.io). Just validate the toolchain is available.
+      - name: MoonBit toolchain check
+        run: nix develop --command moon version
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build package
-        run: pnpm run build
+        # scripts/build-package.mjs invokes `moon build --target js --release`,
+        # which requires moon on PATH — use the devShell.
+        run: nix develop --command pnpm run build
 
       - name: Verify
         run: |
