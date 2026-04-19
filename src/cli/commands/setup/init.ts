@@ -50,6 +50,21 @@ min_runs = 5
 [flaky]
 window_days = 14
 detection_threshold_ratio = 0.02
+
+[profile.local]
+strategy = "affected"
+max_duration_seconds = 60
+fallback_strategy = "weighted"
+skip_flaky_tagged = true
+
+[profile.ci]
+strategy = "hybrid"
+sample_percentage = 30
+adaptive = true
+skip_flaky_tagged = true
+
+[profile.scheduled]
+strategy = "full"
 `;
 }
 
