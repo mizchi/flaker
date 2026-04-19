@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import type { Command } from "commander";
+import { deprecate } from "../deprecation.js";
 import {
   loadConfig,
   resolveActrunWorkflowPath,
@@ -161,7 +162,7 @@ export function registerExecCommands(program: Command): void {
     .command("exec")
     .description("Test selection and execution");
 
-  addSamplingOptions(
+  const execRunCmd = addSamplingOptions(
     exec
       .command("run")
       .description("Run the selected gate or profile (auto-detects changed files and strategy from config)")
@@ -172,8 +173,9 @@ export function registerExecCommands(program: Command): void {
   )
     .addHelpText("after", RUN_COMMAND_HELP)
     .action(execRunAction);
+  deprecate(execRunCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker run" });
 
-  exec
+  const execAffectedCmd = exec
     .command("affected [paths...]")
     .description("Explain affected test selection for changed files")
     .option("--changed <files>", "Comma-separated list of changed files")
@@ -220,4 +222,5 @@ export function registerExecCommands(program: Command): void {
         );
       },
     );
+  deprecate(execAffectedCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker run --gate iteration --changed <paths>" });
 }

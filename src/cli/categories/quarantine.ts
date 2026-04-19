@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import type { Command } from "commander";
+import { deprecate } from "../deprecation.js";
 import { loadConfig } from "../config.js";
 import { DuckDBStore } from "../storage/duckdb.js";
 import {
@@ -98,18 +99,20 @@ export function registerQuarantineCommands(program: Command): void {
     .command("quarantine")
     .description("Quarantine planning and plan-based mutation");
 
-  quarantine
+  const suggestCmd = quarantine
     .command("suggest")
     .description("Suggest quarantine add/remove actions without mutating state")
     .option("--window-days <days>", "Analysis window in days", "30")
     .option("--json", "Output as JSON")
     .option("--output <file>", "Write the rendered plan to a file")
     .action(quarantineSuggestAction);
+  deprecate(suggestCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker apply" });
 
-  quarantine
+  const applyCmd = quarantine
     .command("apply")
     .description("Apply a reviewed quarantine plan")
     .requiredOption("--from <file>", "Read plan JSON from a file")
     .option("--create-issues", "Create GitHub issues for newly quarantined tests")
     .action(quarantineApplyAction);
+  deprecate(applyCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker apply" });
 }

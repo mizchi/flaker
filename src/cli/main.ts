@@ -121,40 +121,41 @@ Getting started:
   flaker status                     KPI dashboard (sampling, flaky, data quality)
 
 Primary commands:
-  init        Create flaker.toml and bootstrap config
-  run         Run the selected gate or profile
-  status      Show the user-facing health dashboard
-  doctor      Check local runtime requirements
-  gate        Review gate readiness and sampling health
-  ops         Generate operator review artifacts
-  quarantine  Suggest quarantine add/remove plans
+  init                                          Bootstrap flaker.toml
+  plan                                          Preview actions apply would take
+  apply                                         Reconcile repo to flaker.toml (idempotent)
+  status                                        Dashboard + promotion drift
+  run --gate <iteration|merge|release>          Execute the selected gate
+  doctor                                        Verify local environment
+  debug <retry|confirm|bisect|diagnose>         Incident investigation
+  query <sql>                                   SQL escape hatch
+  explain <topic>                               AI-assisted analysis
+  import <file>                                 Ingest reports (adapter auto-detected)
+  report <file> --summary|--diff|--aggregate    Local report shaping
 
-Gate model:
-  iteration   -> profile.local      Fast author feedback
-  merge       -> profile.ci         PR / mainline gate
-  release     -> profile.scheduled  Full or near-full verification
+Advanced:
+  gate review <name>                Authoritative promotion metrics (--json)
+  ops weekly|incident               Cadence artifact bundles
+  analyze query                     (legacy — use \`flaker query\`)
+  dev <train|tune|self-eval|...>    Maintainer tools
 
-Run \`flaker run --help\` for gate mapping and advanced run options.
-Run \`flaker status --help\` or \`flaker doctor --help\` for user-facing commands.
+Deprecated (removed in 0.8.0):
+  setup init                        → flaker init
+  exec run / exec affected          → flaker run
+  ops daily                         → flaker apply
+  collect ci|local|coverage|calibrate → flaker apply
+  quarantine suggest|apply          → flaker apply
+  policy quarantine|check|report    → flaker apply
+  analyze kpi|eval|flaky|flaky-tag  → flaker status (see --list, --markdown)
+  analyze reason|insights|cluster|bundle|context → flaker explain <topic>
+  analyze query                     → flaker query
+  import report|parquet             → flaker import <file>
+  report summary|diff|aggregate     → flaker report <file> --summary|--diff|--aggregate
+  debug doctor                      → flaker doctor
+  gate review|history|explain       → flaker status --gate <name> [--detail]
+  kpi                               → flaker analyze kpi (also deprecated)
 
-Management and advanced categories:
-  gate       Gate review and readiness        (review)
-  ops        Operator cadence artifacts       (weekly)
-  quarantine Read-only quarantine planning    (suggest)
-  collect    Import history and calibration (ci, local, coverage, commit-changes, calibrate)
-  import     Ingest external reports        (report, parquet)
-  report     Normalize and diff reports     (summary, diff, aggregate)
-  analyze    Read-only inspection           (bundle, kpi, flaky, reason, insights, eval, context, query)
-  debug      Active investigation           (diagnose, bisect, confirm, retry, doctor)
-  policy     Enforcement and ownership      (quarantine, check)
-  dev        Model training and benchmarks  (train, tune, self-eval, eval-fixture, eval-co-failure, test-key)
-
-Compatibility and internal categories remain available:
-  setup      Project scaffolding            (init)
-  exec       Test selection and execution   (run, affected)
-
-Run \`flaker <category> --help\` for the full list under each category.
-Run \`flaker <category> <command> --help\` for per-command options.
+Run \`flaker <command> --help\` for details.
 `;
     return base + extras;
   };

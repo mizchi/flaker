@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import type { Command } from "commander";
+import { deprecate } from "../deprecation.js";
 import {
   runQuarantine,
   formatQuarantineTable,
@@ -190,8 +191,9 @@ export function registerPolicyCommands(program: Command): void {
         }
       },
     );
+  deprecate(quarantineCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker apply" });
 
-  quarantineCmd
+  const quarantineCheckCmd = quarantineCmd
     .command("check")
     .description("Validate the repo-tracked quarantine manifest")
     .option("--manifest <path>", "Override manifest path")
@@ -236,8 +238,9 @@ export function registerPolicyCommands(program: Command): void {
         await store.close();
       }
     });
+  deprecate(quarantineCheckCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker apply" });
 
-  quarantineCmd
+  const quarantineReportCmd = quarantineCmd
     .command("report")
     .description("Render a quarantine manifest report")
     .option("--manifest <path>", "Override manifest path")
@@ -289,8 +292,9 @@ export function registerPolicyCommands(program: Command): void {
         await store.close();
       }
     });
+  deprecate(quarantineReportCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker apply" });
 
-  policy
+  const policyCheckCmd = policy
     .command("check")
     .description("Validate test spec ownership and config drift")
     .option("--json", "Output JSON report")
@@ -325,4 +329,5 @@ export function registerPolicyCommands(program: Command): void {
       );
       process.exit(report.errors.length > 0 ? 1 : 0);
     });
+  deprecate(policyCheckCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker apply" });
 }

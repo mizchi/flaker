@@ -17,12 +17,12 @@ describe("flaker --help", () => {
     expect(top).toContain("Primary commands:");
   });
 
-  it("contains Gate model section", () => {
-    expect(top).toContain("Gate model:");
+  it("contains Advanced section", () => {
+    expect(top).toContain("Advanced:");
   });
 
-  it("contains Management and advanced categories section", () => {
-    expect(top).toContain("Management and advanced categories:");
+  it("contains Deprecated section", () => {
+    expect(top).toContain("Deprecated (removed in 0.8.0):");
   });
 
   for (const category of ["setup", "exec", "collect", "import", "report", "analyze", "debug", "policy", "dev"]) {
