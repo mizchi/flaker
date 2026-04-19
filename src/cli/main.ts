@@ -90,6 +90,10 @@ export function createProgram(): Command {
     .description("User-facing summary dashboard (summary-only, no promotion decision)")
     .option("--window-days <days>", "Analysis window in days", "30")
     .option("--json", "Output as JSON")
+    .option("--markdown", "Render output as Markdown (mutually exclusive with --json)")
+    .option("--list <mode>", "Standalone list mode: flaky | quarantined")
+    .option("--detail", "Append per-threshold drift actuals after the summary")
+    .option("--gate <name>", "Narrow the gates block to a single gate: iteration | merge | release")
     .action(statusAction);
 
   const doctorCmd = program

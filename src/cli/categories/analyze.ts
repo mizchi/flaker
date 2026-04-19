@@ -26,7 +26,17 @@ import {
   runFlakyTagTriage,
 } from "../commands/analyze/flaky-tag-triage.js";
 import { createRunner } from "../runners/index.js";
-import { formatStatusSummary, runStatusSummary } from "../commands/status/summary.js";
+import {
+  formatStatusSummary,
+  formatStatusMarkdown,
+  renderDetail,
+  renderListFlaky,
+  renderListQuarantined,
+  runStatusSummary,
+  runStatusListFlaky,
+  runStatusListQuarantined,
+} from "../commands/status/summary.js";
+import type { GateName } from "../gate.js";
 
 export async function analyzeKpiAction(opts: { windowDays: string; json?: boolean }): Promise<void> {
   const config = loadConfig(process.cwd());
@@ -45,21 +55,67 @@ export async function analyzeKpiAction(opts: { windowDays: string; json?: boolea
   }
 }
 
-export async function statusAction(opts: { windowDays: string; json?: boolean }): Promise<void> {
+export async function statusAction(opts: {
+  windowDays: string;
+  json?: boolean;
+  markdown?: boolean;
+  list?: string;
+  detail?: boolean;
+  gate?: string;
+}): Promise<void> {
+  // Mutual exclusion checks
+  if (opts.markdown && opts.json) {
+    console.error("Error: --markdown and --json are mutually exclusive");
+    process.exit(2);
+  }
+  if (opts.list && (opts.markdown || opts.detail)) {
+    console.error("Error: --list is a standalone mode and cannot be combined with --markdown or --detail");
+    process.exit(2);
+  }
+
   const config = loadConfig(process.cwd());
   const store = new DuckDBStore(resolve(config.storage.path));
   await store.initialize();
   try {
+    // --list modes: standalone, skip normal summary
+    if (opts.list === "flaky") {
+      const rows = await runStatusListFlaky({ store, windowDays: parseInt(opts.windowDays, 10) });
+      console.log(renderListFlaky(rows));
+      return;
+    }
+    if (opts.list === "quarantined") {
+      const rows = await runStatusListQuarantined({ store });
+      console.log(renderListQuarantined(rows));
+      return;
+    }
+    if (opts.list) {
+      console.error(`Error: unknown --list value '${opts.list}'. Use 'flaky' or 'quarantined'.`);
+      process.exit(2);
+    }
+
+    const gate = opts.gate as GateName | undefined;
     const summary = await runStatusSummary({
       store,
       config,
       windowDays: parseInt(opts.windowDays, 10),
+      gate,
     });
+
+    let output: string;
     if (opts.json) {
       console.log(JSON.stringify(summary, null, 2));
+      return;
+    } else if (opts.markdown) {
+      output = formatStatusMarkdown(summary);
     } else {
-      console.log(formatStatusSummary(summary));
+      output = formatStatusSummary(summary);
     }
+
+    if (opts.detail) {
+      output += "\n\n" + renderDetail(summary.drift, config.promotion);
+    }
+
+    console.log(output);
   } finally {
     await store.close();
   }

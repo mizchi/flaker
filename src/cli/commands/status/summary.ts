@@ -2,9 +2,10 @@ import type { FlakerConfig, PromotionThresholds } from "../../config.js";
 import { type GateName, profileNameFromGateName } from "../../gate.js";
 import { resolveProfile } from "../../profile-compat.js";
 import { workflowRunSourceSql } from "../../run-source.js";
-import type { MetricStore } from "../../storage/types.js";
+import type { MetricStore, FlakyScore, QuarantinedTest } from "../../storage/types.js";
 import { computeKpi, type FlakerKpi } from "../analyze/kpi.js";
 import { runQuarantineSuggest } from "../quarantine/suggest.js";
+import { runFlaky } from "../analyze/flaky.js";
 
 export interface DriftInput {
   matchedCommits: number;
@@ -118,6 +119,7 @@ export async function runStatusSummary(input: {
   config: FlakerConfig;
   now?: Date;
   windowDays?: number;
+  gate?: GateName;
 }): Promise<StatusSummary> {
   const now = input.now ?? new Date();
   const windowDays = input.windowDays ?? 30;
@@ -181,6 +183,18 @@ export async function runStatusSummary(input: {
     input.config.promotion,
   );
 
+  const allGates: Record<GateName, StatusGateSummary> = {
+    iteration: buildGateSummary(input.config, "iteration"),
+    merge: buildGateSummary(input.config, "merge"),
+    release: buildGateSummary(input.config, "release"),
+  };
+
+  // --gate narrows the gates block to a single gate entry for focused inspection.
+  // The drift report is promotion-wide and unaffected by --gate.
+  const gates: Record<GateName, StatusGateSummary> = input.gate
+    ? ({ [input.gate]: allGates[input.gate] } as Record<GateName, StatusGateSummary>)
+    : allGates;
+
   return {
     generatedAt: now.toISOString(),
     windowDays,
@@ -199,11 +213,7 @@ export async function runStatusSummary(input: {
       intermittentFlaky: kpi.flaky.intermittentFlaky,
       flakyTrend: kpi.flaky.flakyTrend,
     },
-    gates: {
-      iteration: buildGateSummary(input.config, "iteration"),
-      merge: buildGateSummary(input.config, "merge"),
-      release: buildGateSummary(input.config, "release"),
-    },
+    gates,
     quarantine: {
       currentCount: currentQuarantine.length,
       pendingAddCount: quarantinePlan.add.length,
@@ -278,4 +288,196 @@ export function formatStatusSummary(summary: StatusSummary): string {
   }
 
   return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// Markdown renderer for --markdown flag
+// ---------------------------------------------------------------------------
+
+export function formatStatusMarkdown(summary: StatusSummary): string {
+  const lines: string[] = [
+    "# flaker Status",
+    "",
+    `_Generated: ${summary.generatedAt} — window: ${summary.windowDays} days_`,
+    "",
+    "## Activity",
+    "",
+    "| Metric | Value |",
+    "| --- | --- |",
+    `| Total runs | ${summary.activity.totalRuns} |`,
+    `| CI runs | ${summary.activity.ciRuns} |`,
+    `| Local runs | ${summary.activity.localRuns} |`,
+    `| Passed results | ${summary.activity.passedResults} |`,
+    `| Failed results | ${summary.activity.failedResults} |`,
+    "",
+    "## Health",
+    "",
+    "| Metric | Value |",
+    "| --- | --- |",
+    `| Data confidence | ${summary.health.dataConfidence} |`,
+    `| Matched commits | ${summary.health.matchedCommits} |`,
+    `| Sample ratio | ${summary.health.sampleRatio != null ? `${summary.health.sampleRatio}%` : "N/A"} |`,
+    `| Broken tests | ${summary.health.brokenTests} |`,
+    `| Intermittent flaky | ${summary.health.intermittentFlaky} |`,
+    `| Flaky trend | ${summary.health.flakyTrend > 0 ? `+${summary.health.flakyTrend}` : summary.health.flakyTrend} |`,
+    "",
+    "## Gates",
+    "",
+    "| Gate | Profile | Strategy | Sample | Budget (s) | Adaptive |",
+    "| --- | --- | --- | --- | --- | --- |",
+  ];
+
+  for (const gate of Object.keys(summary.gates) as GateName[]) {
+    const info = summary.gates[gate];
+    lines.push(
+      `| ${gate} | ${info.profile} | ${info.strategy} | ${info.samplePercentage != null ? `${info.samplePercentage}%` : "N/A"} | ${info.maxDurationSeconds ?? "N/A"} | ${info.adaptive ? "on" : "off"} |`,
+    );
+  }
+
+  lines.push(
+    "",
+    "## Quarantine",
+    "",
+    "| Metric | Value |",
+    "| --- | --- |",
+    `| Current quarantined | ${summary.quarantine.currentCount} |`,
+    `| Pending add | +${summary.quarantine.pendingAddCount} |`,
+    `| Pending remove | -${summary.quarantine.pendingRemoveCount} |`,
+    "",
+    "## Promotion Drift",
+    "",
+  );
+
+  if (summary.drift.ok) {
+    lines.push("**Status: ready** — all 5 thresholds met.");
+  } else {
+    lines.push(`**Status: not ready** — ${summary.drift.unmet.length}/5 thresholds unmet.`, "");
+    lines.push("| Field | Actual | Threshold |", "| --- | --- | --- |");
+    for (const item of summary.drift.unmet) {
+      const actual = item.actual == null ? "N/A" : String(item.actual);
+      const threshold = String(item.threshold);
+      lines.push(`| ${item.field} | ${actual} | ${threshold} |`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// renderDetail for --detail flag
+// ---------------------------------------------------------------------------
+
+export function renderDetail(drift: DriftReport, _thresholds: PromotionThresholds): string {
+  const lines: string[] = ["## Drift Detail", ""];
+  if (drift.ok) {
+    lines.push("All promotion thresholds met.");
+    return lines.join("\n");
+  }
+  for (const item of drift.unmet) {
+    if (item.field === "matched_commits") {
+      // numeric: show actual / threshold
+      const actual = item.actual == null ? "n/a" : String(item.actual);
+      lines.push(`- ${item.field}: ${actual} / ${item.threshold}`);
+    } else if (typeof item.actual === "string" || item.actual == null) {
+      // string (data_confidence) or null: show arrow
+      const actual = item.actual == null ? "n/a" : item.actual;
+      lines.push(`- ${item.field}: ${actual} → ${item.threshold}`);
+    } else {
+      // other numeric fields (rates as percentages)
+      const actual = item.actual == null ? "n/a" : `${item.actual}%`;
+      const threshold = typeof item.threshold === "number" ? `${item.threshold}%` : String(item.threshold);
+      lines.push(`- ${item.field}: ${actual} / ${threshold}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// renderListFlaky / renderListQuarantined for --list flag
+// ---------------------------------------------------------------------------
+
+export interface FlakyListRow {
+  suite: string;
+  test_name: string;
+  flaky_rate: number;
+  runs: number;
+}
+
+export interface QuarantinedListRow {
+  suite: string;
+  test_name: string;
+  added_at: string;
+}
+
+const DEFAULT_LIST_TOP = 20;
+
+export function renderListFlaky(rows: FlakyListRow[], top = DEFAULT_LIST_TOP): string {
+  const limited = rows.slice(0, top);
+  if (limited.length === 0) {
+    return "No flaky tests found.";
+  }
+  const header = ["Suite", "Test Name", "Flaky Rate", "Runs"];
+  const tableRows = limited.map((r) => [
+    r.suite,
+    r.test_name,
+    `${Math.round(r.flaky_rate * 100)}%`,
+    String(r.runs),
+  ]);
+  return formatSimpleTable(header, tableRows);
+}
+
+export function renderListQuarantined(rows: QuarantinedListRow[], top = DEFAULT_LIST_TOP): string {
+  const limited = rows.slice(0, top);
+  if (limited.length === 0) {
+    return "No quarantined tests.";
+  }
+  const header = ["Suite", "Test Name", "Added At"];
+  const tableRows = limited.map((r) => [r.suite, r.test_name, r.added_at]);
+  return formatSimpleTable(header, tableRows);
+}
+
+function formatSimpleTable(headers: string[], rows: string[][]): string {
+  const allRows = [headers, ...rows];
+  const colWidths = headers.map((_, i) =>
+    Math.max(...allRows.map((row) => (row[i] ?? "").length)),
+  );
+  const sep = colWidths.map((w) => "-".repeat(w)).join(" | ");
+  const formatRow = (row: string[]) =>
+    row.map((cell, i) => (cell ?? "").padEnd(colWidths[i])).join(" | ");
+  return [formatRow(headers), sep, ...rows.map(formatRow)].join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// runStatusListFlaky / runStatusListQuarantined
+// ---------------------------------------------------------------------------
+
+export async function runStatusListFlaky(input: {
+  store: MetricStore;
+  windowDays?: number;
+  top?: number;
+}): Promise<FlakyListRow[]> {
+  // Reuse runFlaky from analyze/flaky.ts (src/cli/commands/analyze/flaky.ts:11)
+  const results = await runFlaky({
+    store: input.store,
+    windowDays: input.windowDays ?? 30,
+    top: input.top ?? DEFAULT_LIST_TOP,
+  });
+  return results.map((r) => ({
+    suite: r.suite,
+    test_name: r.testName,
+    flaky_rate: r.flakyRate / 100,
+    runs: r.totalRuns,
+  }));
+}
+
+export async function runStatusListQuarantined(input: {
+  store: MetricStore;
+}): Promise<QuarantinedListRow[]> {
+  // Reuse store.queryQuarantined() — same primitive used by runStatusSummary
+  const rows: QuarantinedTest[] = await input.store.queryQuarantined();
+  return rows.map((r) => ({
+    suite: r.suite,
+    test_name: r.testName,
+    added_at: r.createdAt instanceof Date ? r.createdAt.toISOString().slice(0, 10) : String(r.createdAt),
+  }));
 }
