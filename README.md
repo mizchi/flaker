@@ -527,13 +527,13 @@ The repo now ships two GitHub-native self-host lanes:
 
 Both lanes render the same promotion-readiness summary from `scripts/self-host-review.mjs`. The current default is still advisory: the PR job is non-blocking, and the nightly workflow carries the long-form trend.
 
-Promote `flaker run --gate merge` to a required check only after the nightly issue shows **all five** of the following. Check the current values with `flaker gate review merge --json` (authoritative for promotion) — `flaker status` is a summary-only dashboard and should not be used for promotion.
+Promote `flaker run --gate merge` to a required check only after the nightly issue shows **all five** of the following. The primary signal is `flaker status` (the `Promotion drift` section reports `ready` when all five thresholds are met). For the exact numeric values, use `flaker status --gate merge --detail --json` — this is the authoritative output. (`flaker gate review merge --json` is the legacy alias, DEPRECATED in 0.7.0, removed in 0.8.0.)
 
 - `matched commits >= 20` — commits where both a gated local/CI run and a release/full run exist in the same window, so that local sampling outcomes can be compared against a ground-truth full run. Increases as the nightly `--gate release` accumulates history.
 - `false negative rate <= 5%` — share of commits where the `merge` gate passed but the full run failed (sampling missed a real regression). Measured over the same matched-commit window.
 - `pass correlation >= 95%` — `P(full run passes | merge gate passes)` on matched commits. Same metric referenced elsewhere in this README as `P(CI pass | local pass)`.
 - `holdout FNR <= 10%` — FNR measured on the holdout slice defined by `[sampling] holdout_ratio`. Tests in the holdout slice are excluded from the sampled run so that their outcomes can be used to audit whether the sampler's verdict generalizes. Guards against sampler overfitting to the visible slice.
-- `data confidence` reaches `moderate` or `high` — derived signal combining matched-commit count, history window coverage, and flaky-noise level. Rough rule of thumb: `low` until ~10 matched commits, `moderate` around 20–40 with FNR/correlation green, `high` beyond 40 with stable noise. Exact boundaries come from the `gate review merge` output, not from config.
+- `data confidence` reaches `moderate` or `high` — derived signal combining matched-commit count, history window coverage, and flaky-noise level. Rough rule of thumb: `low` until ~10 matched commits, `moderate` around 20–40 with FNR/correlation green, `high` beyond 40 with stable noise. Exact boundaries come from the `status --gate merge --detail --json` output, not from config.
 
 ## Recommended Usage Model
 
