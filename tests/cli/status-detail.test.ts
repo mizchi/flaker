@@ -7,8 +7,8 @@ describe("status --detail rendering", () => {
     const drift = {
       ok: false,
       unmet: [
-        { field: "matched_commits", actual: 18, threshold: 20 },
-        { field: "data_confidence", actual: "low", threshold: "moderate" },
+        { kind: "matched_commits" as const, actual: 18, desired: 20 },
+        { kind: "data_confidence" as const, actual: "low" as const, desired: "moderate" as const },
       ],
     };
     const text = renderDetail(drift, DEFAULT_PROMOTION);

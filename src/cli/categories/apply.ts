@@ -14,7 +14,18 @@ import { executePreparedLocalRun } from "../commands/exec/execute-prepared-local
 import { createConfiguredResolver } from "./shared-resolver.js";
 import { detectChangedFiles } from "../core/git.js";
 import { loadQuarantineManifestIfExists } from "../quarantine-manifest.js";
-import { executePlan, type ExecutorDeps } from "../commands/apply/executor.js";
+import { executeDag } from "../commands/apply/dag.js";
+import type { ExecutorDeps } from "../commands/apply/executor.js";
+import {
+  writeArtifact,
+  serializePlanArtifact,
+  serializeApplyArtifact,
+  type EmitKind,
+  type EmittedArtifact,
+} from "../commands/apply/artifact.js";
+import { runOpsDaily, formatOpsDailyReport } from "../commands/ops/daily.js";
+import { runOpsWeekly, formatOpsWeeklyReport } from "../commands/ops/weekly.js";
+import { createRunner } from "../runners/index.js";
 
 function describeAction(action: PlannedAction): string {
   switch (action.kind) {
@@ -46,7 +57,7 @@ export function isColdStartZeroTest(result: unknown): boolean {
   return Array.isArray(sampledTests) && sampledTests.length === 0;
 }
 
-export async function planAction(opts: { json?: boolean }): Promise<void> {
+export async function planAction(opts: { json?: boolean; output?: string }): Promise<void> {
   const cwd = process.cwd();
   const config = loadConfig(cwd);
   const store = new DuckDBStore(resolve(config.storage.path));
@@ -54,7 +65,18 @@ export async function planAction(opts: { json?: boolean }): Promise<void> {
   try {
     const kpi = await computeKpi(store, { windowDays: 30 });
     const probe = await probeRepo({ cwd, store });
-    const actions = planApply({ config, kpi, probe });
+    const { diff, actions } = planApply({ config, kpi, probe });
+
+    if (opts.output) {
+      const artifact = serializePlanArtifact({
+        generatedAt: new Date().toISOString(),
+        diff,
+        actions,
+        probe,
+      });
+      writeArtifact(opts.output, artifact);
+    }
+
     if (opts.json) {
       console.log(JSON.stringify({ actions }, null, 2));
       return;
@@ -73,7 +95,27 @@ export async function planAction(opts: { json?: boolean }): Promise<void> {
   }
 }
 
-export async function applyAction(opts: { json?: boolean }): Promise<void> {
+const VALID_EMIT_KINDS = ["daily", "weekly", "incident"] as const;
+
+export async function applyAction(opts: {
+  json?: boolean;
+  output?: string;
+  emit?: string;
+}): Promise<void> {
+  // Validate --emit value early
+  if (opts.emit !== undefined && !(VALID_EMIT_KINDS as readonly string[]).includes(opts.emit)) {
+    console.error(`Error: --emit must be one of: ${VALID_EMIT_KINDS.join(", ")}`);
+    process.exitCode = 2;
+    return;
+  }
+  if (opts.emit === "incident") {
+    console.error(
+      "Error: --emit incident requires --incident-* args (coming in 1.0.0). Use `flaker ops incident` for now.",
+    );
+    process.exitCode = 2;
+    return;
+  }
+
   const cwd = process.cwd();
   const config = loadConfig(cwd);
   const store = new DuckDBStore(resolve(config.storage.path));
@@ -81,7 +123,7 @@ export async function applyAction(opts: { json?: boolean }): Promise<void> {
   try {
     const kpi = await computeKpi(store, { windowDays: 30 });
     const probe = await probeRepo({ cwd, store });
-    const actions = planApply({ config, kpi, probe });
+    const { diff, actions } = planApply({ config, kpi, probe });
 
     const deps: ExecutorDeps = {
       collectCi: async ({ windowDays }) =>
@@ -130,20 +172,92 @@ export async function applyAction(opts: { json?: boolean }): Promise<void> {
       return;
     }
 
-    const result = await executePlan(actions, deps);
+    const result = await executeDag(actions, deps);
+
+    // Run --emit if requested
+    let emitted: EmittedArtifact | undefined;
+    if (opts.emit === "daily") {
+      const dailyReport = await runOpsDaily({
+        store,
+        config,
+        executeReleaseGate: async () => {
+          const prepared = await prepareRunRequest({
+            cwd,
+            config,
+            store,
+            opts: { gate: "release" },
+            deps: {
+              detectChangedFiles,
+              loadQuarantineManifestIfExists,
+              createResolver: createConfiguredResolver,
+            },
+          });
+          const execution = await executePreparedLocalRun({ store, config, cwd, prepared });
+          return {
+            exitCode: execution.runResult.exitCode,
+            sampledCount: execution.runResult.sampledTests.length,
+            holdoutCount: execution.runResult.holdoutTests.length,
+            holdoutFailureCount: execution.recordResult?.holdoutFailureCount ?? 0,
+          };
+        },
+      });
+      emitted = { kind: "daily" as EmitKind, report: dailyReport };
+    } else if (opts.emit === "weekly") {
+      const weeklyReport = await runOpsWeekly({
+        store,
+        config,
+        runner: createRunner(config.runner),
+        cwd,
+      });
+      emitted = { kind: "weekly" as EmitKind, report: weeklyReport };
+    }
+
     if (opts.json) {
-      console.log(JSON.stringify(result, null, 2));
+      const output: Record<string, unknown> = { ...result };
+      if (emitted) {
+        output["emitted"] = emitted;
+      }
+      console.log(JSON.stringify(output, null, 2));
     } else {
       for (const exec of result.executed) {
-        const mark = exec.ok ? "ok  " : "fail";
-        console.log(`${mark} ${exec.kind}${exec.error ? ` — ${exec.error}` : ""}`);
-        if (exec.ok && exec.kind === "cold_start_run" && isColdStartZeroTest(exec.result)) {
+        const mark =
+          exec.status === "ok"      ? "ok  " :
+          exec.status === "failed"  ? "fail" :
+                                      "skip";
+        const suffix =
+          exec.status === "failed"  ? ` — ${exec.error ?? ""}` :
+          exec.status === "skipped" ? ` — ${exec.skippedReason ?? ""}` :
+                                      "";
+        console.log(`${mark} ${exec.kind}${suffix}`);
+        if (exec.status === "ok" && exec.kind === "cold_start_run" && isColdStartZeroTest(exec.result)) {
           process.stderr.write(renderZeroTestHint() + "\n");
         }
       }
-      if (result.aborted) {
+
+      if (emitted) {
+        console.log("\n---");
+        if (emitted.kind === "daily") {
+          console.log(formatOpsDailyReport(emitted.report as Parameters<typeof formatOpsDailyReport>[0]));
+        } else if (emitted.kind === "weekly") {
+          console.log(formatOpsWeeklyReport(emitted.report as Parameters<typeof formatOpsWeeklyReport>[0]));
+        }
+      }
+
+      if (result.executed.some((e) => e.status === "failed")) {
         process.exitCode = 1;
       }
+    }
+
+    if (opts.output) {
+      const artifact = serializeApplyArtifact({
+        generatedAt: new Date().toISOString(),
+        diff,
+        actions,
+        executed: result.executed,
+        probe,
+        emitted,
+      });
+      writeArtifact(opts.output, artifact);
     }
   } finally {
     await store.close();
@@ -155,11 +269,14 @@ export function registerApplyCommands(program: Command): void {
     .command("plan")
     .description("Preview actions `flaker apply` would take for the current repo state")
     .option("--json", "Output as JSON")
+    .option("--output <file>", "Write PlanArtifact JSON to a file")
     .action(planAction);
 
   program
     .command("apply")
     .description("Apply planned actions to converge the repo state to flaker.toml")
     .option("--json", "Output as JSON")
+    .option("--output <file>", "Write ApplyArtifact JSON to a file")
+    .option("--emit <kind>", "Generate an ops cadence artifact alongside apply (daily|weekly|incident)")
     .action(applyAction);
 }

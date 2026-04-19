@@ -15,7 +15,7 @@ describe("computeDrift", () => {
       DEFAULT_PROMOTION,
     );
     expect(drift.ok).toBe(false);
-    expect(drift.unmet.map((u) => u.field)).toEqual([
+    expect(drift.unmet.map((u) => u.kind)).toEqual([
       "matched_commits",
       "false_negative_rate",
       "pass_correlation",
@@ -51,9 +51,9 @@ describe("computeDrift", () => {
       DEFAULT_PROMOTION,
     );
     expect(drift.ok).toBe(false);
-    expect(drift.unmet.map((u) => u.field)).toContain("false_negative_rate");
-    expect(drift.unmet.map((u) => u.field)).toContain("pass_correlation");
-    expect(drift.unmet.map((u) => u.field)).toContain("holdout_fnr");
+    expect(drift.unmet.map((u) => u.kind)).toContain("false_negative_rate");
+    expect(drift.unmet.map((u) => u.kind)).toContain("pass_correlation");
+    expect(drift.unmet.map((u) => u.kind)).toContain("holdout_fnr");
   });
 
   it("treats data_confidence=insufficient as unmet when threshold is moderate", () => {
@@ -67,6 +67,6 @@ describe("computeDrift", () => {
       },
       DEFAULT_PROMOTION,
     );
-    expect(drift.unmet.map((u) => u.field)).toContain("data_confidence");
+    expect(drift.unmet.map((u) => u.kind)).toContain("data_confidence");
   });
 });

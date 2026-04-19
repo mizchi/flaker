@@ -24,8 +24,10 @@ describe("flaker --help top-level shape (Task 11)", () => {
     expect(stdout).toMatch(/Advanced:/i);
   });
 
-  it("no longer contains a Deprecated section (removed in 0.8.0)", () => {
-    expect(stdout).not.toMatch(/Deprecated/i);
+  it("no longer contains a Deprecated section header (removed in 0.8.0)", () => {
+    // The word "deprecated" may appear in inline notes (e.g. ops daily deprecation notice);
+    // what 0.8.0 removed was the standalone "Deprecated:" section heading.
+    expect(stdout).not.toMatch(/^Deprecated:/im);
   });
 
   const primaryNames = [

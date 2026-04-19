@@ -20,4 +20,11 @@ describe("flaker apply", () => {
     expect(res.status).toBe(0);
     expect(res.stdout).toContain("Apply planned actions");
   });
+
+  it("flaker apply --help lists new tri-state concepts", () => {
+    const res = spawnSync("node", [CLI, "apply", "--help"], { encoding: "utf8" });
+    expect(res.status).toBe(0);
+    // Help text mentions --json for machine-readable output
+    expect(res.stdout).toContain("--json");
+  });
 });

@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.9.0
+
+Resource-diff plan model, DAG executor, and `flaker apply --output` / `--emit`.
+
+### New
+
+- `src/cli/commands/apply/state.ts`: `DesiredState`, `ObservedState`, `StateDiff`, `computeStateDiff()` — the plan is now derived from a structured state diff, not an ad-hoc action list.
+- `planApply()` returns `{ diff, actions }`. Each `PlannedAction` carries `driftRef: StateDiffField[]` naming the observed fields the action reconciles.
+- `src/cli/commands/apply/dag.ts`: `executeDag(actions, deps)` replaces the abort-on-failure `executePlan`. Independent actions run concurrently via `Promise.all`; a failed action causes only its downstream to be marked `skipped`, peers still run.
+- `flaker plan --output <file>` and `flaker apply --output <file>` write a JSON artifact containing `generatedAt`, `diff`, `actions`, `probe`, and (for apply) `executed`.
+- `flaker apply --emit daily|weekly|incident` produces the matching ops-cadence artifact alongside normal apply execution. `daily` and `weekly` are fully wired; `incident` is a stub that points at `flaker ops incident` until 1.0.0.
+- Small `src/cli/deprecation.ts` helper re-added (was removed in 0.8.0) to support `ops daily` re-deprecation.
+
+### Changed
+
+- **Breaking JSON shape** for `flaker apply --json`:
+  - `executed[*].ok: boolean` → `executed[*].status: "ok" | "failed" | "skipped"`
+  - top-level `aborted: boolean` removed
+  - `executed[*].skippedReason?: string` new field
+- **Breaking JSON shape** for `flaker status --json`:
+  - `drift.unmet[*].field` → `drift.unmet[*].kind`
+  - `drift.unmet[*].threshold` → `drift.unmet[*].desired`
+- `flaker apply` text output uses tri-state marks (`ok  ` / `fail` / `skip`).
+- `flaker apply` exit code is 1 only when some action failed; skipped actions do not fail the process.
+- Internal `executePlan()` is kept as a thin `@deprecated` wrapper that maps DAG status → legacy `ok: boolean` for backward-compatible unit-test callers.
+
+### Deprecated (removed in 1.0.0)
+
+- `flaker ops daily` — use `flaker apply --emit daily`. The 0.7.0 Phase 1 deprecation was reverted in 0.7.0 Phase 2 because apply didn't emit the daily artifact. 0.9.0 fixes that gap, so the original canonical pointer is now real.
+- `ops weekly` and `ops incident` remain first-class (they carry operator narrative beyond what apply currently emits).
+
 ## 0.8.0 (breaking)
 
 Removes the 17 commands deprecated in 0.7.0. Scripts and CI workflows still using any of the legacy forms below will now exit non-zero. Users on 0.7.x should first work through [docs/migration-0.6-to-0.7.md](docs/migration-0.6-to-0.7.md) before upgrading; the mapping is unchanged from the 0.7.0 deprecation cycle.

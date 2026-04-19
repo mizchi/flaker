@@ -160,13 +160,37 @@ detection_threshold_ratio = 0.02       # この割合以上で flaky と判定
 ```bash
 flaker plan           # 現状との差分を表示 (dry-run)
 flaker plan --json
+flaker plan --output .artifacts/flaker-plan.json   # PlanArtifact を保存
+
 flaker apply          # 差分を埋めるために collect / calibrate / run / quarantine apply を自動実行
 flaker apply --json
+flaker apply --output .artifacts/flaker-apply.json # ApplyArtifact を保存
+
+# 0.9.0 で ops daily を吸収。weekly は動作 / incident は 1.0.0 で stub 解消予定:
+flaker apply --emit daily   --output .artifacts/flaker-daily.md
+flaker apply --emit weekly  --output .artifacts/flaker-weekly.md
+flaker apply --emit incident  # 現在は flaker ops incident へ誘導する stub
 ```
 
 `flaker.toml` を **desired state** とみなし、現在の DB 状態を見て「何をすべきか」を planner が組み立てる。履歴ゼロの新規 repo なら `collect_ci` + `cold_start_run` が、十分な履歴があれば `collect_ci` + `calibrate` + `quarantine_apply` が選ばれる。ユーザー側が順序を覚える必要はない。
 
 `[promotion]` セクションの閾値と現状の KPI を突き合わせて `flaker status` がドリフトを表示する。
+
+#### 0.9.0 の `--json` 出力シェイプ
+
+`flaker apply --json`:
+
+- `executed[*].status`: `"ok" | "failed" | "skipped"` (旧 `.ok: boolean` + トップレベル `aborted` は削除)
+- `executed[*].skippedReason?: string`: dependency 失敗で skip されたときの理由
+- exit code は `status === "failed"` のみ 1、skipped は 0
+
+`flaker status --json` の `drift.unmet[*]` も同様に `{ field, threshold }` → `{ kind, desired }` へ変更。
+
+#### `--emit` と `ops` の棲み分け
+
+- `apply --emit daily`: 旧 `flaker ops daily` と同じ cadence artifact を出力 (0.9.0 で統合、`ops daily` は deprecated)。
+- `apply --emit weekly`: 同じく weekly 集計を出力。ただし `flaker ops weekly` は operator 向け narrative (quarantine 提案, flaky-tag triage 等) を別途 carry するため first-class 継続。
+- `apply --emit incident`: 現状 stub。インシデント調査は `flaker ops incident --run <id>` または `flaker debug retry / confirm / diagnose` を使う。1.0.0 で `--incident-*` フラグを取って完全統合予定。
 
 ### `flaker collect` — CI からデータ収集
 

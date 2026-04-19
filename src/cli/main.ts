@@ -32,7 +32,7 @@ export function createProgram(): Command {
   program
     .name("flaker")
     .description("Intelligent test selection — run fewer tests, catch more failures")
-    .version("0.8.0")
+    .version("0.9.0")
     .showHelpAfterError()
     .showSuggestionAfterError();
 
@@ -114,7 +114,8 @@ Primary commands:
   report <file> --summary|--diff|--aggregate    Local report shaping
 
 Advanced:
-  ops daily|weekly|incident         Cadence artifact bundles
+  ops weekly|incident               Cadence artifact bundles
+  (ops daily is deprecated in 0.9.0 — use \`flaker apply --emit daily\`)
   dev <train|tune|self-eval|...>    Maintainer tools
 
 Run \`flaker <command> --help\` for details.

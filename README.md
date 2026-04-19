@@ -224,14 +224,14 @@ Retries can help classify failures, but they are not proof of stability.
 
 The current CLI and config already fit this model:
 
-| Mental model | Current flaker shape |
+| Mental model | Current flaker shape (0.9.0) |
 |-------------|----------------------|
 | Iteration Gate | `profile.local` |
 | Merge Gate | `profile.ci` |
 | Release Gate | usually a full run, often backed by `profile.scheduled` or a dedicated release workflow |
-| Observation loop | `flaker collect` + `flaker ops daily` |
-| Triage loop | `flaker gate review merge` + `flaker ops weekly` + `flaker quarantine suggest/apply` |
-| Incident loop | `flaker ops incident` |
+| Observation loop | `flaker apply` + `flaker apply --emit daily` (`flaker ops daily` deprecated in 0.9.0) |
+| Triage loop | `flaker status --gate merge --detail` + `flaker ops weekly` (apply with `[quarantine].auto=true` also handles suggest/apply) |
+| Incident loop | `flaker ops incident` (or `flaker debug retry / confirm / diagnose`) |
 
 If you describe flaker this way, the surface area becomes smaller:
 
@@ -259,24 +259,23 @@ pnpm flaker status        # dashboard + promotion drift
 
 The full Day 0 → Week 4 onboarding checklist lives at [docs/new-project-checklist.ja.md](docs/new-project-checklist.ja.md) / [.md](docs/new-project-checklist.md).
 
-> **Canonical command forms (0.7.0)**
+> **Canonical command forms (0.9.0)**
 >
-> The primary surface is 11 commands: `init`, `plan`, `apply`, `status`, `run`, `doctor`, `debug`, `query`, `explain`, `import`, `report`. Everything else is either Advanced (`gate`, `ops`, `dev`) or Deprecated (removed in 0.8.0). The legacy aliases below still work and emit a stderr warning pointing at the canonical form.
+> The primary surface is 11 commands: `init`, `plan`, `apply`, `status`, `run`, `doctor`, `debug`, `query`, `explain`, `import`, `report`. The 0.7.0 legacy aliases were removed in 0.8.0. 0.9.0 re-deprecates `flaker ops daily` (removed in 1.0.0). `ops weekly` / `ops incident` remain Advanced first-class.
 >
-> | Canonical (0.7.0) | Legacy form |
+> | Canonical (0.9.0) | Deprecated (since → removed) |
 > |---|---|
-> | `flaker apply` | `flaker collect ci / local / coverage / calibrate`, `flaker quarantine suggest / apply`, `flaker policy quarantine`, `flaker analyze flaky-tag` |
-> | `flaker status` | `flaker analyze kpi`, `flaker kpi` |
-> | `flaker status --markdown` | `flaker analyze eval --markdown` |
-> | `flaker status --list flaky` | `flaker analyze flaky` |
-> | `flaker status --gate <name> --detail --json` | `flaker gate review <name> --json`, `flaker gate history`, `flaker gate explain` |
-> | `flaker run --gate <name>` | `flaker exec run`, `flaker exec affected` |
-> | `flaker init` | `flaker setup init` |
-> | `flaker doctor` | `flaker debug doctor` |
-> | `flaker query <sql>` | `flaker analyze query` |
-> | `flaker explain <topic>` | `flaker analyze reason / insights / cluster / bundle / context` |
-> | `flaker import <file>` (adapter auto-detect) | `flaker import report / parquet` |
-> | `flaker report <file> --summary \| --diff <base> \| --aggregate <dir>` | `flaker report summary / diff / aggregate` |
+> | `flaker apply` | (replaces `collect ci / local / coverage / calibrate`, `quarantine suggest / apply`, `policy quarantine`, `analyze flaky-tag` — all removed in 0.8.0) |
+> | `flaker apply --emit daily [--output <file>]` | `flaker ops daily` (deprecated 0.9.0, remove 1.0.0) |
+> | `flaker apply --emit weekly` | `ops weekly` remains first-class (operator narrative) |
+> | `flaker apply --output <file>` | new in 0.9.0 — saves `ApplyArtifact` JSON |
+> | `flaker plan --output <file>` | new in 0.9.0 — saves `PlanArtifact` JSON |
+> | `flaker status` | (replaces `analyze kpi`, `kpi` — removed in 0.8.0) |
+> | `flaker status --markdown` | (replaces `analyze eval --markdown` — removed in 0.8.0) |
+> | `flaker status --list flaky` | (replaces `analyze flaky` — removed in 0.8.0) |
+> | `flaker status --gate <name> --detail --json` | (replaces `gate review / history / explain` — removed in 0.8.0) |
+>
+> **Breaking JSON shape changes in 0.9.0**: `apply --json` uses `executed[*].status: "ok"|"failed"|"skipped"` (was `.ok: boolean` + `aborted`). `status --json` uses `drift.unmet[*].kind` / `.desired` (was `.field` / `.threshold`). See CHANGELOG for full notes.
 
 ### Initialize
 

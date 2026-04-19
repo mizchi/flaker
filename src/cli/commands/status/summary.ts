@@ -6,6 +6,7 @@ import type { MetricStore, FlakyScore, QuarantinedTest } from "../../storage/typ
 import { computeKpi, type FlakerKpi } from "../analyze/kpi.js";
 import { runQuarantineSuggest } from "../quarantine/suggest.js";
 import { runFlaky } from "../analyze/flaky.js";
+import { computeStateDiff, type StateDiffField } from "../apply/state.js";
 
 export interface DriftInput {
   matchedCommits: number;
@@ -15,56 +16,42 @@ export interface DriftInput {
   dataConfidence: "insufficient" | "low" | "moderate" | "high";
 }
 
-export interface DriftItem {
-  field: string;
-  actual: number | string | null;
-  threshold: number | string;
-}
+/** @deprecated use StateDiffField directly */
+export type DriftItem = StateDiffField;
 
 export interface DriftReport {
   ok: boolean;
-  unmet: DriftItem[];
+  unmet: StateDiffField[];
 }
 
-const CONFIDENCE_RANK = { insufficient: 0, low: 1, moderate: 2, high: 3 } as const;
+// The 5 promotion-relevant drift kinds (excludes apply-only: local_history_missing, history_stale, quarantine_pending)
+const STATUS_DRIFT_KINDS = new Set<StateDiffField["kind"]>([
+  "matched_commits",
+  "false_negative_rate",
+  "pass_correlation",
+  "holdout_fnr",
+  "data_confidence",
+]);
 
 export function computeDrift(input: DriftInput, thresholds: PromotionThresholds): DriftReport {
-  const unmet: DriftItem[] = [];
-  if (input.matchedCommits < thresholds.matched_commits_min) {
-    unmet.push({
-      field: "matched_commits",
-      actual: input.matchedCommits,
-      threshold: thresholds.matched_commits_min,
-    });
-  }
-  if (input.falseNegativeRatePercentage == null || input.falseNegativeRatePercentage > thresholds.false_negative_rate_max_percentage) {
-    unmet.push({
-      field: "false_negative_rate",
-      actual: input.falseNegativeRatePercentage,
-      threshold: thresholds.false_negative_rate_max_percentage,
-    });
-  }
-  if (input.passCorrelationPercentage == null || input.passCorrelationPercentage < thresholds.pass_correlation_min_percentage) {
-    unmet.push({
-      field: "pass_correlation",
-      actual: input.passCorrelationPercentage,
-      threshold: thresholds.pass_correlation_min_percentage,
-    });
-  }
-  if (input.holdoutFnrPercentage == null || input.holdoutFnrPercentage > thresholds.holdout_fnr_max_percentage) {
-    unmet.push({
-      field: "holdout_fnr",
-      actual: input.holdoutFnrPercentage,
-      threshold: thresholds.holdout_fnr_max_percentage,
-    });
-  }
-  if (CONFIDENCE_RANK[input.dataConfidence] < CONFIDENCE_RANK[thresholds.data_confidence_min]) {
-    unmet.push({
-      field: "data_confidence",
-      actual: input.dataConfidence,
-      threshold: thresholds.data_confidence_min,
-    });
-  }
+  const desired = {
+    promotion: thresholds,
+    quarantineAuto: false,
+    samplingStrategy: "full",
+    hasGithubToken: false,
+  };
+  const observed = {
+    matchedCommits: input.matchedCommits,
+    falseNegativeRatePercentage: input.falseNegativeRatePercentage,
+    passCorrelationPercentage: input.passCorrelationPercentage,
+    holdoutFnrPercentage: input.holdoutFnrPercentage,
+    dataConfidence: input.dataConfidence,
+    hasLocalHistory: true,
+    staleDays: null,
+    pendingQuarantineCount: 0,
+  };
+  const { drifts } = computeStateDiff(desired, observed);
+  const unmet = drifts.filter((d) => STATUS_DRIFT_KINDS.has(d.kind));
   return { ok: unmet.length === 0, unmet };
 }
 
@@ -269,20 +256,19 @@ export function formatStatusSummary(summary: StatusSummary): string {
     lines.push(`  status: not ready  (${summary.drift.unmet.length}/5 thresholds unmet)`);
     for (const item of summary.drift.unmet) {
       const actual = item.actual == null ? "N/A" : typeof item.actual === "string" ? item.actual : `${item.actual}%`;
-      const threshold = typeof item.threshold === "string" ? item.threshold : `${item.threshold}%`;
-      let comparison: string;
-      if (item.field === "matched_commits") {
+      const desired = typeof item.desired === "string" ? item.desired : `${item.desired}%`;
+      if (item.kind === "matched_commits") {
         const actualNum = item.actual == null ? "N/A" : item.actual;
-        const thresholdNum = item.threshold;
-        lines.push(`  - ${item.field.padEnd(22)} actual=${actualNum}  threshold>=${thresholdNum}`);
-      } else if (item.field === "false_negative_rate" || item.field === "holdout_fnr") {
-        lines.push(`  - ${item.field.padEnd(22)} actual=${actual}  threshold<=${threshold}`);
-      } else if (item.field === "pass_correlation") {
-        lines.push(`  - ${item.field.padEnd(22)} actual=${actual}  threshold>=${threshold}`);
-      } else if (item.field === "data_confidence") {
-        lines.push(`  - ${item.field.padEnd(22)} actual=${item.actual ?? "N/A"}  threshold>=${item.threshold}`);
+        const desiredNum = item.desired;
+        lines.push(`  - ${item.kind.padEnd(22)} actual=${actualNum}  threshold>=${desiredNum}`);
+      } else if (item.kind === "false_negative_rate" || item.kind === "holdout_fnr") {
+        lines.push(`  - ${item.kind.padEnd(22)} actual=${actual}  threshold<=${desired}`);
+      } else if (item.kind === "pass_correlation") {
+        lines.push(`  - ${item.kind.padEnd(22)} actual=${actual}  threshold>=${desired}`);
+      } else if (item.kind === "data_confidence") {
+        lines.push(`  - ${item.kind.padEnd(22)} actual=${item.actual ?? "N/A"}  threshold>=${item.desired}`);
       } else {
-        lines.push(`  - ${item.field}: actual=${actual}  threshold=${threshold}`);
+        lines.push(`  - ${item.kind}: actual=${actual}  threshold=${desired}`);
       }
     }
   }
@@ -355,8 +341,8 @@ export function formatStatusMarkdown(summary: StatusSummary): string {
     lines.push("| Field | Actual | Threshold |", "| --- | --- | --- |");
     for (const item of summary.drift.unmet) {
       const actual = item.actual == null ? "N/A" : String(item.actual);
-      const threshold = String(item.threshold);
-      lines.push(`| ${item.field} | ${actual} | ${threshold} |`);
+      const desired = String(item.desired);
+      lines.push(`| ${item.kind} | ${actual} | ${desired} |`);
     }
   }
 
@@ -374,19 +360,19 @@ export function renderDetail(drift: DriftReport, _thresholds: PromotionThreshold
     return lines.join("\n");
   }
   for (const item of drift.unmet) {
-    if (item.field === "matched_commits") {
-      // numeric: show actual / threshold
+    if (item.kind === "matched_commits") {
+      // numeric: show actual / desired
       const actual = item.actual == null ? "n/a" : String(item.actual);
-      lines.push(`- ${item.field}: ${actual} / ${item.threshold}`);
+      lines.push(`- ${item.kind}: ${actual} / ${item.desired}`);
     } else if (typeof item.actual === "string" || item.actual == null) {
       // string (data_confidence) or null: show arrow
       const actual = item.actual == null ? "n/a" : item.actual;
-      lines.push(`- ${item.field}: ${actual} → ${item.threshold}`);
+      lines.push(`- ${item.kind}: ${actual} → ${item.desired}`);
     } else {
       // other numeric fields (rates as percentages)
       const actual = item.actual == null ? "n/a" : `${item.actual}%`;
-      const threshold = typeof item.threshold === "number" ? `${item.threshold}%` : String(item.threshold);
-      lines.push(`- ${item.field}: ${actual} / ${threshold}`);
+      const desired = typeof item.desired === "number" ? `${item.desired}%` : String(item.desired);
+      lines.push(`- ${item.kind}: ${actual} / ${desired}`);
     }
   }
   return lines.join("\n");

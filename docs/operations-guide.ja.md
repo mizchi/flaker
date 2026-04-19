@@ -45,8 +45,10 @@
 ### Observation loop
 
 - `flaker apply` (history collect + calibrate を内包)
+- `flaker apply --emit daily --output .artifacts/flaker-daily.md` (release gate の日次 snapshot、`ops daily` の canonical 置換)
 - `flaker status`
-- `flaker ops daily` (release gate の日次 snapshot が必要なとき)
+
+> 0.9.0 で `flaker ops daily` は deprecated。`flaker apply --emit daily` が同じ artifact を生成する。`ops weekly` / `ops incident` は operator narrative を含むため first-class 継続。
 
 役割:
 
@@ -85,11 +87,13 @@
 ```bash
 mkdir -p .artifacts
 export GITHUB_TOKEN=$(gh auth token)
-pnpm flaker apply
+pnpm flaker apply --emit daily --output .artifacts/flaker-daily.md
 pnpm flaker status
 ```
 
 `flaker apply` が `flaker.toml` を desired state として現状を収束させ (collect / calibrate / quarantine apply を idempotent に内包)、`flaker status` で drift と health を 1 画面で確認する。何が走るか事前に見たい場合は `flaker plan`。
+
+`--emit daily` は従来の `flaker ops daily` と同じ内容の cadence artifact を出力する (0.9.0 で統合)。`--output <file>` は `PlanArtifact` / `ApplyArtifact` を JSON で保存し、agent や CI の下流コンシューマから機械的に読める。
 
 ### 毎週
 
