@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.10.5
+
+Rebrand cleanup. Resolves the three deferred items from 0.10.4.
+
+### Changed
+
+- `src/cli/core/loader.ts`: `MetriciCore` interface renamed to `FlakerCore`. Call sites, JSDoc, and FFI glue updated across 9 files. Last rebrand leftover in the TypeScript codebase (closes #68).
+
+### Docs
+
+- `docs/adr/008-apply-first-architecture.md`: NEW. Supersedes ADR-001 as the current architecture SSOT, documenting the apply-first reconciler introduced in 0.10.0 (DesiredState/ObservedState/StateDiff, DAG executor, advisory promotion thresholds). ADR-001 marked superseded (closes #67).
+
+### Removed
+
+- `release-please` tooling removed (`.github/workflows/release-please.yml`, `release-please-config.json`, `.release-please-manifest.json`). The 0.x line is released manually; `docs/contributing.md` now documents the seven-step manual release flow. Publishing to npm remains automated via `.github/workflows/publish.yml` on tag push (closes #66).
+
 ## 0.10.4
 
 Docs patch. ADR audit follow-up.

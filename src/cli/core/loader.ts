@@ -72,7 +72,7 @@ export interface SamplingListedTestInput {
   test_id?: string | null;
 }
 
-export interface MetriciCore {
+export interface FlakerCore {
   detectFlaky(input: DetectInput): DetectOutput;
   sampleRandom(meta: TestMeta[], count: number, seed: number): TestMeta[];
   sampleWeighted(meta: TestMeta[], count: number, seed: number): TestMeta[];
@@ -246,7 +246,7 @@ function normalizeMetaBoosts(result: TestMeta[], inputMeta: TestMeta[]): TestMet
   });
 }
 
-function wrapMbtCore(mbt: MbtJsExports): MetriciCore {
+function wrapMbtCore(mbt: MbtJsExports): FlakerCore {
   return {
     detectFlaky(input: DetectInput): DetectOutput {
       return JSON.parse(mbt.detect_flaky_json(JSON.stringify(input)));
@@ -315,9 +315,9 @@ function wrapMbtCore(mbt: MbtJsExports): MetriciCore {
   };
 }
 
-let cachedCore: MetriciCore | undefined;
+let cachedCore: FlakerCore | undefined;
 
-export async function loadCore(): Promise<MetriciCore> {
+export async function loadCore(): Promise<FlakerCore> {
   if (cachedCore) return cachedCore;
   const mbt = await importOptionalMoonBitBridge<MbtJsExports>(
     MOONBIT_JS_BRIDGE_URL,

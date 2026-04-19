@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { loadCore, type MetriciCore } from "../../src/cli/core/loader.js";
+import { loadCore, type FlakerCore } from "../../src/cli/core/loader.js";
 
 describe("resolveAffected glob (MoonBit bridge)", () => {
-  let core: MetriciCore;
+  let core: FlakerCore;
 
   beforeAll(async () => {
     core = await loadCore();

@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import type { DependencyGraph, GraphNode } from "../../src/cli/graph/types.js";
-import { loadCore, type MetriciCore } from "../../src/cli/core/loader.js";
+import { loadCore, type FlakerCore } from "../../src/cli/core/loader.js";
 
-let core: MetriciCore;
+let core: FlakerCore;
 
 function makeNode(partial: Partial<GraphNode> & { id: string }): GraphNode {
   return {

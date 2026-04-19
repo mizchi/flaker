@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
-import { loadCore, type MetriciCore } from "../../src/cli/core/loader.js";
+import { loadCore, type FlakerCore } from "../../src/cli/core/loader.js";
 
-let core: MetriciCore;
+let core: FlakerCore;
 
 describe("selectByCoverage (MoonBit bridge)", () => {
   beforeEach(async () => {
@@ -53,7 +53,7 @@ describe("selectByCoverage (MoonBit bridge)", () => {
 
 describe("coverage-guided with synthetic fixture", () => {
   let store: DuckDBStore;
-  let core: MetriciCore;
+  let core: FlakerCore;
 
   beforeEach(async () => {
     store = new DuckDBStore(":memory:");

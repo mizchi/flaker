@@ -1,5 +1,9 @@
 # ADR-001: metrici アーキテクチャ概要
 
+> **Superseded by [ADR-008](./008-apply-first-architecture.md) (2026-04-20)**.
+> This document reflects the pre-rebrand "metrici" architecture and the 0.5-era CLI surface.
+> It is preserved for historical context.
+
 **日付:** 2026-03-31
 **ステータス:** Accepted
 

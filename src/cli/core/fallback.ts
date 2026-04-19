@@ -9,7 +9,7 @@ import type {
   DetectOutput,
   FixtureConfig,
   FixtureData,
-  MetriciCore,
+  FlakerCore,
   SamplingHistoryRowInput,
   SamplingListedTestInput,
   TestMeta,
@@ -518,7 +518,7 @@ function generateFixtureFallback(config: FixtureConfig): FixtureData {
   };
 }
 
-export function createTypeScriptFallbackCore(): MetriciCore {
+export function createTypeScriptFallbackCore(): FlakerCore {
   return {
     detectFlaky: detectFlakyFallback,
     sampleRandom: sampleRandomFallback,

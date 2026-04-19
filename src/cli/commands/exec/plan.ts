@@ -4,7 +4,7 @@ import type { TestId } from "../../runners/types.js";
 import type { ClusterSamplingMode, SamplingMode } from "./sampling-options.js";
 import {
   loadCore,
-  type MetriciCore,
+  type FlakerCore,
   type SamplingHistoryRowInput,
   type SamplingListedTestInput,
   type StableVariantEntryInput,
@@ -278,7 +278,7 @@ async function selectByStrategy(
   count: number,
   seed: number,
   opts: SampleOpts,
-  core: MetriciCore,
+  core: FlakerCore,
 ): Promise<{ sampled: TestMeta[]; effectiveMode: SamplingMode }> {
   const pickPrimary = async (
     mode: SamplingMode,
@@ -513,7 +513,7 @@ function describeSamplingFallback(reason: string): SamplingFallbackHint | null {
 export async function prepareSamplingMeta(
   store: MetricStore,
   listedTests: TestId[],
-  core: MetriciCore,
+  core: FlakerCore,
 ): Promise<PrecomputedSamplingMeta> {
   const rows = await store.raw<{
     suite: string;
@@ -620,7 +620,7 @@ function loadGBDTModel(modelPath?: string): GBDTModel | null {
 function sampleByGBDT(
   allTests: TestMeta[],
   count: number,
-  core: MetriciCore,
+  core: FlakerCore,
   modelPath?: string,
 ): TestMeta[] {
   const model = loadGBDTModel(modelPath);

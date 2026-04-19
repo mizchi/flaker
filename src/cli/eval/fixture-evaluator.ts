@@ -1,7 +1,7 @@
 import type { MetricStore } from "../storage/types.js";
 import type { FixtureData } from "../core/loader.js";
 import type { DependencyResolver } from "../resolvers/types.js";
-import { loadCore, type MetriciCore } from "../core/loader.js";
+import { loadCore, type FlakerCore } from "../core/loader.js";
 import { planSample, prepareSamplingMeta } from "../commands/exec/plan.js";
 
 function generateSyntheticCoverage(fixture: FixtureData): { suite: string; test_name: string; edges: string[] }[] {

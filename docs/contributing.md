@@ -60,4 +60,17 @@ This repository uses short, imperative commit subjects (`Verb subject`). When a 
 
 ## Releases
 
+The 0.x line is released manually. Conventional-Commits messages still apply so the log is machine-readable later, but no release-please bot cuts PRs.
+
+Manual release steps:
+
+1. Branch: `fix/<version>-<slug>` or `feat/<version>-<slug>` off `main`.
+2. Edit `package.json` `version` and the `.version(...)` call in `src/cli/main.ts` to the new version.
+3. Add a `CHANGELOG.md` entry under a new `## [<version>] - YYYY-MM-DD` heading, grouped by Added / Changed / Fixed / Removed.
+4. `pnpm build && pnpm test && pnpm typecheck` — all must pass.
+5. Commit, push, open PR, merge.
+6. After merge: `git tag v<version> <merge-sha> && git push origin v<version>`.
+7. `gh release create v<version> --title "v<version>" --notes-from-tag` (or `--notes-file` for a curated body).
+8. Publishing to npm is handled by `.github/workflows/publish.yml` on tag push (OIDC, Nix-based).
+
 See `CHANGELOG.md` for the version history.
