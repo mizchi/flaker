@@ -97,11 +97,22 @@ export async function planAction(opts: { json?: boolean; output?: string }): Pro
 
 const VALID_EMIT_KINDS = ["daily", "weekly", "incident"] as const;
 
+const VALID_TARGETS = ["collect_ci", "calibrate", "cold_start_run", "quarantine_apply"] as const;
+type Target = (typeof VALID_TARGETS)[number];
+
 export async function applyAction(opts: {
   json?: boolean;
   output?: string;
   emit?: string;
+  target?: string;
 }): Promise<void> {
+  // Validate --target value early
+  if (opts.target !== undefined && !(VALID_TARGETS as readonly string[]).includes(opts.target)) {
+    console.error(`Error: --target must be one of ${VALID_TARGETS.join(" | ")}. Got: ${opts.target}`);
+    process.exitCode = 2;
+    return;
+  }
+
   // Validate --emit value early
   if (opts.emit !== undefined && !(VALID_EMIT_KINDS as readonly string[]).includes(opts.emit)) {
     console.error(`Error: --emit must be one of: ${VALID_EMIT_KINDS.join(", ")}`);
@@ -172,7 +183,30 @@ export async function applyAction(opts: {
       return;
     }
 
-    const result = await executeDag(actions, deps);
+    let dagResult: Awaited<ReturnType<typeof executeDag>>;
+    let skippedByTarget: import("../commands/apply/dag.js").DagExecutedAction[] = [];
+
+    if (opts.target !== undefined) {
+      const targetKind = opts.target as Target;
+      const toRun = actions.filter((a) => a.kind === targetKind);
+      const toSkip = actions.filter((a) => a.kind !== targetKind);
+      dagResult = await executeDag(toRun, deps);
+      skippedByTarget = toSkip.map((a) => ({
+        kind: a.kind,
+        status: "skipped" as const,
+        skippedReason: "not in --target",
+      }));
+    } else {
+      dagResult = await executeDag(actions, deps);
+    }
+
+    // Merge executed + skipped-by-target preserving original plan order
+    const executedByKind = new Map(dagResult.executed.map((e) => [e.kind, e]));
+    const skippedByKindMap = new Map(skippedByTarget.map((s) => [s.kind, s]));
+    const mergedExecuted = actions.map((a) => {
+      return executedByKind.get(a.kind) ?? skippedByKindMap.get(a.kind)!;
+    });
+    const result = { executed: mergedExecuted };
 
     // Run --emit if requested
     let emitted: EmittedArtifact | undefined;
@@ -278,5 +312,6 @@ export function registerApplyCommands(program: Command): void {
     .option("--json", "Output as JSON")
     .option("--output <file>", "Write ApplyArtifact JSON to a file")
     .option("--emit <kind>", "Generate an ops cadence artifact alongside apply (daily|weekly|incident)")
+    .option("--target <kind>", "Run only actions of this kind (collect_ci|calibrate|cold_start_run|quarantine_apply)")
     .action(applyAction);
 }
