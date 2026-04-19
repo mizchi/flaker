@@ -500,14 +500,7 @@ flaker collect coverage --format playwright --input .artifacts/coverage
 
 `coverage-guided` sampling 用に、テストごとの coverage edge を DuckDB へ取り込みます。directory input も受け付け、重複 edge は insert 前に dedupe されます。
 
-### `flaker dev train` — GBDT モデル学習
-
-```bash
-flaker dev train
-flaker dev train --window-days 30 --num-trees 10 --learning-rate 0.3
-```
-
-蓄積済みの CI / local history から `.flaker/models/gbdt.json` を生成します。local run も低い重みで学習に含め、保存される model には `gbdt` sampling で使う feature 名も入ります。
+(メンテナ用コマンドは末尾の Advanced / Maintainer tools 節を参照)
 
 ### quarantine の管理 — `flaker apply` + `[quarantine].auto`
 
@@ -884,3 +877,18 @@ flaker policy quarantine --remove "suite>testName"
 `flaky_rate_threshold` の単位解釈も変わりました。以前は `30.0` を「30%」、`0.3` を自動正規化して扱っていましたが、現在はそのまま percentage として解釈します。旧設定が `flaky_rate_threshold = 0.3` だった場合は `flaky_rate_threshold_percentage = 30` にリネームしてください。
 
 範囲検証は `flaker debug doctor` と `flaker policy check` が担当します: `*_ratio` は [0.0, 1.0]、`*_percentage` は [0, 100]、`*_days` / `*_seconds` / `*_count` は非負整数でなければなりません。
+
+---
+
+## Advanced / Maintainer tools
+
+通常の日常利用では不要なメンテナ向けコマンド群。ML モデルのチューニングや内部評価に使う。
+
+### `flaker dev train` — GBDT モデル学習
+
+```bash
+flaker dev train
+flaker dev train --window-days 30 --num-trees 10 --learning-rate 0.3
+```
+
+蓄積済みの CI / local history から `.flaker/models/gbdt.json` を生成します。local run も低い重みで学習に含め、保存される model には `gbdt` sampling で使う feature 名も入ります。
