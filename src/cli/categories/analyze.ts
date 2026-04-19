@@ -37,6 +37,7 @@ import {
   runStatusListQuarantined,
 } from "../commands/status/summary.js";
 import type { GateName } from "../gate.js";
+import { deprecate } from "../deprecation.js";
 
 export async function analyzeKpiAction(opts: { windowDays: string; json?: boolean }): Promise<void> {
   const config = loadConfig(process.cwd());
@@ -153,7 +154,7 @@ export function registerAnalyzeCommands(program: Command): void {
       }
     });
 
-  analyze
+  const flakyTagCmd = analyze
     .command("flaky-tag")
     .description("Suggest which Playwright tests should gain or lose the flaky tag")
     .option("--window-days <days>", "Analysis window in days")
@@ -198,15 +199,17 @@ export function registerAnalyzeCommands(program: Command): void {
         await store.close();
       }
     });
+  deprecate(flakyTagCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker apply" });
 
-  analyze
+  const kpiCmd = analyze
     .command("kpi")
     .description("Show KPI dashboard — sampling effectiveness, flaky tracking, data quality")
     .option("--window-days <days>", "Analysis window in days", "30")
     .option("--json", "Output as JSON")
     .action(analyzeKpiAction);
+  deprecate(kpiCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker status" });
 
-  analyze
+  const flakyCmd = analyze
     .command("flaky")
     .description("Inspect flaky tests and failure-rate trends")
     .option("--top <n>", "Number of top flaky tests to show")
@@ -242,6 +245,7 @@ export function registerAnalyzeCommands(program: Command): void {
         await store.close();
       }
     });
+  deprecate(flakyCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker status --list flaky" });
 
   analyze
     .command("cluster")
@@ -316,7 +320,7 @@ export function registerAnalyzeCommands(program: Command): void {
       }
     });
 
-  analyze
+  const evalCmd = analyze
     .command("eval")
     .description("Measure whether local sampled runs predict CI")
     .option("--window <days>", "Analysis window in days")
@@ -347,6 +351,7 @@ export function registerAnalyzeCommands(program: Command): void {
         await store.close();
       }
     });
+  deprecate(evalCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker status --markdown" });
 
   analyze
     .command("context")
