@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import type { Command } from "commander";
+import { deprecate } from "../deprecation.js";
 import { loadConfig } from "../config.js";
 import { DuckDBStore } from "../storage/duckdb.js";
 import { normalizeGateName, profileNameFromGateName } from "../gate.js";
@@ -81,23 +82,26 @@ export function registerGateCommands(program: Command): void {
     .command("gate")
     .description("Gate review and readiness inspection");
 
-  gate
+  const gateReviewCmd = gate
     .command("review <gate>")
     .description("Review gate readiness and recommended action")
     .option("--window-days <days>", "Analysis window in days", "30")
     .option("--json", "Output as JSON")
     .action(gateReviewAction);
+  deprecate(gateReviewCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker status --gate <name> --detail" });
 
-  gate
+  const gateExplainCmd = gate
     .command("explain <gate>")
     .description("Explain resolved gate settings and their config sources")
     .option("--json", "Output as JSON")
     .action(gateExplainAction);
+  deprecate(gateExplainCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker status --gate <name> --detail" });
 
-  gate
+  const gateHistoryCmd = gate
     .command("history <gate>")
     .description("Show recent gate outcomes and sample ratio trend")
     .option("--window-days <days>", "Analysis window in days", "14")
     .option("--json", "Output as JSON")
     .action(gateHistoryAction);
+  deprecate(gateHistoryCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker status --gate <name>" });
 }

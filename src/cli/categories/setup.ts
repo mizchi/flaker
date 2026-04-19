@@ -2,6 +2,7 @@ import { basename } from "node:path";
 import type { Command } from "commander";
 import { runInit } from "../commands/setup/init.js";
 import { detectRepoInfo } from "../core/git.js";
+import { deprecate } from "../deprecation.js";
 
 const VALID_ADAPTERS = ["playwright", "vitest", "jest", "junit"] as const;
 const VALID_RUNNERS = ["vitest", "playwright", "jest", "actrun"] as const;
@@ -32,7 +33,7 @@ export function registerSetupCommands(program: Command): void {
     .command("setup")
     .description("Project scaffolding");
 
-  setup
+  const initCmd = setup
     .command("init")
     .description("Create flaker.toml (auto-detects owner/name from git remote)")
     .option("--owner <owner>", "Repository owner (auto-detected from git remote)")
@@ -40,4 +41,5 @@ export function registerSetupCommands(program: Command): void {
     .option("--adapter <type>", `Test result adapter: ${VALID_ADAPTERS.join("|")}`)
     .option("--runner <type>", `Test runner: ${VALID_RUNNERS.join("|")}`)
     .action(setupInitAction);
+  deprecate(initCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker init" });
 }

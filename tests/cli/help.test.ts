@@ -14,7 +14,7 @@ describe("CLI help", () => {
     expect(help).toContain("flaker run --gate merge");
     expect(help).toContain("gate");
     expect(help).toContain("Primary commands");
-    expect(help).toContain("Management and advanced categories");
+    expect(help).toContain("Advanced:");
   });
 
   it("shows exec run help with --dry-run and --explain flags", () => {

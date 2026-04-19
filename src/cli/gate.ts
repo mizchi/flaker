@@ -1,5 +1,7 @@
 export type GateName = "iteration" | "merge" | "release";
 
+export const VALID_GATE_NAMES: readonly GateName[] = ["iteration", "merge", "release"] as const;
+
 const GATE_TO_PROFILE: Record<GateName, string> = {
   iteration: "local",
   merge: "ci",

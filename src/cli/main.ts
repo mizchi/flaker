@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Command, type HelpContext } from "commander";
+import { Command } from "commander";
 import { registerSetupCommands, setupInitAction } from "./categories/setup.js";
 import { registerExecCommands, execRunAction, RUN_COMMAND_HELP } from "./categories/exec.js";
 import { registerCollectCommands } from "./categories/collect.js";
 import { registerImportCommands } from "./categories/import.js";
 import { registerReportCommands } from "./categories/report.js";
-import { registerAnalyzeCommands, analyzeKpiAction, statusAction } from "./categories/analyze.js";
+import { registerAnalyzeCommands, analyzeKpiAction, statusAction, analyzeQueryAction } from "./categories/analyze.js";
+import { registerExplainCommands } from "./categories/explain.js";
 import { registerGateCommands } from "./categories/gate.js";
 import { registerOpsCommands } from "./categories/ops.js";
 import { registerQuarantineCommands } from "./categories/quarantine.js";
@@ -15,23 +16,7 @@ import { registerDebugCommands, debugDoctorAction } from "./categories/debug.js"
 import { registerPolicyCommands } from "./categories/policy.js";
 import { registerDevCommands } from "./categories/dev.js";
 import { registerApplyCommands } from "./categories/apply.js";
-
-function warnDeprecated(aliasName: string, canonical: string): void {
-  process.stderr.write(
-    `warning: \`flaker ${aliasName}\` is deprecated and will be removed in 0.7.0. `
-    + `Use \`${canonical}\` instead.\n`,
-  );
-}
-
-function attachDeprecationWarning(cmd: Command, aliasName: string, canonical: string): void {
-  const origOutputHelp = cmd.outputHelp.bind(cmd);
-  const wrapped = (context?: HelpContext) => {
-    warnDeprecated(aliasName, canonical);
-    return origOutputHelp(context);
-  };
-  // Commander's outputHelp has overloads; cast to satisfy the assignment
-  cmd.outputHelp = wrapped as typeof cmd.outputHelp;
-}
+import { deprecate } from "./deprecation.js";
 
 function isDirectCliExecution(): boolean {
   return process.argv[1] != null
@@ -50,6 +35,7 @@ export function createProgram(): Command {
   registerOpsCommands(program);
   registerQuarantineCommands(program);
   registerAnalyzeCommands(program);
+  registerExplainCommands(program);
   registerDebugCommands(program);
   registerPolicyCommands(program);
   registerDevCommands(program);
@@ -57,7 +43,7 @@ export function createProgram(): Command {
   program
     .name("flaker")
     .description("Intelligent test selection — run fewer tests, catch more failures")
-    .version("0.5.0")
+    .version("0.7.0-next.0")
     .showHelpAfterError()
     .showSuggestionAfterError();
 
@@ -95,30 +81,32 @@ export function createProgram(): Command {
 
   const kpiCmd = program
     .command("kpi")
-    .description("DEPRECATED alias for `flaker analyze kpi` (removed in 0.7.0)")
+    .description("KPI dashboard (sampling effectiveness, flaky, data quality)")
     .option("--window-days <days>", "Analysis window in days", "30")
     .option("--json", "Output as JSON")
-    .action((opts) => {
-      warnDeprecated("kpi", "flaker analyze kpi");
-      return analyzeKpiAction(opts);
-    });
-  attachDeprecationWarning(kpiCmd, "kpi", "flaker analyze kpi");
+    .action(analyzeKpiAction);
+  deprecate(kpiCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker analyze kpi" });
 
   program
     .command("status")
     .description("User-facing summary dashboard (summary-only, no promotion decision)")
     .option("--window-days <days>", "Analysis window in days", "30")
     .option("--json", "Output as JSON")
+    .option("--markdown", "Render output as Markdown (mutually exclusive with --json)")
+    .option("--list <mode>", "Standalone list mode: flaky | quarantined")
+    .option("--detail", "Append per-threshold drift actuals after the summary")
+    .option("--gate <name>", "Narrow the gates block to a single gate: iteration | merge | release")
     .action(statusAction);
 
-  const doctorCmd = program
+  program
+    .command("query <sql>")
+    .description("Execute a read-only SQL query against the metrics database")
+    .action(analyzeQueryAction);
+
+  program
     .command("doctor")
-    .description("DEPRECATED alias for `flaker debug doctor` (removed in 0.7.0)")
-    .action(() => {
-      warnDeprecated("doctor", "flaker debug doctor");
-      return debugDoctorAction();
-    });
-  attachDeprecationWarning(doctorCmd, "doctor", "flaker debug doctor");
+    .description("Check runtime requirements")
+    .action(debugDoctorAction);
 
   const originalHelpInformation = program.helpInformation.bind(program);
   program.helpInformation = () => {
@@ -132,40 +120,41 @@ Getting started:
   flaker status                     KPI dashboard (sampling, flaky, data quality)
 
 Primary commands:
-  init        Create flaker.toml and bootstrap config
-  run         Run the selected gate or profile
-  status      Show the user-facing health dashboard
-  doctor      Check local runtime requirements
-  gate        Review gate readiness and sampling health
-  ops         Generate operator review artifacts
-  quarantine  Suggest quarantine add/remove plans
+  init                                          Bootstrap flaker.toml
+  plan                                          Preview actions apply would take
+  apply                                         Reconcile repo to flaker.toml (idempotent)
+  status                                        Dashboard + promotion drift
+  run --gate <iteration|merge|release>          Execute the selected gate
+  doctor                                        Verify local environment
+  debug <retry|confirm|bisect|diagnose>         Incident investigation
+  query <sql>                                   SQL escape hatch
+  explain <topic>                               AI-assisted analysis
+  import <file>                                 Ingest reports (adapter auto-detected)
+  report <file> --summary|--diff|--aggregate    Local report shaping
 
-Gate model:
-  iteration   -> profile.local      Fast author feedback
-  merge       -> profile.ci         PR / mainline gate
-  release     -> profile.scheduled  Full or near-full verification
+Advanced:
+  gate review <name>                Authoritative promotion metrics (--json)
+  ops weekly|incident               Cadence artifact bundles
+  analyze query                     (legacy — use \`flaker query\`)
+  dev <train|tune|self-eval|...>    Maintainer tools
 
-Run \`flaker run --help\` for gate mapping and advanced run options.
-Run \`flaker status --help\` or \`flaker doctor --help\` for user-facing commands.
+Deprecated (removed in 0.8.0):
+  setup init                        → flaker init
+  exec run / exec affected          → flaker run
+  ops daily                         → flaker apply
+  collect ci|local|coverage|calibrate → flaker apply
+  quarantine suggest|apply          → flaker apply
+  policy quarantine|check|report    → flaker apply
+  analyze kpi|eval|flaky|flaky-tag  → flaker status (see --list, --markdown)
+  analyze reason|insights|cluster|bundle|context → flaker explain <topic>
+  analyze query                     → flaker query
+  import report|parquet             → flaker import <file>
+  report summary|diff|aggregate     → flaker report <file> --summary|--diff|--aggregate
+  debug doctor                      → flaker doctor
+  gate review|history|explain       → flaker status --gate <name> [--detail]
+  kpi                               → flaker analyze kpi (also deprecated)
 
-Management and advanced categories:
-  gate       Gate review and readiness        (review)
-  ops        Operator cadence artifacts       (weekly)
-  quarantine Read-only quarantine planning    (suggest)
-  collect    Import history and calibration (ci, local, coverage, commit-changes, calibrate)
-  import     Ingest external reports        (report, parquet)
-  report     Normalize and diff reports     (summary, diff, aggregate)
-  analyze    Read-only inspection           (bundle, kpi, flaky, reason, insights, eval, context, query)
-  debug      Active investigation           (diagnose, bisect, confirm, retry, doctor)
-  policy     Enforcement and ownership      (quarantine, check)
-  dev        Model training and benchmarks  (train, tune, self-eval, eval-fixture, eval-co-failure, test-key)
-
-Compatibility and internal categories remain available:
-  setup      Project scaffolding            (init)
-  exec       Test selection and execution   (run, affected)
-
-Run \`flaker <category> --help\` for the full list under each category.
-Run \`flaker <category> <command> --help\` for per-command options.
+Run \`flaker <command> --help\` for details.
 `;
     return base + extras;
   };

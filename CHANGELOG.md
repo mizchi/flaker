@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.7.0-next.0 (prerelease)
+
+### Deprecated (removed in 0.8.0)
+
+All listed below still work; they now emit a stderr warning pointing at
+the 0.7.0 canonical replacement.
+
+| Deprecated | Canonical replacement |
+|---|---|
+| `flaker setup init` | `flaker init` |
+| `flaker exec run` / `flaker exec affected` | `flaker run` / `flaker run --gate iteration --changed <paths>` |
+| `flaker ops daily` | `flaker apply` |
+| `flaker collect ci / local / coverage / commit-changes / calibrate` | `flaker apply` |
+| `flaker quarantine suggest / apply` | `flaker apply` |
+| `flaker policy quarantine / check / report` | `flaker apply` |
+| `flaker gate review / history / explain` | `flaker status --gate <name> [--detail]` |
+| `flaker analyze kpi` | `flaker status` |
+| `flaker analyze eval` | `flaker status --markdown` |
+| `flaker analyze flaky` | `flaker status --list flaky` |
+| `flaker analyze flaky-tag` | `flaker apply` |
+| `flaker analyze reason / insights / cluster / bundle / context` | `flaker explain <topic>` |
+| `flaker analyze query` | `flaker query <sql>` |
+| `flaker import report / parquet` | `flaker import <file>` (auto-detect) |
+| `flaker report summary / diff / aggregate` | `flaker report <file> --summary \| --diff <base> \| --aggregate <dir>` |
+| `flaker debug doctor` | `flaker doctor` |
+
+### New
+
+- `flaker plan` / `flaker apply` (declarative reconciler; shipped in 0.6.0)
+- `flaker status` gained `--markdown`, `--list flaky|quarantined`, `--detail`, `--gate <name>`
+- `flaker query <sql>` top-level
+- `flaker explain <topic>` umbrella for AI-assisted analysis
+- `flaker import <file>` auto-detects adapter from extension
+- `flaker report <file>` uses `--summary` / `--diff` / `--aggregate` flags
+- `[promotion]` config section with documented defaults
+- `[promotion].data_confidence_min` validated against the `low|moderate|high` enum
+
+### Changed
+
+- `flaker --help` reorganized into three tiers: Primary (11), Advanced, Deprecated
+- Primary command surface reduced from 53 to 11 user-facing entries (hidden `dev *` subtree retained)
+
+### Fixed
+
+- `flaker apply` now aborts cleanly when `GITHUB_TOKEN` is missing (previously `process.exit(1)` bypassed the executor's abort handler)
+- `probeRepo.hasLocalHistory` now queries `workflow_runs` instead of being hardcoded `false`
+
 ## [0.5.0](https://github.com/mizchi/flaker/compare/flaker-v0.4.0...flaker-v0.5.0) (2026-04-18)
 
 ### Migration guide

@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import type { Command } from "commander";
+import { deprecate } from "../deprecation.js";
 import { Octokit } from "@octokit/rest";
 import { loadConfig, writeSamplingConfig, type FlakerConfig } from "../config.js";
 import {
@@ -155,9 +156,10 @@ export function registerCollectCommands(program: Command): void {
     .option("--output <file>", "Write collect summary to a file")
     .option("--fail-on-errors", "Exit with status 1 when any workflow run fails to collect")
     .action(collectCiAction);
+  deprecate(collectCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker apply" });
 
   // --- collect ci ---
-  collectCmd
+  const collectCiCmd = collectCmd
     .command("ci")
     .description("Collect workflow runs from GitHub")
     .option("--days <n>", "Number of days to look back", "30")
@@ -166,9 +168,10 @@ export function registerCollectCommands(program: Command): void {
     .option("--output <file>", "Write collect summary to a file")
     .option("--fail-on-errors", "Exit with status 1 when any workflow run fails to collect")
     .action(collectCiAction);
+  deprecate(collectCiCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker apply" });
 
   // --- collect local ---
-  collectCmd
+  const collectLocalCmd = collectCmd
     .command("local")
     .description("Import actrun local run history into flaker")
     .option("--last <n>", "Import only last N runs")
@@ -192,9 +195,10 @@ export function registerCollectCommands(program: Command): void {
         await store.close();
       }
     });
+  deprecate(collectLocalCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker apply" });
 
   // --- collect coverage ---
-  collectCmd
+  const collectCoverageCmd = collectCmd
     .command("coverage")
     .description("Collect test coverage data and store edges in DuckDB")
     .requiredOption("--format <type>", "Coverage format: istanbul, v8, playwright")
@@ -220,9 +224,10 @@ export function registerCollectCommands(program: Command): void {
         await store.close();
       }
     });
+  deprecate(collectCoverageCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker apply" });
 
   // --- collect commit-changes ---
-  collectCmd
+  const collectCommitChangesCmd = collectCmd
     .command("commit-changes")
     .description("Collect commit change data")
     .action(async () => {
@@ -232,9 +237,10 @@ export function registerCollectCommands(program: Command): void {
       console.error("Error: collect commit-changes requires --commit <sha> option");
       process.exit(1);
     });
+  deprecate(collectCommitChangesCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker apply" });
 
   // --- collect calibrate ---
-  collectCmd
+  const collectCalibrateCmd = collectCmd
     .command("calibrate")
     .description("Analyze project history and write optimal [sampling] config to flaker.toml")
     .option("--window-days <days>", "Analysis window in days", "90")
@@ -279,4 +285,5 @@ export function registerCollectCommands(program: Command): void {
         await store.close();
       }
     });
+  deprecate(collectCalibrateCmd, { since: "0.7.0", remove: "0.8.0", canonical: "flaker apply" });
 }
