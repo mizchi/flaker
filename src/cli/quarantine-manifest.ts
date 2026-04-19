@@ -332,43 +332,58 @@ function toCoreEntry(entry: QuarantineManifestEntry): QuarantineEntryInput {
   };
 }
 
-const findMatchingManifestEntryImpl = await (async (): Promise<
-  (
-    entries: QuarantineManifestEntry[],
-    selector: QuarantineManifestSelector,
-    opts?: FindMatchingManifestEntryOpts,
-  ) => QuarantineManifestEntry | undefined
-> => {
-  const mod = (await import(MOONBIT_JS_BRIDGE_URL.href)) as QuarantineMatchExports;
-  if (typeof mod.find_matching_quarantine_json !== "function") {
-    throw new Error("MoonBit quarantine bridge is missing. Run 'moon build --target js' first.");
-  }
-  return (entries, selector, opts) => {
-    const filteredEntries = opts?.modes
-      ? entries.filter((entry) => opts.modes!.includes(entry.mode))
-      : entries;
-    const resolved = resolveTestIdentity({
-      suite: selector.suite,
-      testName: selector.testName,
-      taskId: selector.taskId,
-    });
-    const matchedIndex = JSON.parse(
-      mod.find_matching_quarantine_json(
-        JSON.stringify(filteredEntries.map(toCoreEntry)),
-        resolved.taskId,
-        normalizeSpecPath(resolved.suite),
-        resolved.testName,
-      ),
-    ) as number;
-    return matchedIndex >= 0 ? filteredEntries[matchedIndex] : undefined;
-  };
-})();
+type FindMatchingManifestEntryFn = (
+  entries: QuarantineManifestEntry[],
+  selector: QuarantineManifestSelector,
+  opts?: FindMatchingManifestEntryOpts,
+) => QuarantineManifestEntry | undefined;
+
+let findMatchingManifestEntryImpl: FindMatchingManifestEntryFn | undefined;
+let quarantineBridgeLoadPromise: Promise<FindMatchingManifestEntryFn> | undefined;
+
+export async function loadQuarantineBridge(): Promise<FindMatchingManifestEntryFn> {
+  if (quarantineBridgeLoadPromise) return quarantineBridgeLoadPromise;
+  quarantineBridgeLoadPromise = (async () => {
+    const mod = (await import(MOONBIT_JS_BRIDGE_URL.href)) as QuarantineMatchExports;
+    if (typeof mod.find_matching_quarantine_json !== "function") {
+      throw new Error("MoonBit quarantine bridge is missing. Run 'moon build --target js' first.");
+    }
+    const fn: FindMatchingManifestEntryFn = (entries, selector, opts) => {
+      const filteredEntries = opts?.modes
+        ? entries.filter((entry) => opts.modes!.includes(entry.mode))
+        : entries;
+      const resolved = resolveTestIdentity({
+        suite: selector.suite,
+        testName: selector.testName,
+        taskId: selector.taskId,
+      });
+      const matchedIndex = JSON.parse(
+        mod.find_matching_quarantine_json(
+          JSON.stringify(filteredEntries.map(toCoreEntry)),
+          resolved.taskId,
+          normalizeSpecPath(resolved.suite),
+          resolved.testName,
+        ),
+      ) as number;
+      return matchedIndex >= 0 ? filteredEntries[matchedIndex] : undefined;
+    };
+    findMatchingManifestEntryImpl = fn;
+    return fn;
+  })();
+  return quarantineBridgeLoadPromise;
+}
 
 export function findMatchingManifestEntry(
   entries: QuarantineManifestEntry[],
   selector: QuarantineManifestSelector,
   opts?: FindMatchingManifestEntryOpts,
 ): QuarantineManifestEntry | undefined {
+  if (!findMatchingManifestEntryImpl) {
+    throw new Error(
+      "findMatchingManifestEntry called before quarantine bridge was loaded. " +
+      "Call loadQuarantineBridge() first.",
+    );
+  }
   return findMatchingManifestEntryImpl(entries, selector, opts);
 }
 

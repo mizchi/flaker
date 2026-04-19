@@ -3,7 +3,7 @@ import { parseFlakerQuarantine } from "../../src/cli/reporting/flaker-quarantine
 import { buildFlakerQuarantineSummary } from "../../src/cli/reporting/flaker-quarantine-summary-core.js";
 
 describe("buildFlakerQuarantineSummary", () => {
-  it("validates ownership, expiry, and missing specs from prepared inputs", () => {
+  it("validates ownership, expiry, and missing specs from prepared inputs", async () => {
     const quarantine = parseFlakerQuarantine(`
 {
   "schemaVersion": 1,
@@ -51,7 +51,7 @@ describe("buildFlakerQuarantineSummary", () => {
 }
 `);
 
-    const summary = buildFlakerQuarantineSummary({
+    const summary = await buildFlakerQuarantineSummary({
       quarantine,
       tasks: [
         {
