@@ -24,7 +24,7 @@ describe("CLI help", () => {
     const runHelp = runCmd?.helpInformation();
     // gate/quarantine commands removed in 0.8.0 — lookups deleted.
     const opsCmd = program.commands.find((command) => command.name() === "ops");
-    const opsDailyHelp = opsCmd?.commands.find((command) => command.name() === "daily")?.helpInformation();
+    // ops daily removed in 0.10.0 — lookup deleted.
     const opsIncidentHelp = opsCmd?.commands.find((command) => command.name() === "incident")?.helpInformation();
     const opsWeeklyHelp = opsCmd?.commands.find((command) => command.name() === "weekly")?.helpInformation();
     // analyze subcommands (eval, bundle, flaky-tag) removed in 0.8.0 — lookups deleted.
@@ -37,8 +37,7 @@ describe("CLI help", () => {
     expect(runHelp).toContain("--skip-flaky-tagged");
     // gateReviewHelp, gateExplainHelp, gateHistoryHelp assertions removed — gate dropped in 0.8.0.
     // quarantineSuggestHelp, quarantineApplyHelp assertions removed — quarantine dropped in 0.8.0.
-    expect(opsDailyHelp).toContain("--window-days");
-    expect(opsDailyHelp).toContain("--json");
+    // opsDailyHelp assertions removed — ops daily dropped in 0.10.0.
     expect(opsIncidentHelp).toContain("--suite");
     expect(opsIncidentHelp).toContain("--test");
     expect(opsIncidentHelp).toContain("--run");

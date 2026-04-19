@@ -2,7 +2,6 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import type { Command } from "commander";
 import { loadConfig } from "../config.js";
-import { deprecate } from "../deprecation.js";
 import { DuckDBStore } from "../storage/duckdb.js";
 import { prepareRunRequest } from "../commands/exec/prepare-run-request.js";
 import { executePreparedLocalRun } from "../commands/exec/execute-prepared-local-run.js";
@@ -193,15 +192,6 @@ export function registerOpsCommands(program: Command): void {
   const ops = program
     .command("ops")
     .description("Operator cadence commands");
-
-  const dailyCmd = ops
-    .command("daily")
-    .description("Run the daily observation loop and render an artifact")
-    .option("--window-days <days>", "Analysis window in days", "1")
-    .option("--json", "Output as JSON")
-    .option("--output <file>", "Write the rendered artifact to a file")
-    .action(opsDailyAction);
-  deprecate(dailyCmd, { since: "0.9.0", remove: "1.0.0", canonical: "flaker apply --emit daily" });
 
   ops
     .command("weekly")

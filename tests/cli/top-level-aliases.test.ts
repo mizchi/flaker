@@ -42,11 +42,7 @@ describe("top-level aliases", () => {
     expect(help).toContain("--json");
   });
 
-  it("flaker ops daily --help shows ops daily options", () => {
-    const help = execSync(`node ${cliPath} ops daily --help`, { encoding: "utf-8" });
-    expect(help).toContain("--window-days");
-    expect(help).toContain("--json");
-  });
+  // flaker ops daily removed in 0.10.0 — test deleted.
 
   it("flaker ops incident --help shows ops incident options", () => {
     const help = execSync(`node ${cliPath} ops incident --help`, { encoding: "utf-8" });
