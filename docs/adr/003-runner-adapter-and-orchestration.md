@@ -28,7 +28,8 @@ interface RunnerAdapter {
 |---------|---------|------|-------------|
 | Vitest | `vitest run -t "pattern" --reporter json` | `vitest --list --reporter json` | `nativeParallel: true` |
 | Playwright | `playwright test --grep "pattern" --reporter json` | `playwright test --list --reporter json` | `nativeParallel: true` |
-| MoonBit | `moon test --filter "pkg::test"` | `moon test --dry-run` | `nativeParallel: false, maxBatchSize: 50` |
+| `moontest` | `moon test --filter "pkg::test"` | `moon test --dry-run` | `nativeParallel: false, maxBatchSize: 50` |
+| `actrun` | GitHub Actions-compatible local runner; invoked via `--runner actrun` and wraps the configured actrun workflow. Entry-point: `src/cli/runners/actrun.ts`. | — | `nativeParallel: false` |
 | Custom | JSON stdin/stdout プロトコル | JSON stdout | 設定による |
 
 ### カスタムアダプタプロトコル
