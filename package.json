@@ -1,6 +1,6 @@
 {
   "name": "@mizchi/flaker",
-  "version": "0.10.3",
+  "version": "0.10.4",
   "description": "Flaky test detection, sampling, and test runner orchestration",
   "type": "module",
   "bin": {

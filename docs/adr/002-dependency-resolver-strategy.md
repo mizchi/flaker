@@ -3,6 +3,8 @@
 **日付:** 2026-03-31
 **ステータス:** Accepted
 
+> **Update (0.9.0 → 0.10.0)**: Node / Moon / Cargo / Actrun dependency graph construction is unified behind the `GraphAdapter` abstraction in `src/cli/graph/`, with the cross-ecosystem algorithm in MoonBit at `src/graph/graph_core.mbt`. See ADR-006 for the ownership decision and phase status.
+
 ## コンテキスト
 
 テストサンプリングの `affected` 戦略では「変更されたファイルに影響を受けるテスト」を特定する必要がある。依存関係の発見方法には大きく 2 つのアプローチがある:
