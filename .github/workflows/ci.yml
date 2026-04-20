@@ -188,11 +188,11 @@ jobs:
 
       - name: Snapshot KPI
         if: always()
-        run: node dist/cli/main.js kpi --window-days 30 --json > .artifacts/kpi.json
+        run: node dist/cli/main.js dev kpi --window-days 30 --output .artifacts/kpi.json
 
       - name: Snapshot eval
         if: always()
-        run: node dist/cli/main.js analyze eval --json --window 30 --output .artifacts/eval.json > /dev/null
+        run: node dist/cli/main.js dev eval --window-days 30 --output .artifacts/eval.json
 
       - name: Render advisory review
         if: always()

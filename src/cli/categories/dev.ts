@@ -260,6 +260,59 @@ export function registerDevCommands(program: Command): void {
     });
 
   dev
+    .command("kpi")
+    .description("Raw KPI JSON snapshot (maintainer tool for self-host CI)")
+    .option("--window-days <days>", "Analysis window in days", "30")
+    .option("--output <path>", "Write JSON to a file instead of stdout")
+    .action(async (opts: { windowDays?: string; output?: string }) => {
+      const config = loadConfig(process.cwd());
+      const store = new DuckDBStore(resolve(config.storage.path));
+      await store.initialize();
+      try {
+        const { computeKpi } = await import("../commands/analyze/kpi.js");
+        const kpi = await computeKpi(store, {
+          windowDays: opts.windowDays ? parseInt(opts.windowDays, 10) : undefined,
+        });
+        const json = JSON.stringify(kpi, null, 2);
+        if (opts.output) {
+          const { writeFileSync } = await import("node:fs");
+          writeFileSync(resolve(process.cwd(), opts.output), json, "utf8");
+        } else {
+          console.log(json);
+        }
+      } finally {
+        await store.close();
+      }
+    });
+
+  dev
+    .command("eval")
+    .description("Raw eval report JSON snapshot (maintainer tool for self-host CI)")
+    .option("--window-days <days>", "Analysis window in days", "30")
+    .option("--output <path>", "Write JSON to a file instead of stdout")
+    .action(async (opts: { windowDays?: string; output?: string }) => {
+      const config = loadConfig(process.cwd());
+      const store = new DuckDBStore(resolve(config.storage.path));
+      await store.initialize();
+      try {
+        const { runEval } = await import("../commands/analyze/eval.js");
+        const report = await runEval({
+          store,
+          windowDays: opts.windowDays ? parseInt(opts.windowDays, 10) : undefined,
+        });
+        const json = JSON.stringify(report, null, 2);
+        if (opts.output) {
+          const { writeFileSync } = await import("node:fs");
+          writeFileSync(resolve(process.cwd(), opts.output), json, "utf8");
+        } else {
+          console.log(json);
+        }
+      } finally {
+        await store.close();
+      }
+    });
+
+  dev
     .command("test-key")
     .description("Debug test key generation")
     .option("--suite <suite>", "Test suite name")

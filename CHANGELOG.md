@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+Fix: self-host nightly + PR advisory workflows called `flaker kpi` and `flaker analyze eval`, both removed in 0.8.0 (#37). The next scheduled run would have failed at `Snapshot KPI` / `Snapshot eval`, breaking the nightly issue update.
+
+### Added
+
+- `flaker dev kpi --window-days <n> [--output <path>]`: maintainer-only JSON export backed by `computeKpi`. Preserves the old `flaker analyze kpi --json` shape (`timestamp`, `windowDays`, `sampling`, `flaky`, `data`) so existing self-host review scripts keep working.
+- `flaker dev eval --window-days <n> [--output <path>]`: maintainer-only JSON export backed by `runEval`. Preserves the old `flaker analyze eval --json` shape (`dataSufficiency`, `detection`, `resolution`, `samplingKpi`, `healthScore`).
+
+### Fixed
+
+- `.github/workflows/nightly-self-host.yml`, `.github/workflows/ci.yml`: migrated the two `Snapshot KPI` / `Snapshot eval` steps from the removed `kpi` / `analyze eval` commands to the new `dev kpi` / `dev eval` maintainer tools. The self-host review template (`scripts/self-host-review.mjs`) is unchanged.
+
 ## 0.10.6
 
 Bug fix: `resolveCommitChanges` now returns the changed files for merge commits.
