@@ -383,4 +383,35 @@ describe("analysis bundle", () => {
       },
     ]);
   });
+
+  it("serializes GitHub-scale workflow_run_id (> 2^31) without INT32 overflow", async () => {
+    const now = new Date();
+    // Real GitHub Actions run IDs are already in the 24-billion range;
+    // DuckDB ::INTEGER (INT32, max ~2.15B) used to throw a Conversion Error
+    // here. bigIntToNumber at the query boundary must demote BIGINT → Number.
+    const realGithubRunId = 24186732768;
+
+    await store.insertWorkflowRun(makeRun(realGithubRunId, "sha-ci", now, {
+      source: "ci",
+      event: "push",
+    }));
+    await store.insertTestResults([
+      makeResult(realGithubRunId, "tests/a.spec.ts", "big id test", "failed", "sha-ci", now, {
+        errorMessage: "boom",
+      }),
+    ]);
+
+    const bundle = await runAnalysisBundle({
+      store,
+      storagePath: ":memory:",
+      resolverConfigured: false,
+    });
+
+    const failure = bundle.data.recentFailures.find((f) => f.testName === "big id test");
+    expect(failure).toBeDefined();
+    expect(failure?.workflowRunId).toBe(realGithubRunId);
+    expect(typeof failure?.workflowRunId).toBe("number");
+    // JSON.stringify must succeed (bigint would throw "Do not know how to serialize a BigInt")
+    expect(() => JSON.stringify(bundle)).not.toThrow();
+  });
 });

@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+Fix: self-host nightly + PR advisory workflows called `flaker kpi` and `flaker analyze eval`, both removed in 0.8.0 (#37). The next scheduled run would have failed at `Snapshot KPI` / `Snapshot eval`, breaking the nightly issue update.
+
+### Added
+
+- `flaker dev kpi --window-days <n> [--output <path>]`: maintainer-only JSON export backed by `computeKpi`. Preserves the old `flaker analyze kpi --json` shape (`timestamp`, `windowDays`, `sampling`, `flaky`, `data`) so existing self-host review scripts keep working.
+- `flaker dev eval --window-days <n> [--output <path>]`: maintainer-only JSON export backed by `runEval`. Preserves the old `flaker analyze eval --json` shape (`dataSufficiency`, `detection`, `resolution`, `samplingKpi`, `healthScore`).
+
+### Fixed
+
+- `.github/workflows/nightly-self-host.yml`, `.github/workflows/ci.yml`: migrated the two `Snapshot KPI` / `Snapshot eval` steps from the removed `kpi` / `analyze eval` commands to the new `dev kpi` / `dev eval` maintainer tools. The self-host review template (`scripts/self-host-review.mjs`) is unchanged.
+- `.github/workflows/nightly-self-host.yml`, `.github/workflows/ci.yml`: also migrated `collect --days 30 --output X` → `apply --target collect_ci 2>&1 | tee X`, `import parquet <dir>` → `import <dir> --adapter parquet`, and `import report <file> ...` → `import <file> ...`. All three old forms were removed in 0.8.0 and were breaking the PR advisory job (first surfaced on the PR for this fix).
+- `.github/workflows/ci.yml`: the main `test` job used the default shallow checkout (`fetch-depth: 1`), making `tests/core/git-diff-tree.test.ts` / `tests/commands/collect-commit-changes.test.ts` fail 100% in CI because `git diff-tree -m --first-parent HEAD` can't reach HEAD's parent. Both tests were appearing in the self-host flaky report (#37). `fetch-depth: 0` aligns the `test` job with `self-host-advisory` / nightly, which already use full history.
+- `src/cli/commands/analyze/bundle.ts`: `flaker explain bundle` crashed with `Conversion Error: Type INT64 ... out of range for the destination type INT32` against real GitHub data because `workflow_run_id` / `artifact_id` were cast via `::INTEGER` (DuckDB INT32, max ~2.1 billion) while GitHub IDs are already in the 24-billion range. Casts are now `::BIGINT` with a `bigIntToNumber` helper that demotes safely to JS Number at the query boundary (values outside safe-integer range become null instead of silently losing precision), and `formatAnalysisBundle` uses a JSON replacer as defence in depth.
+
 ## 0.10.6
 
 Bug fix: `resolveCommitChanges` now returns the changed files for merge commits.

@@ -26,6 +26,20 @@ import { workflowRunSourceSql } from "../../run-source.js";
 import type { FlakyScore } from "../../storage/types.js";
 import type { QuarantineManifestEntry } from "../../quarantine-manifest.js";
 
+// DuckDB BIGINT columns (workflow_run_id, artifact_id) come back as JS BigInt.
+// GitHub run / artifact IDs fit in Number.MAX_SAFE_INTEGER with ~10× headroom,
+// and downstream TS types declare these as number, so demote at the query
+// boundary. Values outside safe range fall back to null so callers notice the
+// loss instead of getting silent precision corruption.
+function bigIntToNumber(value: unknown): number | null {
+  if (typeof value === "number") return value;
+  if (typeof value !== "bigint") return null;
+  if (value > BigInt(Number.MAX_SAFE_INTEGER) || value < BigInt(Number.MIN_SAFE_INTEGER)) {
+    return null;
+  }
+  return Number(value);
+}
+
 export interface AnalysisBundleOpts {
   store: MetricStore;
   storagePath: string;
@@ -300,13 +314,13 @@ async function loadWorkflowArtifactMap(
   const placeholders = uniqueRunIds.map(() => "?").join(", ");
   const rows = await store.raw<CollectedWorkflowArtifactRow>(`
     SELECT
-      ca.workflow_run_id::INTEGER AS workflow_run_id,
+      ca.workflow_run_id::BIGINT AS workflow_run_id,
       wr.repo,
       ${workflowRunSourceSql("wr")} AS run_source,
       ca.adapter_type,
       ca.artifact_name,
       ca.adapter_config,
-      ca.artifact_id::INTEGER AS artifact_id,
+      ca.artifact_id::BIGINT AS artifact_id,
       ca.local_archive_path,
       ca.artifact_entries
     FROM collected_artifacts ca
@@ -317,20 +331,22 @@ async function loadWorkflowArtifactMap(
 
   const grouped = new Map<number, FlakerAnalysisBundleWorkflowArtifactRef[]>();
   for (const row of rows) {
-    const current = grouped.get(row.workflow_run_id) ?? [];
+    const workflowRunId = bigIntToNumber(row.workflow_run_id);
+    if (workflowRunId == null) continue;
+    const current = grouped.get(workflowRunId) ?? [];
     current.push({
-      workflowRunId: row.workflow_run_id,
+      workflowRunId,
       repo: row.repo,
       source: row.run_source,
       adapterType: row.adapter_type,
       adapterConfig: row.adapter_config ?? "",
       artifactName: row.artifact_name,
-      artifactId: row.artifact_id ?? null,
+      artifactId: bigIntToNumber(row.artifact_id),
       localArchivePath: row.local_archive_path ?? null,
       entryNames: parseJsonStringArray(row.artifact_entries),
       downloadCommand: buildArtifactDownloadCommand(row),
     });
-    grouped.set(row.workflow_run_id, current);
+    grouped.set(workflowRunId, current);
   }
 
   return grouped;
@@ -497,7 +513,8 @@ function toHistoryEntry(
     artifactPaths,
     parseStoredArtifacts(row.artifacts),
   );
-  const workflowArtifacts = workflowArtifactMap.get(row.workflow_run_id) ?? [];
+  const workflowRunId = bigIntToNumber(row.workflow_run_id);
+  const workflowArtifacts = workflowRunId != null ? (workflowArtifactMap.get(workflowRunId) ?? []) : [];
   return {
     commitSha: row.commit_sha,
     status: row.status,
@@ -510,7 +527,7 @@ function toHistoryEntry(
     stderr: row.stderr_text,
     artifactPaths,
     artifacts,
-    workflowRunId: row.workflow_run_id,
+    workflowRunId: workflowRunId ?? 0,
     workflowArtifacts,
     relatedWorkflowArtifacts: buildRelatedWorkflowArtifacts(
       artifacts,
@@ -554,7 +571,7 @@ async function loadFailureEvidence(
         tr.stderr_text,
         tr.artifact_paths,
         tr.artifacts,
-        tr.workflow_run_id::INTEGER AS workflow_run_id,
+        tr.workflow_run_id::BIGINT AS workflow_run_id,
         tr.retry_count::INTEGER AS retry_count,
         tr.duration_ms::INTEGER AS duration_ms,
         tr.variant,
@@ -583,7 +600,7 @@ async function loadFailureEvidence(
     const activeQuarantines = dedupeQuarantines(historyRows);
     const workflowArtifactMap = await loadWorkflowArtifactMap(
       opts.store,
-      historyRows.map((row) => row.workflow_run_id),
+      historyRows.map((row) => bigIntToNumber(row.workflow_run_id)).filter((n): n is number => n != null),
     );
     const recentHistory = historyRows.map((row) =>
       toHistoryEntry(row, workflowArtifactMap),
@@ -668,7 +685,7 @@ export async function runAnalysisBundle(
         tr.stderr_text,
         tr.artifact_paths,
         tr.artifacts,
-        tr.workflow_run_id::INTEGER AS workflow_run_id,
+        tr.workflow_run_id::BIGINT AS workflow_run_id,
         tr.retry_count::INTEGER AS retry_count,
         tr.duration_ms::INTEGER AS duration_ms,
         tr.variant,
@@ -711,7 +728,7 @@ export async function runAnalysisBundle(
 
   const recentWorkflowArtifactMap = await loadWorkflowArtifactMap(
     opts.store,
-    recentFailureRows.map((row) => row.workflow_run_id),
+    recentFailureRows.map((row) => bigIntToNumber(row.workflow_run_id)).filter((n): n is number => n != null),
   );
 
   const recentFailures: FlakerAnalysisBundleRecentFailure[] = recentFailureRows.map((row) => {
@@ -720,7 +737,8 @@ export async function runAnalysisBundle(
       artifactPaths,
       parseStoredArtifacts(row.artifacts),
     );
-    const workflowArtifacts = recentWorkflowArtifactMap.get(row.workflow_run_id) ?? [];
+    const workflowRunId = bigIntToNumber(row.workflow_run_id);
+    const workflowArtifacts = workflowRunId != null ? (recentWorkflowArtifactMap.get(workflowRunId) ?? []) : [];
     return {
       testId: row.test_id,
       taskId: row.task_id,
@@ -735,7 +753,7 @@ export async function runAnalysisBundle(
       stderr: row.stderr_text,
       artifactPaths,
       artifacts,
-      workflowRunId: row.workflow_run_id,
+      workflowRunId: workflowRunId ?? 0,
       workflowArtifacts,
       relatedWorkflowArtifacts: buildRelatedWorkflowArtifacts(
         artifacts,
@@ -783,5 +801,15 @@ export async function runAnalysisBundle(
 }
 
 export function formatAnalysisBundle(bundle: FlakerAnalysisBundle): string {
-  return JSON.stringify(bundle, null, 2);
+  // DuckDB BIGINT columns (workflow_run_id, artifact_id) come back as JS BigInt,
+  // which JSON.stringify cannot serialize. GitHub run IDs fit in
+  // Number.MAX_SAFE_INTEGER (2^53) with ~10× headroom, so demote to Number
+  // rather than stringify — downstream TS types already expect number.
+  return JSON.stringify(bundle, (_key, value) => {
+    if (typeof value !== "bigint") return value;
+    if (value > BigInt(Number.MAX_SAFE_INTEGER) || value < BigInt(Number.MIN_SAFE_INTEGER)) {
+      return value.toString();
+    }
+    return Number(value);
+  }, 2);
 }

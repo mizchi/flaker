@@ -46,7 +46,7 @@ jobs:
       - name: Collect CI history
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node dist/cli/main.js collect --days 30 --output .artifacts/collect.txt
+        run: node dist/cli/main.js apply --target collect_ci 2>&1 | tee .artifacts/collect.txt
 
       - name: Download historical self-host metrics
         env:
@@ -58,7 +58,7 @@ jobs:
           --days 30
 
       - name: Import historical self-host metrics
-        run: node dist/cli/main.js import parquet .artifacts/self-host-metrics
+        run: node dist/cli/main.js import .artifacts/self-host-metrics --adapter parquet
 
       - name: Reset self-host parquet export dir
         run: |
@@ -82,11 +82,11 @@ jobs:
 
       - name: Snapshot KPI
         if: always()
-        run: node dist/cli/main.js kpi --window-days 30 --json > .artifacts/kpi.json
+        run: node dist/cli/main.js dev kpi --window-days 30 --output .artifacts/kpi.json
 
       - name: Snapshot eval
         if: always()
-        run: node dist/cli/main.js analyze eval --json --window 30 --output .artifacts/eval.json > /dev/null
+        run: node dist/cli/main.js dev eval --window-days 30 --output .artifacts/eval.json
 
       - name: Render nightly review
         if: always()

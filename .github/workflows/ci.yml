@@ -13,6 +13,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          # tests/core/git-diff-tree.test.ts and tests/commands/collect-commit-changes.test.ts
+          # resolve HEAD's parent via `git diff-tree -m --first-parent`. With the default
+          # shallow clone (fetch-depth=1) the parent commit is unreachable and the
+          # command returns empty output, making both tests fail deterministically in CI.
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
@@ -137,7 +143,7 @@ jobs:
       - name: Collect CI history
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node dist/cli/main.js collect --days 30 --output .artifacts/collect.txt
+        run: node dist/cli/main.js apply --target collect_ci 2>&1 | tee .artifacts/collect.txt
 
       - name: Download historical self-host metrics
         env:
@@ -149,7 +155,7 @@ jobs:
           --days 30
 
       - name: Import historical self-host metrics
-        run: node dist/cli/main.js import parquet .artifacts/self-host-metrics
+        run: node dist/cli/main.js import .artifacts/self-host-metrics --adapter parquet
 
       - name: Reset self-host parquet export dir
         run: |
@@ -181,18 +187,18 @@ jobs:
       - name: Import current CI vitest report
         if: always()
         run: >
-          node dist/cli/main.js import report .self-host/current-ci/vitest-report.json
+          node dist/cli/main.js import .self-host/current-ci/vitest-report.json
           --adapter vitest
           --commit "${{ github.event.pull_request.head.sha }}"
           --branch "${{ github.head_ref }}"
 
       - name: Snapshot KPI
         if: always()
-        run: node dist/cli/main.js kpi --window-days 30 --json > .artifacts/kpi.json
+        run: node dist/cli/main.js dev kpi --window-days 30 --output .artifacts/kpi.json
 
       - name: Snapshot eval
         if: always()
-        run: node dist/cli/main.js analyze eval --json --window 30 --output .artifacts/eval.json > /dev/null
+        run: node dist/cli/main.js dev eval --window-days 30 --output .artifacts/eval.json
 
       - name: Render advisory review
         if: always()
