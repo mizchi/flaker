@@ -4,7 +4,7 @@ import type { DuckDBStore } from "../../storage/duckdb.js";
 import { FlakerUsageError } from "../../errors.js";
 import { DATASET_NAMES, isDatasetName } from "../../datasets/registry.js";
 import { EXPORT_FORMATS, formatRows, isExportFormat } from "../../datasets/format.js";
-import { buildDatasetQuery } from "../../datasets/query.js";
+import { prepareDatasetQuery } from "../../datasets/query.js";
 import { readDataset } from "../../datasets/read.js";
 import { FLAKER_V1_SCHEMAS } from "../../contracts/flaker-v1-datasets.js";
 
@@ -34,11 +34,16 @@ export async function runExportDataset(opts: ExportDatasetOpts): Promise<ExportD
   const filter = { since: opts.since, where: opts.where };
   if (format === "parquet") {
     if (!opts.output) throw new FlakerUsageError("--format parquet requires -o <file>");
-    const sql = buildDatasetQuery(dataset, filter);
-    await store.copySelectToParquet(sql, resolve(opts.output));
+    const sql = await prepareDatasetQuery(store, dataset, filter);
+    const output = resolve(opts.output);
+    mkdirSync(dirname(output), { recursive: true });
+    // Even if a --where grammar slipped past the guard, it cannot touch files.
+    await store.disableExternalAccess([output]);
+    await store.copySelectToParquet(sql, output);
     const [count] = await store.raw<{ n: number }>(`SELECT COUNT(*)::INTEGER AS n FROM (${sql})`);
     return { rows: count?.n ?? 0, text: null };
   }
+  await store.disableExternalAccess();
   const rows = await readDataset(store, dataset, filter);
   const columns = Object.keys((FLAKER_V1_SCHEMAS[dataset] as { properties: object }).properties);
   const text = formatRows(rows, format, columns);

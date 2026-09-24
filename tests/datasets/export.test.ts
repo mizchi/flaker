@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DuckDBStore } from "../../src/cli/storage/duckdb.js";
 import { runExportDataset } from "../../src/cli/commands/export/dataset.js";
 import { FlakerUsageError } from "../../src/cli/errors.js";
+import { assertRowFilterTree } from "../../src/cli/commands/analyze/sql-guard.js";
 import { memoryStore, seedRun } from "./helpers.js";
 
 describe("runExportDataset", () => {
@@ -116,6 +117,35 @@ describe("--where is only a filter on the selected dataset", () => {
     });
   }
 
+  describe("PIVOT_WIDER / PIVOT_LONGER cannot read files or storage tables", () => {
+    const secretFile = () => {
+      const path = join(mkdtempSync(join(tmpdir(), "flaker-secret-")), "secret.csv");
+      writeFileSync(path, "secret_col\nhunter2\n");
+      return path;
+    };
+    const payloads = (file: string) => [
+      `EXISTS (PIVOT_WIDER '${file}' ON secret_col)`,
+      "EXISTS (PIVOT_WIDER test_results ON status)",
+      `run_id IN (PIVOT_LONGER '${file}' ON COLUMNS(*) INTO NAME k VALUE v)`,
+      "run_id IN (PIVOT_LONGER test_results ON COLUMNS(*) INTO NAME k VALUE v)",
+    ];
+
+    it("json", async () => {
+      for (const where of payloads(secretFile())) {
+        await expect(runExportDataset({ store, dataset: "runs", format: "json", where }), where)
+          .rejects.toThrow(FlakerUsageError);
+      }
+    });
+
+    it("parquet", async () => {
+      const out = join(mkdtempSync(join(tmpdir(), "flaker-export-")), "runs.parquet");
+      for (const where of payloads(secretFile())) {
+        await expect(runExportDataset({ store, dataset: "runs", format: "parquet", output: out, where }), where)
+          .rejects.toThrow(FlakerUsageError);
+      }
+    });
+  });
+
   it("rejects the same fragments for parquet", async () => {
     const out = join(mkdtempSync(join(tmpdir(), "flaker-export-")), "runs.parquet");
     await expect(runExportDataset({
@@ -136,5 +166,84 @@ describe("--where is only a filter on the selected dataset", () => {
       const { rows } = await runExportDataset({ store, dataset: "runs", format: "json", where });
       expect(rows, where).toBe(1);
     }
+  });
+});
+
+describe("the structural --where check", () => {
+  let store: DuckDBStore;
+  beforeEach(async () => {
+    store = await memoryStore();
+  });
+  afterEach(async () => {
+    await store.close();
+  });
+  const tree = async (sql: string) => {
+    const [row] = await store.raw<{ j: string }>(`SELECT json_serialize_sql(?::VARCHAR) AS j`, [sql]);
+    return JSON.parse(row.j) as unknown;
+  };
+
+  it("accepts a plain filter over the one dataset", async () => {
+    const ok = await tree(`SELECT * FROM flaker_v1.runs WHERE (commit_sha = 'c1' AND lower(branch) LIKE '%(select%')`);
+    expect(() => assertRowFilterTree(ok, "runs", "--where")).not.toThrow();
+  });
+
+  it("rejects subqueries even when no keyword gave them away", async () => {
+    for (const sql of [
+      "SELECT * FROM flaker_v1.runs WHERE (run_id IN (PIVOT_LONGER '/etc/hosts' ON COLUMNS(*) INTO NAME k VALUE v))",
+      "SELECT * FROM flaker_v1.runs WHERE (EXISTS (SELECT 1))",
+      "SELECT * FROM flaker_v1.runs WHERE (run_id = (SELECT 1))",
+    ]) {
+      const t = await tree(sql);
+      expect(() => assertRowFilterTree(t, "runs", "--where"), sql).toThrow(/subquer/);
+    }
+  });
+
+  it("rejects a statement DuckDB cannot serialize", () => {
+    const t = { error: true, error_message: "Only SELECT statements can be serialized to json!" };
+    expect(() => assertRowFilterTree(t, "runs", "--where")).toThrow(FlakerUsageError);
+  });
+
+  it("rejects anything but one SELECT * over the named dataset", async () => {
+    for (const sql of [
+      "SELECT * FROM flaker_v1.runs WHERE (1=1) UNION ALL SELECT * FROM flaker_v1.runs",
+      "SELECT * FROM flaker_v1.tests WHERE (1=1)",
+      "SELECT * FROM test_results WHERE (1=1)",
+      "SELECT run_id FROM flaker_v1.runs WHERE (1=1)",
+      "WITH x AS (SELECT 1) SELECT * FROM flaker_v1.runs WHERE (1=1)",
+      "SELECT * FROM flaker_v1.runs WHERE (EXISTS (PIVOT_WIDER test_results ON status))",
+    ]) {
+      const t = await tree(sql);
+      expect(() => assertRowFilterTree(t, "runs", "--where"), sql).toThrow(FlakerUsageError);
+    }
+  });
+});
+
+describe("export runs with external access disabled", () => {
+  let store: DuckDBStore;
+  beforeEach(async () => {
+    store = await memoryStore();
+    await seedRun(store, { id: 1, commitSha: "c1", daysAgo: 1, results: [
+      { suite: "tests/a.test.ts", testName: "a", status: "passed" },
+    ] });
+  });
+  afterEach(async () => {
+    await store.close();
+  });
+
+  it("blocks file reads on the store once an export has run", async () => {
+    const file = join(mkdtempSync(join(tmpdir(), "flaker-secret-")), "secret.txt");
+    writeFileSync(file, "hunter2");
+    await expect(store.raw(`SELECT content FROM read_text('${file}')`)).resolves.toHaveLength(1);
+    await runExportDataset({ store, dataset: "runs", format: "json" });
+    await expect(store.raw(`SELECT content FROM read_text('${file}')`)).rejects.toThrow(/disabled by configuration/);
+  });
+
+  it("still writes the parquet output, and nothing else", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "flaker-export-"));
+    const out = join(dir, "runs.parquet");
+    await runExportDataset({ store, dataset: "runs", format: "parquet", output: out });
+    const back = await store.raw<{ n: number }>(`SELECT COUNT(*)::INTEGER AS n FROM read_parquet('${out}')`);
+    expect(back[0].n).toBe(1);
+    await expect(store.raw(`COPY (SELECT 1) TO '${join(dir, "other.csv")}'`)).rejects.toThrow(/disabled by configuration/);
   });
 });

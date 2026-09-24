@@ -1,5 +1,6 @@
 import { FlakerUsageError } from "../errors.js";
-import { assertSafeSqlFragment } from "../commands/analyze/sql-guard.js";
+import { assertRowFilterTree, assertSafeSqlFragment } from "../commands/analyze/sql-guard.js";
+import type { MetricStore } from "../storage/types.js";
 import { DATASET_TIME_COLUMN, type DatasetName } from "./registry.js";
 
 export interface DatasetQueryOptions {
@@ -32,4 +33,21 @@ export function buildDatasetQuery(name: DatasetName, opts: DatasetQueryOptions =
   }
   const where = clauses.length > 0 ? ` WHERE ${clauses.join(" AND ")}` : "";
   return `SELECT * FROM flaker_v1.${name}${where}`;
+}
+
+/**
+ * buildDatasetQuery, then (when there is a --where) DuckDB parses the query and
+ * the parse tree must be a plain filter over the one dataset.
+ */
+export async function prepareDatasetQuery(
+  store: MetricStore,
+  name: DatasetName,
+  opts: DatasetQueryOptions = {},
+): Promise<string> {
+  const sql = buildDatasetQuery(name, opts);
+  if (opts.where !== undefined) {
+    const [row] = await store.raw<{ tree: string }>(`SELECT json_serialize_sql(?::VARCHAR) AS tree`, [sql]);
+    assertRowFilterTree(JSON.parse(row?.tree ?? "null"), name, "--where");
+  }
+  return sql;
 }

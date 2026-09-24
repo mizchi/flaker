@@ -579,6 +579,31 @@ export class DuckDBStore implements MetricStore {
   }
 
   /** COPY the result of a parameter-free SELECT to a Parquet file. */
+  /**
+   * Turn off DuckDB's external access (file reads and writes, extensions) for
+   * the rest of this store's life, keeping only `allowedPaths` and the spill
+   * directory. DuckDB cannot turn it back on while the database is open, so
+   * call this only right before a store's last queries (e.g. `flaker export`).
+   */
+  async disableExternalAccess(allowedPaths: string[] = []): Promise<void> {
+    const [state] = await this.all(`SELECT current_setting('enable_external_access') AS on`);
+    if (state?.on === false || state?.on === "false") {
+      const [paths] = await this.all(`SELECT current_setting('allowed_paths') AS p`);
+      const allowed = new Set<string>((paths?.p ?? []) as string[]);
+      const missing = allowedPaths.filter((p) => !allowed.has(p));
+      if (missing.length > 0) {
+        throw new Error(`external access is already disabled on this store; cannot allow ${missing.join(", ")}`);
+      }
+      return;
+    }
+    const list = (items: string[]) => `[${items.map((p) => `'${this.sanitizeSqlLiteral(p)}'`).join(", ")}]`;
+    const [temp] = await this.all(`SELECT current_setting('temp_directory') AS d`);
+    const tempDir = typeof temp?.d === "string" && temp.d !== "" ? [temp.d as string] : [];
+    if (allowedPaths.length > 0) await this.run(`SET allowed_paths = ${list(allowedPaths)}`);
+    if (tempDir.length > 0) await this.run(`SET allowed_directories = ${list(tempDir)}`);
+    await this.run(`SET enable_external_access = false`);
+  }
+
   async copySelectToParquet(selectSql: string, outputPath: string): Promise<void> {
     mkdirSync(dirname(outputPath), { recursive: true });
     await this.run(
