@@ -30,6 +30,9 @@ detected_flaky_rate_ratio = 0.017
 detected_co_failure_strength_ratio = 0.86
 detected_test_count = 633
 
+[selector]
+type = "jev"
+
 [gate.release]
 strategy = "full"
 

@@ -1,0 +1,170 @@
+# flaker + jev-test-filter on main: the "jev on main" layout from
+# docs/jev-test-filter-integration.md ("Put jev and a full run on the same commits").
+#
+# On every push to main this workflow
+#   1. restores the flaker database from the Actions cache,
+#   2. exports the jev-context and runs jev against the previous commit,
+#   3. runs the full suite on the same commit and uploads only that report,
+#   4. imports jev's record, imports the full runs of earlier pushes (`import --ci`),
+#      runs `calibrate --selector`, and saves the database back to the cache.
+#
+# Advisory only: nothing here gates a merge. Copy it to .github/workflows/ and adapt
+# the test commands. flaker.toml needs, besides [repo] / [storage]:
+#
+#   [collect]
+#   workflow_paths = [".github/workflows/jev-loop.yml"]
+#
+#   [adapter]
+#   type = "vitest"
+#   artifact_name = "flaker-full-report"   # the artifact uploaded below
+#
+#   [workflow_lanes]
+#   "jev-loop" = { lane = "full", full = true }   # the workflow `name:` below
+#
+#   [selector]
+#   type = "jev"
+#
+# and a TYPESAFE_API_KEY repository secret for jev. Without it jev falls back to
+# selecting everything and writes no record; the rest of the loop still runs.
+
+name: jev-loop
+
+on:
+  push:
+    branches: [main]
+  # The Actions cache evicts entries unused for 7 days, which would drop the
+  # database on a quiet repository. The weekly run restores and saves it.
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+# DuckDB is single-writer and the cache has no locking: one run at a time owns
+# the database. A newer push waits for the running one. (GitHub keeps only the
+# newest pending run per group, so a burst of pushes skips jev on the commits in
+# between; their full runs are still imported.)
+concurrency:
+  group: flaker-database
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read # flaker import --ci downloads earlier runs' artifacts
+
+jobs:
+  loop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # jev's --base needs the previous commit in the checkout.
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The newest saved database, by prefix. Keys are per run because a cache
+      # entry cannot be overwritten. Match the path to [storage].path.
+      - name: Restore flaker database
+        uses: actions/cache/restore@v4
+        with:
+          path: .flaker/data
+          key: flaker-db-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: flaker-db-
+
+      - name: Export jev-context
+        run: pnpm exec flaker export --projection jev-context -o .flaker/context.json
+
+      - name: Resolve the previous commit
+        if: github.event_name == 'push'
+        id: base
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          # all zeros on the first push of a branch, and absent on a forced
+          # push that dropped it: fall back to the parent.
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+            || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            BEFORE=$(git rev-parse HEAD~1)
+          fi
+          echo "sha=$BEFORE" >> "$GITHUB_OUTPUT"
+
+      # jev's own selection. Its results are a partial run: they are not
+      # uploaded, so they never count as the full lane. --json only scores; use
+      # `--exec -- pnpm exec vitest run` instead to also run what it selected.
+      - name: Run jev-test-filter
+        if: github.event_name == 'push'
+        continue-on-error: true
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+        run: >
+          pnpm exec jev-test-filter
+          --base ${{ steps.base.outputs.sha }}
+          --context .flaker/context.json
+          --json > jev-selection.json
+
+      # The full suite on the same commit. Its report is the only artifact of
+      # the full lane; the next run's `flaker import --ci` imports it.
+      - name: Full suite
+        if: github.event_name == 'push'
+        continue-on-error: true
+        run: pnpm exec vitest run --reporter=json --outputFile=report.json
+
+      - name: Upload full-suite report
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v7
+        with:
+          name: flaker-full-report
+          path: report.json
+          if-no-files-found: warn
+
+      # Records are named after their commit (.jev-test-filter/records/<sha>.json);
+      # importing one that is already stored is a no-op.
+      - name: Import jev record
+        if: github.event_name == 'push' && hashFiles('.jev-test-filter/records/*.json') != ''
+        run: pnpm exec flaker import .jev-test-filter --adapter jev
+
+      # Full runs of earlier pushes (this run's own artifact is imported by the
+      # next run, once this run has completed).
+      - name: Import full runs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm exec flaker import --ci --days 30
+
+      - name: Calibrate the selector gate
+        run: |
+          pnpm exec flaker calibrate --selector --dry-run --json | tee calibration.json
+          pnpm exec flaker calibrate --selector
+
+      # Optional: keep the database small. Must stay above the flaky +
+      # calibration windows (104 days by default).
+      # - name: Prune old history
+      #   run: pnpm exec flaker prune --older-than 180
+
+      - name: Save flaker database
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .flaker/data
+          key: flaker-db-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Upload loop outputs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jev-loop
+          path: |
+            .flaker/context.json
+            jev-selection.json
+            calibration.json
+            .jev-test-filter/records/
+          if-no-files-found: ignore

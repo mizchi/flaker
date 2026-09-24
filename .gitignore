@@ -13,6 +13,7 @@ result
 .artifacts/
 .direnv
 .worktrees/
+.jev-test-filter/
 
 # Claude Code runtime locks
 .claude/scheduled_tasks.lock

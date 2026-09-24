@@ -1,0 +1,146 @@
+name: jev-loop
+
+# Dogfoods the jev-test-filter loop on flaker itself (#100), advisory only.
+# The layout is examples/github-actions/jev-loop.yml, except that the full run
+# on each commit is ci.yml's (it runs the whole suite on every push to main and
+# uploads it as `vitest-report`, which [collect]/[adapter] in flaker.toml read).
+# jev needs the TYPESAFE_API_KEY secret; without it the jev steps are skipped
+# and the loop only keeps importing full runs.
+
+on:
+  push:
+    branches: [main]
+  # Keeps the cached database from expiring (7 days unused) and runs the
+  # real-API jev check (#101) weekly.
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: flaker-self-host-database
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  loop:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Setup MoonBit
+        uses: hustcer/setup-moonbit@v1
+        with:
+          # Pinned with ci.yml; bump together.
+          version: 0.10.14+7d59c7ec9
+          core-version: 0.10.14+7d59c7ec9
+
+      - name: MoonBit deps
+        run: moon update
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Restore flaker database
+        uses: actions/cache/restore@v4
+        with:
+          path: .flaker/data.duckdb
+          key: flaker-jev-db-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: flaker-jev-db-
+
+      - name: Export jev-context
+        run: |
+          mkdir -p .artifacts
+          node dist/cli/main.js export --projection jev-context -o .flaker/context.json
+
+      - name: Resolve the previous commit
+        if: github.event_name == 'push' && env.TYPESAFE_API_KEY != ''
+        id: base
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+            || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            BEFORE=$(git rev-parse HEAD~1)
+          fi
+          echo "sha=$BEFORE" >> "$GITHUB_OUTPUT"
+
+      # Scoring only: ci.yml runs the whole suite on this commit.
+      - name: Run jev-test-filter
+        if: github.event_name == 'push' && env.TYPESAFE_API_KEY != ''
+        continue-on-error: true
+        run: >
+          pnpm exec jev-test-filter
+          --base ${{ steps.base.outputs.sha }}
+          --context .flaker/context.json
+          --json > .artifacts/jev-selection.json
+
+      - name: Import jev record
+        if: hashFiles('.jev-test-filter/records/*.json') != ''
+        run: node dist/cli/main.js import .jev-test-filter --adapter jev
+
+      - name: Import full runs from ci.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node dist/cli/main.js import --ci --days 30
+
+      - name: Calibrate the selector gate
+        run: |
+          node dist/cli/main.js calibrate --selector --dry-run --json | tee .artifacts/calibration.json
+          node dist/cli/main.js calibrate --selector
+          node dist/cli/main.js export gate_calibration --format json -o .artifacts/gate_calibration.json
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## jev loop"
+            echo
+            echo '```json'
+            node -e 'const c = JSON.parse(require("fs").readFileSync(".artifacts/calibration.json", "utf8")); console.log(JSON.stringify({ decision: c.decision?.decision, records: c.decision?.records, real_failures: c.decision?.real_failures, without_full_run: c.without_full_run, rationale: c.decision?.rationale }, null, 2))' || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # jev run for real on a flaker-exported context (#101). Skips itself
+      # without TYPESAFE_API_KEY; the mock-server case runs in every test run.
+      - name: Check jev against the TypeSafe API
+        if: github.event_name != 'push' && env.TYPESAFE_API_KEY != ''
+        run: pnpm exec vitest run tests/integration-jev-live.test.ts
+
+      - name: Save flaker database
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .flaker/data.duckdb
+          key: flaker-jev-db-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Upload loop outputs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jev-loop
+          path: |
+            .flaker/context.json
+            .artifacts/
+            .jev-test-filter/records/
+          if-no-files-found: ignore

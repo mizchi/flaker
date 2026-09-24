@@ -93,6 +93,8 @@ calibration が学べるのは、jev の record と full run の両方がある�
 - **main で jev を走らせる。** main への push のたびに、`--base` を 1 つ前のコミット (`${{ github.event.before }}`。branch の最初の push では全桁 0 になるので、そのときは `HEAD~1`) にして jev を走らせ、同じ workflow で同じコミットの全件を走らせます。full lane の artifact として upload するのは全件の report だけにしてください。jev が選んだテストだけの run は部分的な run で、これを full と数えると、選ばれなかったテストがすべて通ったように見えます。
 - **一部の PR で jev の後に全件を走らせる。** PR の job で jev の選択を先に走らせ、同じ checkout で残りのテストを走らせて、その結果を full lane として取り込みます。一部の PR に絞ればコストを抑えられます。
 
+「main で jev を走らせる」構成の workflow 一式は [`examples/github-actions/jev-loop.yml`](../examples/github-actions/jev-loop.yml) にあります。DB は Actions の cache に置き (開始時に prefix で復元し、終了時に新しい key で保存。cache が期限切れにならないよう週 1 回も走らせる)、DuckDB は書き手が 1 つなので `concurrency` group で run を直列にし、`--base` は `github.event.before` から `HEAD~1` へのフォールバック付きで決め、全件の report だけを upload してから `import --adapter jev`、`import --ci`、`calibrate --selector` を走らせ、次の run の最初に `export --projection jev-context` します。`import --ci` は完了した run しか読まないので、ある push の full run は次の run で取り込まれます。
+
 構成が機能しているかは `flaker calibrate --selector --dry-run --json` で分かります。`without_full_run` は自分のコミットに full run がない record の数で、`decision.real_failures` はこれまでに集まった根拠の件数です。
 
 ## context で jev の何が変わるか

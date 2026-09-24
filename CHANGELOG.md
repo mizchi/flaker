@@ -4,6 +4,7 @@
 
 ### Added
 
+- `examples/github-actions/jev-loop.yml`: the "jev on main" loop as a workflow — the flaker database in the Actions cache, a `concurrency` group for DuckDB's single writer, jev against `github.event.before` (falling back to `HEAD~1`), a full-suite run on the same commit that alone uploads the full lane's artifact, then `import --adapter jev`, `import --ci` and `calibrate --selector`. Linked from the jev guide and the `flaker-setup` skill (#99).
 - `flaker prune --older-than <days> [--dry-run] [--json]` deletes history older than `<days>`: workflow runs with their results and collected artifacts, selector records with their verdicts, sampling runs, commit changes no kept run or record names, and gate calibrations other than each selector's latest. It keeps quarantine, coverage and settings, checkpoints the database afterwards, and reports what it removed (or would remove). `<days>` must be at least `max(90, [sampling].co_failure_window_days) + [flaky].window_days` (104 by default), so the flaky window, `is_full`, co-failures and both calibrations keep their data; a shorter value exits 2 (#105).
 
 ### Changed

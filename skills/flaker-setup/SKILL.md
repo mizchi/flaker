@@ -107,7 +107,7 @@ flaker import --ci
 flaker calibrate --selector
 ```
 
-Calibration only learns from commits that have both a jev record and a full run, so a PR-only jev job plus a nightly full run never overlaps. Run jev on pushes to main with a full run on the same commit, or run the full suite after jev on some PRs (the guide's "Put jev and a full run on the same commits"). In CI, check out with `fetch-depth: 0` and pass `--base origin/main`; for `vitest`, set `[adapter].artifact_name` to the artifact the full run uploads (`vitest run --reporter=json --outputFile=report.json`). Upload only the full-suite report under the full lane; the tests jev selected are a partial run. `flaker apply` does not run the selector steps, so run `import --adapter jev` and `calibrate --selector` after it.
+Calibration only learns from commits that have both a jev record and a full run, so a PR-only jev job plus a nightly full run never overlaps. Run jev on pushes to main with a full run on the same commit, or run the full suite after jev on some PRs (the guide's "Put jev and a full run on the same commits"). In CI, check out with `fetch-depth: 0` and pass `--base origin/main`; for `vitest`, set `[adapter].artifact_name` to the artifact the full run uploads (`vitest run --reporter=json --outputFile=report.json`). Upload only the full-suite report under the full lane; the tests jev selected are a partial run. `flaker apply` does not run the selector steps, so run `import --adapter jev` and `calibrate --selector` after it. For a ready workflow (cache-backed database, `concurrency` group, jev on main with a full run on the same commit), start from `${CLAUDE_PLUGIN_ROOT}/examples/github-actions/jev-loop.yml`.
 
 Add `.jev-test-filter/` to `.gitignore`. Never put `cutoff`, `unsure_below` or `unsure_margin` in `flaker.toml`: the loader rejects them, and the current gate is the latest row of `flaker_v1.gate_calibration`.
 
@@ -268,4 +268,5 @@ All paths relative to `${CLAUDE_PLUGIN_ROOT}` of the installed plugin, or in the
 - `docs/contributing.md` — sibling dogfood, MoonBit/TS fallback, build internals
 - `docs/agent-changelog.md` — upgrade guide for agents: old form → current form, error → fix, verify checklist
 - `docs/jev-test-filter-integration.md` / `.ja.md` — connecting jev-test-filter: import, calibrate, export the context
+- `examples/github-actions/jev-loop.yml` — the jev-on-main loop as a GitHub Actions workflow
 - `CHANGELOG.md` — version history, breaking changes per release
