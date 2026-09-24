@@ -90,6 +90,10 @@
     "./reporting/flaker-config-report": {
       "types": "./dist/cli/reporting/flaker-config-report.d.ts",
       "default": "./dist/cli/reporting/flaker-config-report.js"
+    },
+    "./contracts/flaker-v1-datasets": {
+      "types": "./dist/cli/contracts/flaker-v1-datasets.d.ts",
+      "default": "./dist/cli/contracts/flaker-v1-datasets.js"
     }
   },
   "scripts": {
@@ -140,6 +144,7 @@
   "devDependencies": {
     "@types/adm-zip": "^0.5.8",
     "@types/node": "^25.5.2",
+    "ajv": "^8.20.0",
     "rolldown": "1.0.0-rc.12",
     "typescript": "^6.0.2",
     "vitest": "^4.1.2"

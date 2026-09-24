@@ -41,11 +41,12 @@ describe("flaker --help top-level shape (Task 11)", () => {
     "doctor",
     "debug",
     "query",
+    "export",
     "explain",
     "import",
   ];
 
-  it("lists all 11 primary commands before the closing note", () => {
+  it("lists all 12 primary commands before the closing note", () => {
     // Everything before the closing "Run `flaker" note is the "primary" region
     const primarySection = stdout.split(/Run `flaker/)[0];
     for (const name of primaryNames) {

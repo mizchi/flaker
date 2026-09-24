@@ -128,7 +128,7 @@ Every dataset shares the key `test_key`, the stable ID from MoonBit `create_stab
 3. **Adoption rule: tighten at once, loosen with care.**
    - A candidate that misses even one observed real failure is rejected.
    - If the current settings have a miss, switch at once to the candidate with the fewest selected tests among those that catch every real failure (`decision = tighten`).
-   - Loosening beyond the defaults (selecting fewer tests) is allowed only when there are at least `min_failures` real failures with `source = real` (default 20) and the Wilson 95% lower bound of recall is at least `recall_target` (default 0.98) (`decision = loosen`).
+   - Loosening beyond the defaults (selecting fewer tests) is allowed only when there are at least `min_failures` real failures with `source = real` (default 20) and the Wilson 95% lower bound of recall is at least `recall_target` (default 0.90) (`decision = loosen`).
    - Otherwise keep the current values and record why in `rationale` (`decision = keep`).
    - On a tie, prefer the candidate closest to the defaults.
 4. **Output.** Append one row to `gate_calibration`. No file is written. `--dry-run` does not append the row either. `--json` prints a machine-readable result. When a context file is needed, run `flaker export --projection jev-context` afterwards.
@@ -140,7 +140,7 @@ Configuration:
 ```toml
 [selector]
 type = "jev"
-recall_target = 0.98
+recall_target = 0.90
 min_failures = 20
 max_hinted_tests = 200
 ```

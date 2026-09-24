@@ -71,6 +71,7 @@ ALTER TABLE test_results ADD COLUMN IF NOT EXISTS stdout_text VARCHAR;
 ALTER TABLE test_results ADD COLUMN IF NOT EXISTS stderr_text VARCHAR;
 ALTER TABLE test_results ADD COLUMN IF NOT EXISTS artifact_paths JSON;
 ALTER TABLE test_results ADD COLUMN IF NOT EXISTS artifacts JSON;
+ALTER TABLE test_results ADD COLUMN IF NOT EXISTS title_path JSON;
 
 CREATE TABLE IF NOT EXISTS quarantined_test_identities (
   test_id      VARCHAR PRIMARY KEY,
@@ -133,6 +134,62 @@ CREATE TABLE IF NOT EXISTS test_coverage (
   test_name  VARCHAR NOT NULL,
   edge       VARCHAR NOT NULL,
   PRIMARY KEY (test_id, edge)
+);
+
+CREATE TABLE IF NOT EXISTS flaker_dataset_config (
+  id                      INTEGER PRIMARY KEY,
+  flaky_window_days       INTEGER NOT NULL,
+  flaky_threshold_ratio   DOUBLE NOT NULL,
+  co_failure_window_days  INTEGER NOT NULL,
+  full_run_ratio          DOUBLE NOT NULL
+);
+INSERT INTO flaker_dataset_config VALUES (1, 14, 0.02, 90, 0.95) ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS flaker_lane_config (
+  lane     VARCHAR PRIMARY KEY,
+  is_full  BOOLEAN NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS selector_runs (
+  selector_run_id   VARCHAR PRIMARY KEY,
+  selector          VARCHAR NOT NULL,
+  selector_version  VARCHAR,
+  head_sha          VARCHAR,
+  base_sha          VARCHAR,
+  context_digest    VARCHAR,
+  source            VARCHAR NOT NULL DEFAULT 'real',
+  gate              JSON,
+  created_at        TIMESTAMP NOT NULL,
+  imported_at       TIMESTAMP DEFAULT (now() AT TIME ZONE 'UTC')  -- naive UTC, not session-local
+);
+
+CREATE TABLE IF NOT EXISTS selector_run_tests (
+  selector_run_id  VARCHAR NOT NULL,
+  ordinal          INTEGER NOT NULL,
+  test_key         VARCHAR,
+  file             VARCHAR NOT NULL,
+  title_path       JSON NOT NULL,
+  project          VARCHAR,
+  runner_file      VARCHAR,
+  score            DOUBLE,
+  confidence       DOUBLE,
+  reason           VARCHAR NOT NULL,
+  selected         BOOLEAN NOT NULL,
+  PRIMARY KEY (selector_run_id, ordinal)
+);
+
+CREATE TABLE IF NOT EXISTS gate_calibrations (
+  selector       VARCHAR NOT NULL,
+  calibrated_at  TIMESTAMP NOT NULL,
+  cutoff         DOUBLE NOT NULL,
+  unsure_below   DOUBLE NOT NULL,
+  unsure_margin  DOUBLE NOT NULL,
+  records        INTEGER NOT NULL,
+  real_failures  INTEGER NOT NULL,
+  recall_lb95    DOUBLE,
+  decision       VARCHAR NOT NULL,
+  rationale      VARCHAR NOT NULL,
+  PRIMARY KEY (selector, calibrated_at)
 );
 `;
 

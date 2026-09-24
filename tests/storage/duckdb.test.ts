@@ -409,4 +409,20 @@ describe("DuckDBStore", () => {
       rmSync(tempDir, { recursive: true, force: true });
     }
   });
+
+  it("stores title_path as JSON", async () => {
+    await store.insertWorkflowRun({
+      id: 901, repo: "o/r", branch: "main", commitSha: "tp1", event: "push",
+      status: "completed", createdAt: new Date(), durationMs: 1,
+    });
+    await store.insertTestResults([{
+      workflowRunId: 901, suite: "tests/a.test.ts", testName: "A works",
+      titlePath: ["A", "works"], status: "passed", durationMs: 1, retryCount: 0,
+      errorMessage: null, commitSha: "tp1", variant: null, createdAt: new Date(),
+    }]);
+    const [row] = await store.raw<{ title_path: string | null }>(
+      `SELECT title_path FROM test_results WHERE workflow_run_id = 901`,
+    );
+    expect(JSON.parse(row.title_path!)).toEqual(["A", "works"]);
+  });
 });

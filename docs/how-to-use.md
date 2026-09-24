@@ -259,6 +259,51 @@ Identity mapping on the flaker side:
 
 Because both the initial image and interaction scenarios for the same domain live under the same suite, suite-based aggregation and affected-suites handling stay natural. Both producer and consumer can declare `schemaVersion`, so historical data stays consistent.
 
+### `flaker export` — public datasets (flaker_v1)
+
+The storage tables are internal and may change in any release. The public, versioned view of the data is the DuckDB schema `flaker_v1`: nine datasets, each with a JSON Schema exported from `@mizchi/flaker/contracts/flaker-v1-datasets`. Every dataset shares the key `test_key`, the stable test ID.
+
+| Dataset | Content |
+|---|---|
+| `tests` | Test identity: `suite`, `test_name`, `task_id`, `variant`, `file`, `title_path` (JSON array), first and last seen. `file` + `title_path` is what selectors are matched on |
+| `runs` | One execution: `source` (`ci` / `local` / `mutation`), `workflow_name`, `lane`, `commit_sha`, `branch`, `event`, `is_full` (whether the whole suite ran) |
+| `results` | Per-test results: `run_id`, `test_key`, `status`, `retry_count`, `duration_ms` |
+| `flaky` | Flaky verdicts: `window_days`, `runs`, `failures`, `flaky_rate`, `is_flaky`. `failures` counts every result that failed at least once; `flaky_rate` counts only flake evidence (a retried pass, a `flaky` status, or a failure on a commit where the test also passed), so a plain regression has `flaky_rate = 0` |
+| `quarantine` | Quarantined tests: `reason`, `since`, `source` (`auto` / `manual`) |
+| `co_failures` | "This test failed when this file changed", aggregated: `changed_file`, `co_failures`, `changes`, `strength`. `changes` counts the commits in the window that changed the file and have a result for the test; `co_failures` counts those where the test failed at least once. One failing result on a commit is enough, and every file that commit changed is credited |
+| `selector_verdicts` | A selector's per-test decisions: `score`, `confidence`, `reason`, `selected` |
+| `misses` | Tests the selector did not select that really failed in a full run, one row per verdict. Only `real` selector runs are scored, against real full runs; mutation scoring arrives with the mutation phase |
+| `gate_calibration` | History of selector gate calibrations. The latest row is the current value |
+
+Runs with `source = mutation` never feed `flaky`, `co_failures` or `misses`.
+
+Stability rule: within `flaker_v1`, columns are only added. Removing, renaming or changing the meaning of a column means a new `flaker_v2`. External tools may open the `.duckdb` file directly, but they should read `flaker_v1.*` only, never the storage tables.
+
+```bash
+flaker export tests --format jsonl
+flaker export runs --since 2026-09-01 --format csv -o runs.csv
+flaker export results --format parquet -o .flaker/export/results.parquet
+flaker query "SELECT * FROM flaker_v1.flaky WHERE is_flaky"
+```
+
+- `--format` is `json` (default, an array), `jsonl`, `csv` (header in schema order; arrays and objects are JSON-encoded; a null is an empty cell and an empty string is `""`) or `parquet` (requires `-o`).
+- Timestamps are UTC. JSON and CSV write them as ISO strings ending in `Z`. Parquet keeps them as `TIMESTAMP` without a time zone (`isAdjustedToUTC = false`) holding the UTC wall-clock time, so read them as UTC. The JSON columns (`variant`, `title_path`, `changed_files`) are Parquet strings with the JSON logical type.
+- `--since <date>` keeps rows at or after an ISO date. A date alone (`2026-09-01`) means midnight UTC. A date-time needs an offset (`2026-09-01T09:00:00Z` or `…+09:00`), and impossible dates such as `2026-02-30` are rejected. It applies to `tests` (`last_seen_at`), `runs` and `results` (`created_at`), `quarantine` (`since`), `selector_verdicts` (`created_at`) and `gate_calibration` (`calibrated_at`); the other datasets reject it.
+- `--where <expr>` is an extra condition over the dataset's own columns, for example `--where "status = 'failed'"`. It must be a single row-level expression: subqueries, `;`, comments and filesystem functions are rejected. DuckDB parses the whole query first and it must stay one filter over the chosen dataset, and export runs with DuckDB's file access turned off except for the `-o` Parquet file.
+- Invalid input (unknown dataset or format, `--since` on a dataset without a time column, an unsafe `--where`) exits with code 2.
+
+#### `[workflow_lanes]` and `runs.is_full`
+
+`[workflow_lanes]` maps a workflow name or path to a lane. An entry may also be a table that says whether the lane runs the whole suite:
+
+```toml
+[workflow_lanes]
+"ci.yml" = "sampled"
+"nightly.yml" = { lane = "full-batch", full = true }
+```
+
+Runs in a lane with `full = true` have `runs.is_full = true`, and `full = false` forces `false`. For a lane without `full`, a run counts as full when it has results for at least 95% as many tests as the largest run of the same workflow within the preceding `[flaky].window_days` (the run itself included). Renamed or deleted tests therefore do not make a later full run look partial.
+
 ### Flaky test listing — `flaker status --list flaky`
 
 `flaker analyze flaky` was removed in 0.8.0. Flaky test listing is now part of `flaker status`:
@@ -537,6 +582,8 @@ flaker query "SELECT suite, test_name, status, COUNT(*) as cnt
 ```
 
 Run SQL directly against DuckDB. Full access to window functions, FILTER clauses, and other DuckDB analytics features.
+
+The query sees the flaker database only. DuckDB's external access is turned off before it runs, so `read_csv(…)`, `FROM 'file.parquet'` and similar cannot read files; to get data out, use `flaker export`. It also opens the database read-only and takes one statement (a trailing `;` is fine), so `SELECT 1; CREATE TABLE …` is rejected and no statement can change the database.
 
 ---
 

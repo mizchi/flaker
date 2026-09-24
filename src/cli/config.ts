@@ -44,16 +44,55 @@ export const DEFAULT_PROMOTION: PromotionThresholds = {
   data_confidence_min: "moderate",
 };
 
+export type WorkflowLaneEntry = string | { lane: string; full?: boolean };
+
+export interface NormalizedWorkflowLanes {
+  /** workflow name or path → lane */
+  lanes: Record<string, string>;
+  /** lane → whether its runs are full runs; absent when not configured */
+  fullByLane: Record<string, boolean>;
+}
+
+export function normalizeWorkflowLanes(
+  raw: Record<string, WorkflowLaneEntry> | undefined,
+): NormalizedWorkflowLanes {
+  const lanes: Record<string, string> = {};
+  const fullByLane: Record<string, boolean> = {};
+  for (const [workflow, entry] of Object.entries(raw ?? {})) {
+    if (typeof entry === "string") {
+      lanes[workflow] = entry;
+      continue;
+    }
+    if (!isTable(entry) || typeof entry.lane !== "string" || entry.lane === "") {
+      throw new FlakerUsageError(
+        `[workflow_lanes] "${workflow}" must be a lane name or { lane = "<name>", full = true|false }`,
+      );
+    }
+    lanes[workflow] = entry.lane;
+    if (entry.full === undefined) continue;
+    if (typeof entry.full !== "boolean") {
+      throw new FlakerUsageError(`[workflow_lanes] "${workflow}".full must be true or false`);
+    }
+    const previous = fullByLane[entry.lane];
+    if (previous !== undefined && previous !== entry.full) {
+      throw new FlakerUsageError(`[workflow_lanes] lane "${entry.lane}" has conflicting full values`);
+    }
+    fullByLane[entry.lane] = entry.full;
+  }
+  return { lanes, fullByLane };
+}
+
 export interface FlakerConfig {
   repo: { owner: string; name: string };
   storage: { path: string };
   collect?: { workflow_paths?: string[] };
   /**
-   * Optional GitHub-Actions workflow-name → lane mapping. Applied at collect/import
-   * time so `flaker explain cluster --lane <name>` can filter by lane afterwards.
-   * Example: { "cohort-regression-test" = "cohort", "ci.yml" = "sampled" }
+   * Optional GitHub-Actions workflow-name → lane mapping, applied at collect/import
+   * time. A value is either the lane name, or `{ lane = "<name>", full = true|false }`
+   * to also say whether runs in that lane execute the whole suite
+   * (`flaker_v1.runs.is_full`). A lane without `full` is judged by result count.
    */
-  workflow_lanes?: Record<string, string>;
+  workflow_lanes?: Record<string, WorkflowLaneEntry>;
   adapter: { type: string; command?: string; artifact_name?: string };
   runner: {
     type: string;
@@ -278,6 +317,8 @@ export function loadConfigWithDiagnostics(dir: string): LoadedConfigDiagnostics 
   const parsed = parse(content) as unknown as Record<string, unknown>;
   checkLegacyKeys(parsed);
   const config = deepMerge(DEFAULT_CONFIG, parsed);
+  // Fail on load, not later in collect or export, when a lane entry is malformed.
+  normalizeWorkflowLanes(config.workflow_lanes);
   return { config, warnings: [] };
 }
 
@@ -343,6 +384,13 @@ export function validateConfigRanges(config: FlakerConfig): ConfigRangeError[] {
   check("promotion.false_negative_rate_max_percentage", config.promotion.false_negative_rate_max_percentage, 0, 100, "0-100");
   check("promotion.pass_correlation_min_percentage", config.promotion.pass_correlation_min_percentage, 0, 100, "0-100");
   check("promotion.holdout_fnr_max_percentage", config.promotion.holdout_fnr_max_percentage, 0, 100, "0-100");
+
+  try {
+    normalizeWorkflowLanes(config.workflow_lanes);
+  } catch (error) {
+    if (!(error instanceof FlakerUsageError)) throw error;
+    errors.push({ path: "workflow_lanes", value: error.message, expected: "a lane name or { lane, full }" });
+  }
 
   const validConfidence = new Set(["low", "moderate", "high"]);
   if (!validConfidence.has(config.promotion.data_confidence_min)) {

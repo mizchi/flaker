@@ -29,6 +29,12 @@ export interface TestFailureLocation {
 export interface TestCaseResult {
   suite: string;
   testName: string;
+  /**
+   * The enclosing suites outermost first, then the test's own title. Selectors
+   * (jev-test-filter) name a test by `file` + this path. Null when the report
+   * format does not carry the structure (junit, tap, …).
+   */
+  titlePath?: string[] | null;
   taskId?: string | null;
   filter?: string | null;
   status: "passed" | "failed" | "skipped" | "flaky";

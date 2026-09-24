@@ -17,6 +17,7 @@ import {
 } from "../commands/status/summary.js";
 import { type GateName, VALID_GATE_NAMES } from "../gate.js";
 import { parseTagOption, WorkflowFilterError } from "../workflow-filter.js";
+import { assertReadOnlyQuery } from "../commands/analyze/sql-guard.js";
 
 export async function analyzeKpiAction(opts: { windowDays: string; json?: boolean }): Promise<void> {
   const config = loadConfig(process.cwd());
@@ -248,25 +249,21 @@ export async function analyzeContextAction(opts: { json?: boolean }): Promise<vo
 }
 
 export async function analyzeQueryAction(sql: string): Promise<void> {
-  // Reject write operations and dangerous DuckDB functions
-  const stripped = sql.replace(/--[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "").trim();
-  const normalized = stripped.toUpperCase();
-  const writePatterns = /^(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|COPY\s|ATTACH|LOAD|INSTALL)/;
-  if (writePatterns.test(normalized)) {
-    console.error("Error: query command only supports read-only (SELECT/WITH) queries.");
-    process.exit(1);
-  }
-  // Block DuckDB filesystem functions
-  const dangerousFns = /\b(READ_CSV_AUTO|READ_CSV|READ_PARQUET|READ_JSON_AUTO|READ_JSON|READ_BLOB|READ_TEXT|WRITE_CSV|HTTPFS)\s*\(/i;
-  if (dangerousFns.test(stripped)) {
-    console.error("Error: filesystem/network functions are not allowed in query command.");
-    process.exit(1);
-  }
+  // Readable rejections first. What holds is the store below: read-only, with
+  // external access off, so neither a write nor a file read can succeed.
+  assertReadOnlyQuery(sql);
   const config = loadConfig(process.cwd());
-  const store = new DuckDBStore(resolve(config.storage.path));
+  const path = resolve(config.storage.path);
+  // Create or migrate the schema and views, then reopen the file read-only.
+  const setup = new DuckDBStore(path);
+  await setup.initialize();
+  await setup.close();
+  const store = new DuckDBStore(path, { readOnly: true });
   await store.initialize();
 
   try {
+    // Replacement scans and PIVOT_* read files without a named function.
+    await store.disableExternalAccess();
     const rows = await runQuery(store, sql);
     console.log(formatQueryResult(rows as Record<string, unknown>[]));
   } finally {

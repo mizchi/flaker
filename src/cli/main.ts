@@ -12,6 +12,7 @@ import { registerDebugCommands, debugDoctorAction } from "./categories/debug.js"
 import { registerDevCommands } from "./categories/dev.js";
 import { registerApplyCommands } from "./categories/apply.js";
 import { registerCalibrateCommand } from "./categories/calibrate.js";
+import { registerExportCommand } from "./categories/export.js";
 import { FlakerUsageError } from "./errors.js";
 
 function isDirectCliExecution(): boolean {
@@ -32,6 +33,7 @@ export function createProgram(): Command {
   const program = new Command();
   registerApplyCommands(program);
   registerCalibrateCommand(program);
+  registerExportCommand(program);
   registerImportCommands(program);
   registerReportCommands(program);
   registerExplainCommands(program);
@@ -116,6 +118,7 @@ Primary commands:
   doctor                                        Verify local environment
   debug <retry|confirm|bisect|diagnose>         Incident investigation
   query <sql>                                   SQL escape hatch
+  export <dataset> [--format …]                 Write a public dataset (flaker_v1)
   explain <topic>                               AI-assisted analysis
   import <file> | import --ci                   Ingest reports or CI artifacts
   report <file> --summary|--diff|--aggregate    Local report shaping

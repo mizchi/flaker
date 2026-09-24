@@ -1,7 +1,9 @@
-import { mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { SCHEMA_DDL, FLAKY_QUERY, CO_FAILURE_QUERY, buildTestCoFailureQuery } from "./schema.js";
 import { createStableTestId, resolveTestIdentity } from "../identity.js";
+import { FLAKER_V1_VIEWS_SQL } from "../datasets/views.js";
 import type {
   MetricStore,
   WorkflowRun,
@@ -29,9 +31,18 @@ export class DuckDBStore implements MetricStore {
   private db: DuckDBDatabase | null = null;
   private conn: DuckDBConnection | null = null;
   private dbPath: string;
+  private readOnly: boolean;
+  /** A temp directory this store created (for `:memory:`) and removes on close. */
+  private ownedTempDir: string | null = null;
 
-  constructor(dbPath: string) {
+  /**
+   * `readOnly` opens an existing database file with DuckDB's read-only access
+   * mode and skips schema setup, so the file must already have been
+   * initialized by a writable store.
+   */
+  constructor(dbPath: string, opts: { readOnly?: boolean } = {}) {
     this.dbPath = dbPath;
+    this.readOnly = opts.readOnly ?? false;
   }
 
   async initialize(): Promise<void> {
@@ -41,21 +52,29 @@ export class DuckDBStore implements MetricStore {
     } catch (error) {
       throw this.buildDuckDBLoadError(error);
     }
-    if (this.dbPath !== ":memory:") {
+    if (this.readOnly && this.dbPath === ":memory:") {
+      throw new Error("an in-memory DuckDB database cannot be opened read-only");
+    }
+    if (this.dbPath !== ":memory:" && !this.readOnly) {
       mkdirSync(dirname(this.dbPath), { recursive: true });
     }
     this.db = await new Promise<DuckDBDatabase>((resolve, reject) => {
       try {
-        const db = new duckdb.Database(this.dbPath, (err: any) => {
+        const done = (err: any) => {
           if (err) reject(err);
           else resolve(db);
-        });
+        };
+        const db = this.readOnly
+          ? new duckdb.Database(this.dbPath, duckdb.OPEN_READONLY, done)
+          : new duckdb.Database(this.dbPath, done);
       } catch (err) {
         reject(err);
       }
     });
     this.conn = this.db.connect();
+    if (this.readOnly) return;
     await this.exec(SCHEMA_DDL);
+    await this.exec(FLAKER_V1_VIEWS_SQL);
     await this.backfillLegacyQuarantineEntries();
   }
 
@@ -85,6 +104,10 @@ export class DuckDBStore implements MetricStore {
       });
       this.conn = null;
       this.db = null;
+    }
+    if (this.ownedTempDir) {
+      rmSync(this.ownedTempDir, { recursive: true, force: true });
+      this.ownedTempDir = null;
     }
   }
 
@@ -224,8 +247,8 @@ export class DuckDBStore implements MetricStore {
     for (const r of results) {
       const resolved = resolveTestIdentity(r);
       await this.run(
-        `INSERT INTO test_results (id, workflow_run_id, test_id, task_id, suite, test_name, filter_text, status, duration_ms, retry_count, error_message, failure_location, stdout_text, stderr_text, artifact_paths, artifacts, commit_sha, variant, quarantine, created_at)
-         VALUES (nextval('test_results_id_seq'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO test_results (id, workflow_run_id, test_id, task_id, suite, test_name, filter_text, status, duration_ms, retry_count, error_message, failure_location, stdout_text, stderr_text, artifact_paths, artifacts, commit_sha, variant, quarantine, created_at, title_path)
+         VALUES (nextval('test_results_id_seq'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           resolved.workflowRunId,
           resolved.testId,
@@ -246,6 +269,7 @@ export class DuckDBStore implements MetricStore {
           resolved.variant ? JSON.stringify(resolved.variant) : null,
           resolved.quarantine ? JSON.stringify(resolved.quarantine) : null,
           resolved.createdAt,
+          resolved.titlePath ? JSON.stringify(resolved.titlePath) : null,
         ]
       );
     }
@@ -575,6 +599,44 @@ export class DuckDBStore implements MetricStore {
     return s.replace(/'/g, "''");
   }
 
+  /**
+   * Turn off DuckDB's external access (file reads and writes, extensions) for
+   * the rest of this store's life, keeping only `allowedPaths` and a private,
+   * absolute spill directory (`<db>.tmp` for a file, a fresh directory under
+   * the OS temp dir for `:memory:`, whose default `.tmp` is relative to the
+   * working directory). DuckDB cannot turn it back on while the database is
+   * open, so call this only right before a store's last queries (e.g.
+   * `flaker export`).
+   */
+  async disableExternalAccess(allowedPaths: string[] = []): Promise<void> {
+    const [state] = await this.all(`SELECT current_setting('enable_external_access') AS on`);
+    if (state?.on === false || state?.on === "false") {
+      const [paths] = await this.all(`SELECT current_setting('allowed_paths') AS p`);
+      const allowed = new Set<string>((paths?.p ?? []) as string[]);
+      const missing = allowedPaths.filter((p) => !allowed.has(p));
+      if (missing.length > 0) {
+        throw new Error(`external access is already disabled on this store; cannot allow ${missing.join(", ")}`);
+      }
+      return;
+    }
+    const list = (items: string[]) => `[${items.map((p) => `'${this.sanitizeSqlLiteral(p)}'`).join(", ")}]`;
+    const tempDir = this.dbPath === ":memory:"
+      ? (this.ownedTempDir ??= mkdtempSync(join(tmpdir(), "flaker-duckdb-")))
+      : `${resolve(this.dbPath)}.tmp`;
+    await this.run(`SET temp_directory = '${this.sanitizeSqlLiteral(tempDir)}'`);
+    if (allowedPaths.length > 0) await this.run(`SET allowed_paths = ${list(allowedPaths)}`);
+    await this.run(`SET allowed_directories = ${list([tempDir])}`);
+    await this.run(`SET enable_external_access = false`);
+  }
+
+  /** COPY the result of a parameter-free SELECT to a Parquet file. */
+  async copySelectToParquet(selectSql: string, outputPath: string): Promise<void> {
+    mkdirSync(dirname(outputPath), { recursive: true });
+    await this.run(
+      `COPY (${selectSql}) TO '${this.sanitizeSqlLiteral(outputPath)}' (FORMAT PARQUET)`,
+    );
+  }
+
   async exportRunToParquet(workflowRunId: number, outputDir: string): Promise<ExportResult> {
     mkdirSync(outputDir, { recursive: true });
 
@@ -826,6 +888,7 @@ export class DuckDBStore implements MetricStore {
 
 type DuckDBModule = {
   Database: new (...args: unknown[]) => DuckDBDatabase;
+  OPEN_READONLY: number;
 };
 
 type DuckDBDatabase = {

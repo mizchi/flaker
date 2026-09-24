@@ -9,8 +9,9 @@ const CLI = resolve(__filename, "../../../dist/cli/main.js");
 /**
  * The 0.13.0 surface contract.
  * The "Primary commands:" block of `flaker --help` MUST list exactly these
- * 12 entries (11 primary + `report` for IO). Adding a new primary command
- * requires updating this list AND the 2026-04-19 plan doc.
+ * 13 entries (12 primary + `report` for IO). Adding a new primary command
+ * requires updating this list AND the plan doc that adds it
+ * (`export`: docs/superpowers/plans/2026-09-24-flaker-test-db-phase2.md).
  */
 const PRIMARY = [
   "init",
@@ -22,13 +23,14 @@ const PRIMARY = [
   "doctor",
   "debug",
   "query",
+  "export",
   "explain",
   "import",
   "report",
 ];
 
 describe("primary command surface", () => {
-  it("lists exactly the 12 primary entries before the closing note", () => {
+  it("lists exactly the 13 primary entries before the closing note", () => {
     const res = spawnSync("node", [CLI, "--help"], { encoding: "utf8" });
     expect(res.status).toBe(0);
     const stdout = res.stdout;

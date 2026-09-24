@@ -194,4 +194,33 @@ describe("playwrightAdapter", () => {
       },
     ]);
   });
+
+  it("keeps the describe titles and the spec title as the title path, without the file suite", () => {
+    const results = playwrightAdapter.parse(fixtureJson);
+    const form = results.find((r) => r.testName === "should display form");
+    expect(form?.titlePath).toEqual(["login page", "should display form"]);
+    expect(form?.suite).toBe("tests/login.spec.ts");
+  });
+
+  it("keeps two levels of nested describe titles in the title path", () => {
+    const result = (title: string) => ({
+      title, ok: true, tests: [{ projectName: "chromium", results: [{ status: "passed", duration: 5, retry: 0 }] }],
+    });
+    const report = {
+      suites: [{
+        title: "tests/cart.spec.ts", file: "tests/cart.spec.ts",
+        specs: [result("top level")],
+        suites: [{
+          title: "cart", file: "tests/cart.spec.ts",
+          suites: [{ title: "checkout", file: "tests/cart.spec.ts", specs: [result("pays")] }],
+        }],
+      }],
+    };
+    const results = playwrightAdapter.parse(JSON.stringify(report));
+    expect(results.map((r) => [r.testName, r.titlePath, r.suite, r.taskId])).toEqual([
+      ["top level", ["top level"], "tests/cart.spec.ts", "tests/cart.spec.ts"],
+      // task_id is the innermost describe (existing identity rule), title_path keeps all of them.
+      ["pays", ["cart", "checkout", "pays"], "tests/cart.spec.ts", "checkout"],
+    ]);
+  });
 });

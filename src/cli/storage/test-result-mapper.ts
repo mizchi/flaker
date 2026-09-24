@@ -15,6 +15,7 @@ export function toStoredTestResult(
     workflowRunId: base.workflowRunId,
     suite: testCase.suite,
     testName: testCase.testName,
+    titlePath: testCase.titlePath ?? null,
     taskId: testCase.taskId,
     filter: testCase.filter,
     status: testCase.status,
