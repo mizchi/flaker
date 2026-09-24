@@ -182,6 +182,21 @@ describe("VitestRunner", () => {
     ]);
   });
 
+  it("listTests fails loudly when vitest list exits non-zero", async () => {
+    const runner = new VitestRunner({
+      command: "npx vitest run",
+      exec: () => ({
+        exitCode: 1,
+        stdout: "",
+        stderr: "Error: Failed to generate parquet fixtures via 'moon test'\n    at setup (tests/setup/parquet-fixtures.ts:47:11)",
+      }),
+    });
+
+    await expect(runner.listTests()).rejects.toThrow(
+      /vitest list exited with code 1: Error: Failed to generate parquet fixtures/,
+    );
+  });
+
   it("execute escapes special characters in test names", async () => {
     // With spawnSync, shell metacharacters are not a concern (no shell interpretation)
     // but the test name pattern should still be usable as a vitest filter

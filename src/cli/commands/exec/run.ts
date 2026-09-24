@@ -79,7 +79,11 @@ async function loadListedTests(
 ): Promise<TestId[]> {
   try {
     return await runner.listTests({ cwd });
-  } catch {
+  } catch (error) {
+    // Planning can still proceed from stored history, but a silent empty list
+    // hid a broken runner for weeks (issue #75), so say so.
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`warning: runner could not list tests; planning from stored history only (${message})\n`);
     return [];
   }
 }

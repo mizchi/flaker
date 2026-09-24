@@ -166,11 +166,15 @@ export class VitestRunner implements RunnerAdapter {
 
   async listTests(opts?: ExecuteOpts): Promise<TestId[]> {
     const { cmd, args } = parseBaseCommand(this.baseCommand);
-    const { stdout } = this.safeExecFn(
+    const { exitCode, stdout, stderr } = this.safeExecFn(
       cmd,
       [...normalizeVitestArgs(args, "list"), "--reporter", "json"],
       opts,
     );
+    if (exitCode !== 0) {
+      const detail = stderr.trim().split("\n").slice(0, 3).join(" | ");
+      throw new Error(`vitest list exited with code ${exitCode}: ${detail || "(no stderr)"}`);
+    }
     return parseVitestList(stdout);
   }
 }
