@@ -24,15 +24,6 @@ select = [
 reason = "command:eval"
 
 [[rules]]
-changed = ["src/cli/commands/train.ts"]
-select = [
-  "tests/commands/train.test.ts",
-  "tests/eval/gbdt.test.ts",
-  "tests/pipeline/*.test.ts",
-]
-reason = "command:train"
-
-[[rules]]
 changed = [
   "src/cli/commands/sample.ts",
   "src/cli/commands/run.ts",

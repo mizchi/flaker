@@ -10,7 +10,6 @@ export interface FlakerContext {
     commitsWithChanges: number;
     resolverConfigured: boolean;
     coverageDataAvailable: boolean;
-    gbdtModelAvailable: boolean;
     coFailureDataPoints: number;
     tunedAlpha: number | null;
     oldestDataDays: number | null;
@@ -36,7 +35,6 @@ export async function buildContext(
   const now = opts.now ?? new Date();
   const nowLiteral = now.toISOString().replace("T", " ").replace("Z", "");
   const modelsDir = resolve(dirname(opts.storagePath), "models");
-  const gbdtModelAvailable = existsSync(resolve(modelsDir, "gbdt.json"));
   let tunedAlpha: number | null = null;
   try {
     const tuningPath = resolve(modelsDir, "tuning.json");
@@ -97,26 +95,17 @@ export async function buildContext(
       commitsWithChanges: changesCount.cnt,
       resolverConfigured: opts.resolverConfigured,
       coverageDataAvailable: testCoverageCount.cnt > 0,
-      gbdtModelAvailable,
       coFailureDataPoints: coFailureCount.cnt,
       tunedAlpha,
       oldestDataDays: oldestDays,
       newestDataDays: newestDays,
     },
     strategies: {
-      random: {
-        requires: [],
-        characteristics: [
-          "No dependencies, works immediately",
-          "Recall scales linearly with sample percentage",
-          "Baseline for comparison — efficiency always ~1.0",
-        ],
-      },
       weighted: {
         requires: [],
         characteristics: [
           "Prioritizes tests with higher flaky rates",
-          "Slightly better than random when flaky tests exist",
+          "Better than uniform sampling when flaky tests exist",
           "No dependency on changed files",
         ],
       },
@@ -137,24 +126,6 @@ export async function buildContext(
           "Most effective with --changed flag",
         ],
       },
-      "coverage-guided": {
-        requires: ["coverage data (collect-coverage command)"],
-        characteristics: [
-          "Greedy set cover maximizing changed-edge coverage",
-          "Very high precision (tests selected are always relevant)",
-          "Lower recall than hybrid (misses flaky failures)",
-          "Best used as component within hybrid, not standalone",
-        ],
-      },
-      gbdt: {
-        requires: ["trained model in .flaker/models/gbdt.json (not yet integrated)"],
-        characteristics: [
-          "ML-based: learns from historical test/file/failure patterns",
-          "No resolver needed — 71-90% recall depending on data volume",
-          "Outperforms hybrid when co-failure correlation is moderate",
-          "Degrades with insufficient training data (<50 commits)",
-        ],
-      },
     },
   };
 }
@@ -171,7 +142,6 @@ export function formatContext(ctx: FlakerContext): string {
     `  Commits with changes:  ${env.commitsWithChanges}`,
     `  Co-failure data points: ${env.coFailureDataPoints}`,
     `  Resolver configured:   ${env.resolverConfigured}`,
-    `  GBDT model available:  ${env.gbdtModelAvailable}`,
     `  Coverage data:         ${env.coverageDataAvailable}`,
     `  Tuned alpha:           ${env.tunedAlpha ?? "not tuned"}`,
     `  Data range:            ${env.oldestDataDays != null ? `${env.oldestDataDays}d ago — ${env.newestDataDays}d ago` : "no data"}`,
