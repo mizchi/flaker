@@ -152,4 +152,59 @@ GROUP BY cc.file_path, tr.test_id, cfg.co_failure_window_days
 HAVING COUNT(DISTINCT cc.commit_sha) FILTER (WHERE ${FAILURE_SQL("tr")}) > 0;
 `;
 
-export const FLAKER_V1_VIEWS_SQL = [CORE_VIEWS, HISTORY_VIEWS].join("\n");
+const SELECTOR_VIEWS = `
+CREATE OR REPLACE VIEW flaker_v1.selector_verdicts AS
+SELECT
+  sr.selector_run_id,
+  sr.selector,
+  sr.selector_version,
+  sr.head_sha,
+  sr.base_sha,
+  sr.context_digest,
+  sr.source,
+  st.test_key,
+  st.file,
+  st.title_path,
+  st.project,
+  st.score,
+  st.confidence,
+  st.reason,
+  st.selected,
+  sr.created_at
+FROM selector_runs sr
+JOIN selector_run_tests st ON st.selector_run_id = sr.selector_run_id;
+
+CREATE OR REPLACE VIEW flaker_v1.gate_calibration AS
+SELECT selector, calibrated_at, cutoff, unsure_below, unsure_margin,
+  records, real_failures, recall_lb95, decision, rationale
+FROM gate_calibrations;
+
+-- Internal (not flaker_v1): failures in full runs that count as ground truth.
+CREATE OR REPLACE VIEW selector_ground_truth AS
+SELECT DISTINCT r.run_id AS ci_run_id, ru.commit_sha, r.test_key
+FROM flaker_v1.results r
+JOIN flaker_v1.runs ru ON ru.run_id = r.run_id
+WHERE ru.is_full
+  AND ru.source <> 'mutation'
+  AND r.status = 'failed'
+  AND r.test_key NOT IN (SELECT test_key FROM flaker_v1.flaky WHERE is_flaky)
+  AND r.test_key NOT IN (SELECT test_key FROM flaker_v1.quarantine);
+
+CREATE OR REPLACE VIEW flaker_v1.misses AS
+SELECT DISTINCT
+  v.selector_run_id,
+  v.test_key,
+  v.head_sha,
+  gt.ci_run_id,
+  v.reason,
+  COALESCE(
+    (SELECT to_json(list(cc.file_path ORDER BY cc.file_path))
+     FROM commit_changes cc WHERE cc.commit_sha = v.head_sha),
+    '[]'::JSON
+  ) AS changed_files
+FROM flaker_v1.selector_verdicts v
+JOIN selector_ground_truth gt ON gt.commit_sha = v.head_sha AND gt.test_key = v.test_key
+WHERE v.test_key IS NOT NULL AND NOT v.selected;
+`;
+
+export const FLAKER_V1_VIEWS_SQL = [CORE_VIEWS, HISTORY_VIEWS, SELECTOR_VIEWS].join("\n");

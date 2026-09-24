@@ -57,3 +57,35 @@ export async function keyFor(store: DuckDBStore, suite: string, testName: string
   if (!row) throw new Error(`no test ${suite} :: ${testName}`);
   return row.test_key;
 }
+
+export interface SeedVerdict {
+  testKey: string | null;
+  file: string;
+  titlePath: string[];
+  reason: string;
+  selected: boolean;
+  score?: number | null;
+  confidence?: number | null;
+}
+
+/** Writes selector tables directly; 2b replaces this with insertSelectorRecord. */
+export async function seedSelectorRun(store: DuckDBStore, run: {
+  id: string;
+  headSha: string | null;
+  source?: "real" | "mutation";
+  contextDigest?: string | null;
+  tests: SeedVerdict[];
+}): Promise<void> {
+  await store.raw(
+    `INSERT INTO selector_runs (selector_run_id, selector, selector_version, head_sha, base_sha, context_digest, source, gate, created_at)
+     VALUES (?, 'jev', NULL, ?, NULL, ?, ?, NULL, ?)`,
+    [run.id, run.headSha, run.contextDigest ?? null, run.source ?? "real", new Date()],
+  );
+  for (const [i, t] of run.tests.entries()) {
+    await store.raw(
+      `INSERT INTO selector_run_tests (selector_run_id, ordinal, test_key, file, title_path, project, runner_file, score, confidence, reason, selected)
+       VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?)`,
+      [run.id, i, t.testKey, t.file, JSON.stringify(t.titlePath), t.score ?? null, t.confidence ?? null, t.reason, t.selected],
+    );
+  }
+}
