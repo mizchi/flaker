@@ -55,3 +55,28 @@ describe("runDoctor", () => {
     expect(formatDoctorReport(report)).toContain("WARN  quarantine.flaky_rate_threshold=0.3");
   });
 });
+
+describe("formatDoctorReport config remediation", () => {
+  const report = (detail: string) => ({
+    ok: false,
+    checks: [{ name: "config", ok: false, detail }],
+  });
+
+  it("suggests flaker init only when the config file is missing", () => {
+    const out = formatDoctorReport(report("Config file not found: /x/flaker.toml. Run 'flaker init' to create one."));
+    expect(out).toContain("flaker init");
+  });
+
+  it("points at the migration guide, not flaker init, for removed or renamed keys", () => {
+    const out = formatDoctorReport(
+      report("flaker.toml uses removed or renamed keys (see docs/migration-0.12-to-0.13.md and docs/how-to-use.md#config-migration):\n  [profile.ci] was renamed to [gate.merge]"),
+    );
+    expect(out).not.toContain("flaker init");
+    expect(out).toContain("Fix each key listed above");
+  });
+
+  it("gives no init hint for other config errors", () => {
+    const out = formatDoctorReport(report("Invalid TOML at line 3"));
+    expect(out).not.toContain("flaker init");
+  });
+});

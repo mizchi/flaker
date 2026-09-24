@@ -120,10 +120,20 @@ export async function runDoctor(cwd: string, deps?: Partial<DoctorDeps>): Promis
 }
 
 const REMEDIATION: Record<string, string> = {
-  config: "Run 'flaker init --owner <org> --name <repo>' to create one",
   duckdb: "Run 'pnpm rebuild duckdb' or 'npm rebuild duckdb'",
   moonbit: "Install MoonBit from https://moonbitlang.com (optional, fallback available)",
 };
+
+function remediationFor(check: DoctorCheck): string | undefined {
+  if (check.name !== "config") return REMEDIATION[check.name];
+  if (check.detail.includes("Config file not found")) {
+    return "Run 'flaker init --owner <org> --name <repo>' to create one";
+  }
+  if (check.detail.includes("removed or renamed keys") || check.detail.includes("deprecated keys")) {
+    return "Fix each key listed above; see docs/migration-0.12-to-0.13.md";
+  }
+  return undefined;
+}
 
 export function formatDoctorReport(report: DoctorReport): string {
   const lines: string[] = [];
@@ -134,8 +144,9 @@ export function formatDoctorReport(report: DoctorReport): string {
         lines.push(`WARN  ${warning}`);
       }
     }
-    if (!c.ok && REMEDIATION[c.name]) {
-      lines.push(`              → ${REMEDIATION[c.name]}`);
+    const remediation = c.ok ? undefined : remediationFor(c);
+    if (remediation) {
+      lines.push(`              → ${remediation}`);
     }
   }
   lines.push("");
