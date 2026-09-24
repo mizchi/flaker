@@ -54,6 +54,19 @@ function isIdentityCoreExports(
   );
 }
 
+// MoonBit's `String::lexical_compare` orders by UTF-16 code unit, which is
+// also what JS relational operators do. `localeCompare` is ICU collation and
+// must not be used for anything that feeds a test id.
+function compareCodeUnits(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+// MoonBit's JSON parser rejects lone-surrogate escapes, so every string is
+// made well-formed (lone surrogates become U+FFFD) before either core sees it.
+function wellFormed(value: string): string {
+  return value.toWellFormed();
+}
+
 function toCoreVariant(
   variant?: Record<string, string> | null,
 ): CoreStableVariantEntryInput[] | null {
@@ -61,8 +74,8 @@ function toCoreVariant(
 
   const entries = Object.entries(variant)
     .filter(([, value]) => value != null)
-    .map(([key, value]) => [key, String(value)] as const)
-    .sort(([a], [b]) => a.localeCompare(b));
+    .map(([key, value]) => [wellFormed(key), wellFormed(String(value))] as const)
+    .sort(([a], [b]) => compareCodeUnits(a, b));
 
   if (entries.length === 0) return null;
   return entries.map(([key, value]) => ({ key, value }));
@@ -76,21 +89,21 @@ function fromCoreVariant(
   }
   return Object.fromEntries(
     [...variant]
-      .sort((a, b) => a.key.localeCompare(b.key))
+      .sort((a, b) => compareCodeUnits(a.key, b.key))
       .map((entry) => [entry.key, entry.value] as const),
   );
 }
 
 function toCoreInput(input: TestIdentityFields): CoreStableTestIdentityInput {
   const base: CoreStableTestIdentityInput = {
-    suite: input.suite,
-    test_name: input.testName,
+    suite: wellFormed(input.suite),
+    test_name: wellFormed(input.testName),
   };
   if (input.taskId != null) {
-    base.task_id = input.taskId;
+    base.task_id = wellFormed(input.taskId);
   }
   if (input.filter != null) {
-    base.filter = input.filter;
+    base.filter = wellFormed(input.filter);
   }
   const variant = toCoreVariant(input.variant);
   if (variant) {
@@ -102,19 +115,27 @@ function toCoreInput(input: TestIdentityFields): CoreStableTestIdentityInput {
   return base;
 }
 
+function sortCoreVariant(
+  variant: CoreStableVariantEntryInput[] | null | undefined,
+): CoreStableVariantEntryInput[] | null {
+  if (!variant || variant.length === 0) return null;
+  return [...variant].sort((a, b) => compareCodeUnits(a.key, b.key));
+}
+
+// Mirrors `create_stable_test_id` in src/identity/identity_core.mbt. The JSON
+// text is assembled by hand in MoonBit's key order: going through a JS object
+// would move integer-like variant keys ("9", "10") to the front.
 function createStableTestIdFallback(
   input: CoreStableTestIdentityInput,
 ): string {
+  const quote = (value: string) => JSON.stringify(value);
   const taskId = input.task_id ?? input.suite;
-  const filter = input.filter ?? null;
-  const variant = fromCoreVariant(input.variant);
-  return JSON.stringify({
-    taskId,
-    suite: input.suite,
-    testName: input.test_name,
-    filter,
-    variant,
-  });
+  const filter = input.filter != null ? quote(input.filter) : "null";
+  const entries = sortCoreVariant(input.variant);
+  const variant = entries
+    ? `{${entries.map((entry) => `${quote(entry.key)}:${quote(entry.value)}`).join(",")}}`
+    : "null";
+  return `{"taskId":${quote(taskId)},"suite":${quote(input.suite)},"testName":${quote(input.test_name)},"filter":${filter},"variant":${variant}}`;
 }
 
 function resolveTestIdentityFallback(
@@ -122,7 +143,7 @@ function resolveTestIdentityFallback(
 ): CoreResolvedStableTestIdentityOutput {
   const taskId = input.task_id ?? input.suite;
   const filter = input.filter;
-  const variant = toCoreVariant(fromCoreVariant(input.variant));
+  const variant = sortCoreVariant(input.variant);
   return {
     suite: input.suite,
     test_name: input.test_name,
@@ -157,12 +178,19 @@ const tsFallbackCore: IdentityCoreExports = {
 };
 
 let identityCore: IdentityCoreExports = tsFallbackCore;
-let bridgeLoadStarted = false;
+let bridgeLoad: Promise<void> | undefined;
 
-function ensureBridgeLoad(): void {
-  if (bridgeLoadStarted) return;
-  bridgeLoadStarted = true;
-  importOptionalMoonBitBridge<IdentityCoreExports>(
+/**
+ * Loads the MoonBit identity core. The CLI awaits this before running any
+ * command (see the preAction hook in main.ts) so that one process never
+ * computes ids with both cores. Other callers that compute ids before it
+ * resolves get the TS fallback, which produces the same ids.
+ *
+ * Not done with a top-level await: importing the bridge runs its `main`,
+ * which prints the core version for `flaker --version`.
+ */
+export function loadIdentityCore(): Promise<void> {
+  bridgeLoad ??= importOptionalMoonBitBridge<IdentityCoreExports>(
     MOONBIT_JS_BRIDGE_URL,
     isIdentityCoreExports,
   ).then((mod) => {
@@ -170,6 +198,7 @@ function ensureBridgeLoad(): void {
   }).catch(() => {
     // bridge unavailable — keep using the TS fallback
   });
+  return bridgeLoad;
 }
 
 export function normalizeVariant(
@@ -179,7 +208,7 @@ export function normalizeVariant(
 }
 
 export function createStableTestId(input: TestIdentityFields): string {
-  ensureBridgeLoad();
+  void loadIdentityCore();
   return JSON.parse(
     identityCore.create_stable_test_id_json(JSON.stringify(toCoreInput(input))),
   ) as string;
@@ -188,7 +217,7 @@ export function createStableTestId(input: TestIdentityFields): string {
 export function resolveTestIdentity<T extends TestIdentityFields>(
   input: T,
 ): T & ResolvedTestIdentity {
-  ensureBridgeLoad();
+  void loadIdentityCore();
   const resolved = JSON.parse(
     identityCore.resolve_test_identity_json(JSON.stringify(toCoreInput(input))),
   ) as CoreResolvedStableTestIdentityOutput;
