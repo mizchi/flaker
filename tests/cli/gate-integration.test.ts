@@ -18,7 +18,7 @@ describe("gate integration", () => {
 
   const gates: Partial<Record<GateName, GateConfig>> = {
     release: { strategy: "full" },
-    merge: { strategy: "hybrid", sample_percentage: 25, adaptive: true },
+    merge: { strategy: "hybrid", sample_percentage: 25 },
     iteration: {
       strategy: "affected",
       max_duration_seconds: 60,

@@ -14,9 +14,6 @@ import {
   resolveFallbackSamplingMode,
   type ResolvedGate,
 } from "../../gate-config.js";
-import { computeAdaptivePercentage } from "../../adaptive.js";
-import { computeKpi as computeKpiDefault } from "../analyze/kpi.js";
-import { runInsights as runInsightsDefault } from "../analyze/insights.js";
 import type { MetricStore } from "../../storage/types.js";
 import {
   parseSampleCount,
@@ -51,7 +48,6 @@ export interface PreparedRunRequest {
   holdoutRatio?: number;
   resolver?: DependencyResolver;
   quarantineManifestEntries?: QuarantineManifestEntry[];
-  adaptiveReason?: string;
   timeBudgetSeconds?: number;
 }
 
@@ -59,8 +55,6 @@ export interface PrepareRunRequestDeps {
   detectChangedFiles?: typeof detectChangedFilesDefault;
   loadQuarantineManifestIfExists?: typeof loadQuarantineManifestIfExistsDefault;
   createResolver?: typeof createResolverDefault;
-  computeKpi?: typeof computeKpiDefault;
-  runInsights?: typeof runInsightsDefault;
 }
 
 interface PrepareRunRequestOpts {
@@ -98,13 +92,9 @@ export async function prepareRunRequest(
   const loadQuarantineManifestIfExists =
     deps.loadQuarantineManifestIfExists ?? loadQuarantineManifestIfExistsDefault;
   const createResolver = deps.createResolver ?? createResolverDefault;
-  const computeKpi = deps.computeKpi ?? computeKpiDefault;
-  const runInsights = deps.runInsights ?? runInsightsDefault;
 
   const gateName = resolveGateName(input.opts.gate);
   const resolvedGate = resolveGate(gateName, input.config.gate, input.config.sampling);
-  // Adaptive sampling is read straight from [gate.<name>] until it is removed.
-  const adaptiveConfig = input.config.gate?.[gateName];
   const requestedStrategy = input.opts.strategy?.trim();
   const mode = parseSamplingMode(
     requestedStrategy && requestedStrategy.length > 0
@@ -135,31 +125,8 @@ export async function prepareRunRequest(
       )
       : undefined;
 
-  let percentage =
+  const percentage =
     parseSamplePercentage(input.opts.percentage) ?? resolvedGate.sample_percentage;
-  let adaptiveReason: string | undefined;
-  if (adaptiveConfig?.adaptive && percentage != null) {
-    const kpiData = await computeKpi(input.store);
-    const insightsData = await runInsights({ store: input.store });
-    const divergenceRate = insightsData.summary.totalTests > 0
-      ? insightsData.summary.ciOnlyCount / insightsData.summary.totalTests
-      : null;
-    const adaptive = computeAdaptivePercentage(
-      {
-        falseNegativeRate: kpiData.sampling.falseNegativeRate,
-        divergenceRate,
-      },
-      {
-        basePercentage: percentage,
-        fnrLow: adaptiveConfig.adaptive_fnr_low_ratio ?? 0.02,
-        fnrHigh: adaptiveConfig.adaptive_fnr_high_ratio ?? 0.05,
-        minPercentage: adaptiveConfig.adaptive_min_percentage ?? 10,
-        step: adaptiveConfig.adaptive_step ?? 5,
-      },
-    );
-    percentage = adaptive.percentage;
-    adaptiveReason = adaptive.reason;
-  }
 
   return {
     gateName,
@@ -179,7 +146,6 @@ export async function prepareRunRequest(
       : resolvedGate.holdout_ratio,
     resolver,
     quarantineManifestEntries,
-    adaptiveReason,
     timeBudgetSeconds: resolvedGate.max_duration_seconds,
   };
 }

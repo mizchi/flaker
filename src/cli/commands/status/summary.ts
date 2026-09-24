@@ -59,7 +59,6 @@ export interface StatusGateSummary {
   strategy: string;
   samplePercentage: number | null;
   maxDurationSeconds: number | null;
-  adaptive: boolean;
 }
 
 export interface StatusSummary {
@@ -95,8 +94,6 @@ function buildGateSummary(config: FlakerConfig, gate: GateName): StatusGateSumma
     strategy: resolved.strategy,
     samplePercentage: resolved.sample_percentage ?? null,
     maxDurationSeconds: resolved.max_duration_seconds ?? null,
-    // Adaptive sampling is read straight from [gate.<name>] until it is removed.
-    adaptive: config.gate?.[gate]?.adaptive ?? false,
   };
 }
 
@@ -238,8 +235,7 @@ export function formatStatusSummary(summary: StatusSummary): string {
     lines.push(
       `  ${gate}: ${info.strategy}`
       + `, budget=${info.maxDurationSeconds ?? "N/A"}s`
-      + `, sample=${info.samplePercentage ?? "N/A"}%`
-      + `, adaptive=${info.adaptive ? "on" : "off"}`,
+      + `, sample=${info.samplePercentage ?? "N/A"}%`,
     );
   }
 
@@ -310,14 +306,14 @@ export function formatStatusMarkdown(summary: StatusSummary): string {
     "",
     "## Gates",
     "",
-    "| Gate | Strategy | Sample | Budget (s) | Adaptive |",
-    "| --- | --- | --- | --- | --- |",
+    "| Gate | Strategy | Sample | Budget (s) |",
+    "| --- | --- | --- | --- |",
   ];
 
   for (const gate of Object.keys(summary.gates) as GateName[]) {
     const info = summary.gates[gate];
     lines.push(
-      `| ${gate} | ${info.strategy} | ${info.samplePercentage != null ? `${info.samplePercentage}%` : "N/A"} | ${info.maxDurationSeconds ?? "N/A"} | ${info.adaptive ? "on" : "off"} |`,
+      `| ${gate} | ${info.strategy} | ${info.samplePercentage != null ? `${info.samplePercentage}%` : "N/A"} | ${info.maxDurationSeconds ?? "N/A"} |`,
     );
   }
 

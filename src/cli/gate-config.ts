@@ -69,7 +69,7 @@ export function resolveGate(
     merged.sample_percentage = 100;
     merged.holdout_ratio = 0;
   }
-  // Built field by field so GateConfig-only keys (adaptive*) do not leak into ResolvedGate.
+  // Built field by field so future GateConfig-only keys do not leak into ResolvedGate.
   return {
     name,
     strategy: merged.strategy,

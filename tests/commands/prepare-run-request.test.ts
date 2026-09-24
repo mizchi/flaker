@@ -25,7 +25,6 @@ const baseConfig: FlakerConfig = {
     merge: {
       strategy: "hybrid",
       sample_percentage: 25,
-      adaptive: true,
       max_duration_seconds: 300,
     },
     iteration: {
@@ -58,8 +57,6 @@ describe("prepareRunRequest", () => {
         detectChangedFiles,
         loadQuarantineManifestIfExists: loadManifest,
         createResolver,
-        computeKpi: async () => ({ sampling: { falseNegativeRate: null } }),
-        runInsights: async () => ({ summary: { totalTests: 0, ciOnlyCount: 0 } }),
       },
     });
 
@@ -101,8 +98,6 @@ describe("prepareRunRequest", () => {
       },
       deps: {
         loadQuarantineManifestIfExists: loadManifest,
-        computeKpi: async () => ({ sampling: { falseNegativeRate: null } }),
-        runInsights: async () => ({ summary: { totalTests: 0, ciOnlyCount: 0 } }),
       },
     });
 
@@ -112,36 +107,6 @@ describe("prepareRunRequest", () => {
     });
     expect(prepared.skipQuarantined).toBeUndefined();
     expect(prepared.quarantineManifestEntries).toEqual([{ id: "q-runtime" }]);
-  });
-
-  it("applies adaptive percentage and exposes notes for display", async () => {
-    const computeKpi = vi.fn(async () => ({
-      sampling: { falseNegativeRate: 0.01 },
-    }));
-    const runInsights = vi.fn(async () => ({
-      summary: { totalTests: 10, ciOnlyCount: 0 },
-    }));
-
-    const prepared = await prepareRunRequest({
-      cwd: "/repo",
-      config: baseConfig,
-      store: {} as MetricStore,
-      opts: {
-        gate: "merge",
-        strategy: "",
-      },
-      deps: {
-        detectChangedFiles: () => [],
-        computeKpi,
-        runInsights,
-      },
-    });
-
-    expect(prepared.percentage).toBe(20);
-    expect(prepared.adaptiveReason).toContain("reduced");
-    expect(prepared.timeBudgetSeconds).toBe(300);
-    expect(computeKpi).toHaveBeenCalled();
-    expect(runInsights).toHaveBeenCalled();
   });
 
   it("does not create a resolver when strategy is weighted", async () => {

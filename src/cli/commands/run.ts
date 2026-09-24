@@ -53,9 +53,6 @@ export async function execRunAction(rawOpts: SamplingCliOpts & { runner: string;
     });
 
     console.log(`# Gate: ${prepared.gateName}`);
-    if (prepared.adaptiveReason) {
-      console.log(`# Adaptive: ${prepared.adaptiveReason}`);
-    }
     if (prepared.timeBudgetSeconds != null) {
       console.log(`# Time budget: ${prepared.timeBudgetSeconds}s`);
     }

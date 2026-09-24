@@ -37,10 +37,6 @@ strategy = "full"
 strategy = "hybrid"
 sample_percentage = 30
 holdout_ratio = 0.1
-adaptive = true
-adaptive_fnr_low_ratio = 0.02
-adaptive_fnr_high_ratio = 0.05
-adaptive_min_percentage = 15
 
 [gate.iteration]
 strategy = "affected"

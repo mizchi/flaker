@@ -9,7 +9,7 @@ describe("formatStatusSummary with filtered gates", () => {
       activity: { totalRuns: 0, ciRuns: 0, localRuns: 0, passedResults: 0, failedResults: 0 },
       health: { dataConfidence: "low", matchedCommits: 0, sampleRatio: null, brokenTests: 0, intermittentFlaky: 0, flakyTrend: 0 },
       gates: {
-        merge: { strategy: "hybrid", samplePercentage: 30, maxDurationSeconds: null, adaptive: true },
+        merge: { strategy: "hybrid", samplePercentage: 30, maxDurationSeconds: null },
       },
       quarantine: { currentCount: 0, pendingAddCount: 0, pendingRemoveCount: 0 },
       drift: { ok: false, unmet: [] },
@@ -27,9 +27,9 @@ describe("formatStatusSummary with filtered gates", () => {
       activity: { totalRuns: 0, ciRuns: 0, localRuns: 0, passedResults: 0, failedResults: 0 },
       health: { dataConfidence: "low", matchedCommits: 0, sampleRatio: null, brokenTests: 0, intermittentFlaky: 0, flakyTrend: 0 },
       gates: {
-        iteration: { strategy: "weighted", samplePercentage: 20, maxDurationSeconds: 60, adaptive: false },
-        merge: { strategy: "hybrid", samplePercentage: 30, maxDurationSeconds: null, adaptive: true },
-        release: { strategy: "full", samplePercentage: null, maxDurationSeconds: null, adaptive: false },
+        iteration: { strategy: "weighted", samplePercentage: 20, maxDurationSeconds: 60 },
+        merge: { strategy: "hybrid", samplePercentage: 30, maxDurationSeconds: null },
+        release: { strategy: "full", samplePercentage: null, maxDurationSeconds: null },
       },
       quarantine: { currentCount: 0, pendingAddCount: 0, pendingRemoveCount: 0 },
       drift: { ok: true, unmet: [] },

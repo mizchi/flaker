@@ -5,9 +5,6 @@ import { tmpdir } from "node:os";
 import { loadConfig } from "../../src/cli/config.js";
 import { resolveGate, resolveGateName } from "../../src/cli/gate-config.js";
 import { LEGACY_PROFILE_TO_GATE } from "../../src/cli/gate.js";
-import {
-  computeAdaptivePercentage,
-} from "../../src/cli/adaptive.js";
 
 describe("loadConfig with gate sections", () => {
   let dir: string;
@@ -63,9 +60,6 @@ max_duration_seconds = 300
 [gate.iteration]
 strategy = "weighted"
 sample_percentage = 10
-adaptive = true
-adaptive_fnr_low_ratio = 0.01
-adaptive_fnr_high_ratio = 0.04
 skip_flaky_tagged = true
 `.trim(),
     );
@@ -84,9 +78,6 @@ skip_flaky_tagged = true
     expect(config.gate?.iteration).toMatchObject({
       strategy: "weighted",
       sample_percentage: 10,
-      adaptive: true,
-      adaptive_fnr_low_ratio: 0.01,
-      adaptive_fnr_high_ratio: 0.04,
       skip_flaky_tagged: true,
     });
     expect(config.runner.flaky_tag_pattern).toBe("@flaky");
@@ -224,16 +215,6 @@ describe("resolveGate", () => {
     expect(result.sample_percentage).toBe(20);
   });
 
-  it("does not expose adaptive fields", () => {
-    const result = resolveGate(
-      "iteration",
-      { iteration: { strategy: "weighted", adaptive: true, adaptive_step: 2 } },
-      undefined,
-    );
-    expect(result).not.toHaveProperty("adaptive");
-    expect(result).not.toHaveProperty("adaptive_step");
-  });
-
   it("handles max_duration_seconds and fallback_strategy", () => {
     const result = resolveGate(
       "merge",
@@ -247,64 +228,5 @@ describe("resolveGate", () => {
   it("uses 'weighted' as default strategy when no gate or sampling", () => {
     const result = resolveGate("release", undefined, undefined);
     expect(result.strategy).toBe("weighted");
-  });
-});
-
-describe("computeAdaptivePercentage", () => {
-  const defaultOpts = {
-    basePercentage: 30,
-    fnrLow: 0.02,
-    fnrHigh: 0.05,
-    minPercentage: 10,
-    step: 5,
-  };
-
-  it("reduces percentage when FNR is below low threshold", () => {
-    const result = computeAdaptivePercentage({ falseNegativeRate: 0.01, divergenceRate: null }, defaultOpts);
-    expect(result.percentage).toBe(25);
-  });
-
-  it("keeps percentage when FNR is between thresholds", () => {
-    const result = computeAdaptivePercentage({ falseNegativeRate: 0.03, divergenceRate: null }, defaultOpts);
-    expect(result.percentage).toBe(30);
-  });
-
-  it("increases percentage when FNR exceeds high threshold", () => {
-    const result = computeAdaptivePercentage({ falseNegativeRate: 0.06, divergenceRate: null }, { ...defaultOpts, basePercentage: 20 });
-    expect(result.percentage).toBe(25);
-  });
-
-  it("never goes below minPercentage", () => {
-    const result = computeAdaptivePercentage({ falseNegativeRate: 0.001, divergenceRate: null }, { ...defaultOpts, basePercentage: 12, minPercentage: 10 });
-    expect(result.percentage).toBeGreaterThanOrEqual(10);
-  });
-
-  it("returns base percentage when both signals are null (no data)", () => {
-    const result = computeAdaptivePercentage({ falseNegativeRate: null, divergenceRate: null }, defaultOpts);
-    expect(result.percentage).toBe(30);
-    expect(result.reason).toContain("no data");
-  });
-
-  it("uses divergence rate when FNR is null", () => {
-    const result = computeAdaptivePercentage({ falseNegativeRate: null, divergenceRate: 0.06 }, { ...defaultOpts, basePercentage: 20 });
-    expect(result.percentage).toBe(25);
-    expect(result.reason).toContain("divergence");
-  });
-
-  it("uses worse signal when both present", () => {
-    const result = computeAdaptivePercentage({ falseNegativeRate: 0.01, divergenceRate: 0.08 }, { ...defaultOpts, basePercentage: 20 });
-    expect(result.percentage).toBe(25);
-    expect(result.reason).toContain("divergence");
-  });
-
-  it("reduces when both signals are low", () => {
-    const result = computeAdaptivePercentage({ falseNegativeRate: 0.005, divergenceRate: 0.01 }, { ...defaultOpts, basePercentage: 30 });
-    expect(result.percentage).toBe(25);
-  });
-
-  it("reason includes both signal values when both present", () => {
-    const result = computeAdaptivePercentage({ falseNegativeRate: 0.03, divergenceRate: 0.04 }, defaultOpts);
-    expect(result.reason).toContain("FNR");
-    expect(result.reason).toContain("divergence");
   });
 });

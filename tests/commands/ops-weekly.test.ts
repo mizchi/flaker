@@ -23,7 +23,7 @@ function makeConfig(): FlakerConfig {
     },
     gate: {
       iteration: { strategy: "affected", max_duration_seconds: 20, fallback_strategy: "weighted" },
-      merge: { strategy: "hybrid", sample_percentage: 25, adaptive: true, max_duration_seconds: 600 },
+      merge: { strategy: "hybrid", sample_percentage: 25, max_duration_seconds: 600 },
       release: { strategy: "full", max_duration_seconds: 1800 },
     },
   };

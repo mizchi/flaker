@@ -23,11 +23,6 @@ export interface GateConfig {
   co_failure_window_days?: number;      // was `co_failure_days`
   skip_quarantined?: boolean;
   skip_flaky_tagged?: boolean;
-  adaptive?: boolean;
-  adaptive_fnr_low_ratio?: number;      // was `adaptive_fnr_low`
-  adaptive_fnr_high_ratio?: number;     // was `adaptive_fnr_high`
-  adaptive_min_percentage?: number;
-  adaptive_step?: number;
   max_duration_seconds?: number;
   fallback_strategy?: string;
 }
@@ -161,16 +156,22 @@ const LEGACY_KEYS: LegacyKeyEntry[] = [
 const LEGACY_GATE_KEYS: LegacyKeyEntry[] = [
   { section: "gate.*", oldKey: "percentage", newKey: "sample_percentage", unitNote: "value range 0-100" },
   { section: "gate.*", oldKey: "co_failure_days", newKey: "co_failure_window_days", unitNote: "days (int)" },
-  { section: "gate.*", oldKey: "adaptive_fnr_low", newKey: "adaptive_fnr_low_ratio", unitNote: "0.0-1.0" },
-  { section: "gate.*", oldKey: "adaptive_fnr_high", newKey: "adaptive_fnr_high_ratio", unitNote: "0.0-1.0" },
 ];
 
-const REMOVED_IN_0_13 = ["cluster_mode", "model_path"] as const;
+const REMOVED_IN_0_13 = [
+  "cluster_mode",
+  "model_path",
+  "adaptive",
+  "adaptive_fnr_low_ratio",
+  "adaptive_fnr_high_ratio",
+  "adaptive_min_percentage",
+  "adaptive_step",
+] as const;
 const REMOVED_STRATEGIES = new Set(["random", "gbdt", "coverage-guided"]);
 
 function checkRemovedKeys(sectionLabel: string, section: Record<string, unknown>, errors: string[]): void {
   for (const key of REMOVED_IN_0_13) {
-    if (key in section) errors.push(`\`${key}\` in [${sectionLabel}] was removed in 0.13.0`);
+    if (key in section) errors.push(`\`${key}\` in [${sectionLabel}] was removed in 0.13.0; delete this key`);
   }
   const strategy = section["strategy"];
   if (typeof strategy === "string" && REMOVED_STRATEGIES.has(strategy)) {
@@ -225,7 +226,7 @@ function checkLegacyKeys(parsed: Record<string, unknown>): void {
     checkRemovedKeys("sampling", parsed.sampling, errors);
   }
   if ("coverage" in parsed) {
-    errors.push("[coverage] was removed in 0.13.0");
+    errors.push("[coverage] was removed in 0.13.0; delete this section");
   }
 
   for (const entry of LEGACY_KEYS) {
@@ -332,9 +333,6 @@ export function validateConfigRanges(config: FlakerConfig): ConfigRangeError[] {
       if (!p) continue;
       check(`gate.${name}.sample_percentage`, p.sample_percentage, 0, 100, "0-100");
       check(`gate.${name}.holdout_ratio`, p.holdout_ratio, 0, 1, "0.0-1.0");
-      check(`gate.${name}.adaptive_fnr_low_ratio`, p.adaptive_fnr_low_ratio, 0, 1, "0.0-1.0");
-      check(`gate.${name}.adaptive_fnr_high_ratio`, p.adaptive_fnr_high_ratio, 0, 1, "0.0-1.0");
-      check(`gate.${name}.adaptive_min_percentage`, p.adaptive_min_percentage, 0, 100, "0-100");
     }
   }
 

@@ -66,7 +66,6 @@ skip_flaky_tagged = true
 [gate.merge]
 strategy = "hybrid"
 sample_percentage = 30
-adaptive = true
 skip_flaky_tagged = true
 
 [gate.release]
