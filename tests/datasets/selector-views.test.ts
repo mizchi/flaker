@@ -110,4 +110,14 @@ describe("flaker_v1 selector views", () => {
     );
     expect(Math.abs(row.imported_at.getTime() - Date.now())).toBeLessThan(60_000);
   });
+
+  it("gate_calibrations: (selector, calibrated_at) is unique, so the latest row per selector is one row", async () => {
+    const at = new Date();
+    const insert = () => store.raw(
+      `INSERT INTO gate_calibrations VALUES ('jev', ?, 1.5, 0.5, 1.0, 3, 2, NULL, 'keep', 'r')`,
+      [at],
+    );
+    await insert();
+    await expect(insert()).rejects.toThrow(/constraint/i);
+  });
 });
