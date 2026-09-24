@@ -105,3 +105,21 @@ describe("apply and ops surface in 0.13.0", () => {
     });
   }
 });
+
+describe("help text in 0.13.0", () => {
+  const top = spawnSync("node", [CLI, "--help"], { encoding: "utf8" }).stdout;
+
+  it("does not list dev or ops", () => {
+    expect(top).not.toMatch(/^\s+dev\b/m);
+    expect(top).not.toMatch(/^\s+ops\b/m);
+  });
+
+  it("init no longer claims to alias setup init", () => {
+    expect(top).not.toContain("setup init");
+  });
+
+  it("dev is still runnable", () => {
+    const res = spawnSync("node", [CLI, "dev", "test-key", "--suite", "a", "--test-name", "b"], { encoding: "utf8" });
+    expect(res.status).toBe(0);
+  });
+});

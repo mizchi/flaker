@@ -10,8 +10,8 @@ import { formatEvalFixtureReport, formatSweepReport, formatMultiSweepReport } fr
 
 export function registerDevCommands(program: Command): void {
   const dev = program
-    .command("dev")
-    .description("Tuning and benchmarks");
+    .command("dev", { hidden: true })
+    .description("Maintainer tools (not part of the public surface)");
 
   dev
     .command("tune")

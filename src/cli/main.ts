@@ -47,7 +47,7 @@ export function createProgram(): Command {
   // Top-level aliases
   program
     .command("init")
-    .description("Alias for `flaker setup init`")
+    .description("Create flaker.toml (auto-detects the repository)")
     .option("--owner <owner>", "Repository owner (auto-detected from git remote)")
     .option("--name <name>", "Repository name (auto-detected from git remote)")
     .option("--adapter <type>", "Test result adapter: playwright|vitest|jest|junit")
@@ -111,21 +111,16 @@ Primary commands:
   apply                                         Reconcile repo to flaker.toml (idempotent)
   status                                        Dashboard + promotion drift
   run --gate <iteration|merge|release>          Execute the selected gate
+  calibrate                                     Recommend and write [sampling]
   doctor                                        Verify local environment
   debug <retry|confirm|bisect|diagnose>         Incident investigation
   query <sql>                                   SQL escape hatch
   explain <topic>                               AI-assisted analysis
-  import <file>                                 Ingest reports (adapter auto-detected)
+  import <file> | import --ci                   Ingest reports or CI artifacts
   report <file> --summary|--diff|--aggregate    Local report shaping
 
-Advanced:
-  ops weekly|incident               Cadence artifact bundles
-  (ops daily is deprecated in 0.9.0 — use \`flaker apply --emit daily\`)
-  dev <train|tune|self-eval|...>    Maintainer tools
-
 Run \`flaker <command> --help\` for details.
-If you used legacy forms (collect*, analyze*, gate*, etc.) removed in
-0.8.0, see docs/migration-0.6-to-0.7.md for the canonical replacements.
+Upgrading from 0.12.x? See docs/migration-0.12-to-0.13.md.
 `;
     return base + extras;
   };

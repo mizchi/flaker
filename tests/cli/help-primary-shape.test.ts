@@ -1,6 +1,7 @@
 /**
- * Tests for Task 11: `flaker --help` must expose 10 primary commands in a
- * "Primary" section, followed by "Advanced" and "Deprecated" sections.
+ * Tests for the 0.13.0 top-level help shape: `flaker --help` must expose the
+ * primary commands in a "Primary" section, with no "Advanced" or
+ * "Deprecated" sections (dev is hidden, ops was removed).
  */
 import { describe, it, expect } from "vitest";
 import { spawnSync } from "node:child_process";
@@ -20,8 +21,8 @@ describe("flaker --help top-level shape (Task 11)", () => {
     expect(stdout).toMatch(/Primary commands?:/i);
   });
 
-  it("contains an Advanced section", () => {
-    expect(stdout).toMatch(/Advanced:/i);
+  it("no longer contains an Advanced section (dev is hidden, ops removed in 0.13.0)", () => {
+    expect(stdout).not.toMatch(/Advanced:/i);
   });
 
   it("no longer contains a Deprecated section header (removed in 0.8.0)", () => {
@@ -36,6 +37,7 @@ describe("flaker --help top-level shape (Task 11)", () => {
     "apply",
     "status",
     "run",
+    "calibrate",
     "doctor",
     "debug",
     "query",
@@ -43,9 +45,9 @@ describe("flaker --help top-level shape (Task 11)", () => {
     "import",
   ];
 
-  it("lists all 10 primary commands before the Advanced section", () => {
-    // Everything before "Advanced:" is the "primary" region
-    const primarySection = stdout.split(/Advanced:/i)[0];
+  it("lists all 11 primary commands before the closing note", () => {
+    // Everything before the closing "Run `flaker" note is the "primary" region
+    const primarySection = stdout.split(/Run `flaker/)[0];
     for (const name of primaryNames) {
       expect(primarySection).toContain(name);
     }
@@ -57,8 +59,7 @@ describe("flaker --help top-level shape (Task 11)", () => {
 
   // gate review removed in 0.8.0 — assertion deleted.
 
-  it("mentions ops under Advanced", () => {
-    const advancedSection = stdout.split(/Advanced:/i)[1] ?? "";
-    expect(advancedSection).toContain("ops");
+  it("no longer mentions ops (removed in 0.13.0)", () => {
+    expect(stdout).not.toMatch(/^\s+ops\b/m);
   });
 });

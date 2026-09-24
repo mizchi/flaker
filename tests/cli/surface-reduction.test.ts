@@ -7,9 +7,9 @@ const __filename = fileURLToPath(import.meta.url);
 const CLI = resolve(__filename, "../../../dist/cli/main.js");
 
 /**
- * The 0.7.0 surface reduction contract.
+ * The 0.13.0 surface contract.
  * The "Primary commands:" block of `flaker --help` MUST list exactly these
- * 11 entries (10 primary + `report` for IO). Adding a new primary command
+ * 12 entries (11 primary + `report` for IO). Adding a new primary command
  * requires updating this list AND the 2026-04-19 plan doc.
  */
 const PRIMARY = [
@@ -18,6 +18,7 @@ const PRIMARY = [
   "apply",
   "status",
   "run",
+  "calibrate",
   "doctor",
   "debug",
   "query",
@@ -27,12 +28,12 @@ const PRIMARY = [
 ];
 
 describe("primary command surface", () => {
-  it("lists exactly the 11 primary entries before 'Advanced'", () => {
+  it("lists exactly the 12 primary entries before the closing note", () => {
     const res = spawnSync("node", [CLI, "--help"], { encoding: "utf8" });
     expect(res.status).toBe(0);
     const stdout = res.stdout;
     const primaryStart = stdout.indexOf("Primary commands:");
-    const advancedStart = stdout.indexOf("Advanced:");
+    const advancedStart = stdout.indexOf("Run `flaker");
     expect(primaryStart).toBeGreaterThan(-1);
     expect(advancedStart).toBeGreaterThan(primaryStart);
     const block = stdout.slice(primaryStart, advancedStart);
@@ -53,7 +54,7 @@ describe("primary command surface", () => {
     const res = spawnSync("node", [CLI, "--help"], { encoding: "utf8" });
     const stdout = res.stdout;
     const primaryStart = stdout.indexOf("Primary commands:");
-    const advancedStart = stdout.indexOf("Advanced:");
+    const advancedStart = stdout.indexOf("Run `flaker");
     const block = stdout.slice(primaryStart, advancedStart);
 
     // Sanity: ensure legacy names don't accidentally leak back into Primary.

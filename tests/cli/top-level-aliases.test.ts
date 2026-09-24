@@ -5,7 +5,7 @@ import { join } from "node:path";
 describe("top-level aliases", () => {
   const cliPath = join(process.cwd(), "dist/cli/main.js");
 
-  it("flaker init --help shows setup init options", () => {
+  it("flaker init --help shows init options", () => {
     const help = execSync(`node ${cliPath} init --help`, { encoding: "utf-8" });
     expect(help).toContain("--owner");
     expect(help).toContain("--adapter");
