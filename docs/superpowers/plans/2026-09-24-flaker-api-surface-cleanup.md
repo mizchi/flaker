@@ -71,10 +71,10 @@ Expected: record the pass/fail counts in the task report. Any test that already 
 
 ### Task 2: Delete dead modules
 
-These modules are imported only by tests (verified with `grep -rln "<module>.js" src`). `src/cli/commands/setup/init.ts` is **not** dead: `main.ts` imports `setupInitAction` from it.
+These modules are imported only by tests. `src/cli/commands/gate/review.ts` is **not** dead yet: `commands/ops/{daily,weekly}.ts` import it through the relative path `../gate/review.js`, so it is deleted in Task 8 together with `ops`. `src/cli/commands/setup/init.ts` is **not** dead: `main.ts` imports `setupInitAction` from it.
 
 **Files:**
-- Delete: `src/cli/commands/gate/explain.ts`, `src/cli/commands/gate/history.ts`, `src/cli/commands/gate/review.ts`, `src/cli/commands/policy/check.ts`, `src/cli/commands/policy/quarantine.ts`, `src/cli/commands/collect/local.ts`, `src/cli/commands/collect/coverage.ts`, `src/cli/commands/exec/affected.ts`
+- Delete: `src/cli/commands/gate/explain.ts`, `src/cli/commands/gate/history.ts`, `src/cli/commands/policy/check.ts`, `src/cli/commands/policy/quarantine.ts`, `src/cli/commands/collect/local.ts`, `src/cli/commands/collect/coverage.ts`, `src/cli/commands/exec/affected.ts`
 - Modify: `src/cli/categories/analyze.ts:278` (remove the empty `registerAnalyzeCommands`), `src/cli/main.ts` (remove its comment)
 
 - [ ] **Step 1: Re-verify each module is unreferenced from `src`**
@@ -96,7 +96,7 @@ For each file listed: if every `describe` in it targets a deleted module, delete
 - [ ] **Step 3: Delete the modules and the `registerAnalyzeCommands` stub**
 
 ```bash
-git rm src/cli/commands/gate/explain.ts src/cli/commands/gate/history.ts src/cli/commands/gate/review.ts \
+git rm src/cli/commands/gate/explain.ts src/cli/commands/gate/history.ts \
   src/cli/commands/policy/check.ts src/cli/commands/policy/quarantine.ts \
   src/cli/commands/collect/local.ts src/cli/commands/collect/coverage.ts \
   src/cli/commands/exec/affected.ts
@@ -819,7 +819,7 @@ git commit -m "feat: collect CI artifacts with flaker import --ci"
 
 **Files:**
 - Modify: `src/cli/categories/apply.ts`, `src/cli/main.ts`, `src/cli/commands/apply/artifact.ts` (drop `EmitKind` / `emitted` if nothing else uses them)
-- Delete: `src/cli/categories/ops.ts`, `src/cli/commands/ops/daily.ts`, `src/cli/commands/ops/weekly.ts`, `src/cli/commands/ops/incident.ts`
+- Delete: `src/cli/categories/ops.ts`, `src/cli/commands/ops/daily.ts`, `src/cli/commands/ops/weekly.ts`, `src/cli/commands/ops/incident.ts`, and `src/cli/commands/gate/review.ts` once `grep -rn "gate/review" src` shows no importer left
 - Delete tests: `tests/cli/apply-emit-incident.test.ts`, `tests/cli/apply-target.test.ts`, `tests/cli/removed-ops-daily.test.ts`, and the ops command tests (`grep -rln "commands/ops/\|categories/ops" tests`); update `tests/cli/apply-artifact-emission.test.ts` and `tests/cli/apply-cli.test.ts`
 - Test: extend `tests/cli/removed-0.13.test.ts`
 
