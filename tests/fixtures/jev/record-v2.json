@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "createdAt": "2026-09-20T10:00:00.000Z",
+  "base": "origin/main",
+  "head_sha": "c0ffee0000000000000000000000000000000001",
+  "base_sha": "ba5e000000000000000000000000000000000001",
+  "context_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "gate": { "cutoff": 2, "unsure_below": 0.5, "unsure_margin": 1 },
+  "framework": "vitest",
+  "tests": [
+    { "file": "tests/config.test.ts", "titlePath": ["config", "loads toml"], "line": 5, "endLine": 9, "framework": "vitest", "dynamic": false },
+    { "file": "tests/config.test.ts", "titlePath": ["config", "rejects bad key"], "line": 11, "endLine": 15, "framework": "vitest", "dynamic": false },
+    { "file": "tests/init.test.ts", "titlePath": ["init", "writes toml"], "line": 3, "endLine": 8, "framework": "vitest", "dynamic": false },
+    { "file": "tests/init.test.ts", "titlePath": ["init", "row ${n}"], "line": 10, "endLine": 12, "framework": "vitest", "dynamic": true },
+    { "file": "tests/flaky.test.ts", "titlePath": ["flaky", "sometimes"], "line": 2, "endLine": 4, "framework": "vitest", "dynamic": false }
+  ],
+  "touched": ["tests/config.test.ts\u001fconfig\u001floads toml\u001f5"],
+  "quarantined": ["tests/flaky.test.ts\u001fflaky\u001fsometimes\u001f2"],
+  "answers": {
+    "q0000": { "value": 3, "confidence": 0.9 },
+    "q0001": { "value": 1.2, "confidence": 0.3 },
+    "q0002": { "value": 0.4, "confidence": 0.9 },
+    "q0003": null,
+    "q0004": null
+  },
+  "fallback": null
+}

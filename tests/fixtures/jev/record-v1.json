@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "createdAt": "2026-09-01T10:00:00.000Z",
+  "base": null,
+  "framework": "vitest",
+  "tests": [
+    { "file": "tests/a.test.ts", "titlePath": ["a"], "line": 1, "endLine": 3, "framework": "vitest", "dynamic": false },
+    { "file": "tests/b.test.ts", "titlePath": ["b"], "line": 1, "endLine": 3, "framework": "vitest", "dynamic": false }
+  ],
+  "touched": [],
+  "answers": { "q0000": { "value": 2.5, "confidence": 0.8 }, "q0001": { "value": 0.1, "confidence": 0.9 } },
+  "fallback": null
+}
