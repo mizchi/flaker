@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { SCHEMA_DDL, FLAKY_QUERY, CO_FAILURE_QUERY, buildTestCoFailureQuery } from "./schema.js";
 import { createStableTestId, resolveTestIdentity } from "../identity.js";
-import { FLAKER_V1_VIEWS_SQL } from "../datasets/views.js";
+import { FLAKER_V1_VIEWS_SQL, NOW_UTC } from "../datasets/views.js";
 import type {
   MetricStore,
   WorkflowRun,
@@ -461,8 +461,12 @@ export class DuckDBStore implements MetricStore {
   async addQuarantine(test: TestSelector, reason: string): Promise<void> {
     const resolved = resolveTestIdentity(test);
     await this.run(
-      `INSERT INTO quarantined_test_identities (test_id, task_id, suite, test_name, filter_text, reason)
-       VALUES (?, ?, ?, ?, ?, ?)
+      // created_at is written explicitly: databases created before 0.14.1 still
+      // default it to CURRENT_TIMESTAMP, which is session-local time (#102).
+      // DuckDB 1.4 cannot replay an ALTER ... SET DEFAULT from the WAL, so the
+      // old default is left in place rather than migrated.
+      `INSERT INTO quarantined_test_identities (test_id, task_id, suite, test_name, filter_text, reason, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ${NOW_UTC})
        ON CONFLICT (test_id) DO UPDATE SET reason = EXCLUDED.reason`,
       [
         resolved.testId,

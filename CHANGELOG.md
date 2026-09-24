@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Quarantines that `flaker apply` records (`quarantined_test_identities.created_at`) are dated in UTC, like every other timestamp flaker writes. They defaulted to `CURRENT_TIMESTAMP`, which DuckDB stores as the session's local wall-clock time, so on a machine outside UTC `flaker_v1.quarantine.since` was hours off. Rows written before this release keep their time; they cannot be corrected without knowing the writer's time zone (#102).
+
 ## 0.14.0
 
 ### Added

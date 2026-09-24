@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS collected_artifacts (
   artifact_id     BIGINT,
   local_archive_path VARCHAR,
   artifact_entries JSON,
-  collected_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  collected_at    TIMESTAMP DEFAULT (now() AT TIME ZONE 'UTC'),
   PRIMARY KEY (workflow_run_id, adapter_type, artifact_name, adapter_config)
 );
 
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS quarantined_tests (
   suite       VARCHAR NOT NULL,
   test_name   VARCHAR NOT NULL,
   reason      VARCHAR NOT NULL DEFAULT 'manual',
-  created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  created_at  TIMESTAMP DEFAULT (now() AT TIME ZONE 'UTC'),
   PRIMARY KEY (suite, test_name)
 );
 
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS quarantined_test_identities (
   test_name    VARCHAR NOT NULL,
   filter_text  VARCHAR,
   reason       VARCHAR NOT NULL DEFAULT 'manual',
-  created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at   TIMESTAMP DEFAULT (now() AT TIME ZONE 'UTC')
 );
 
 CREATE TABLE IF NOT EXISTS sampling_runs (
@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS sampling_runs (
   estimated_saved_minutes   DOUBLE,
   fallback_reason           VARCHAR,
   duration_ms               INTEGER,
-  created_at                TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at                TIMESTAMP DEFAULT (now() AT TIME ZONE 'UTC')
 );
 
 CREATE TABLE IF NOT EXISTS sampling_run_tests (
