@@ -110,6 +110,13 @@ describe("flaker_v1 core views", () => {
     expect(row).toEqual({ is_full: false, source: "local" });
   });
 
+  it("runs: is_full is false, not null, when the results have no timestamps", async () => {
+    await seedRun(store, { id: 8, commitSha: "no-time", daysAgo: 1, results: ten });
+    await store.raw(`UPDATE test_results SET created_at = NULL WHERE workflow_run_id = 8`);
+    const [row] = await store.raw<{ is_full: boolean | null }>(`SELECT is_full FROM flaker_v1.runs WHERE run_id = 8`);
+    expect(row.is_full).toBe(false);
+  });
+
   it("results: one row per stored result keyed by test_key", async () => {
     await seedRun(store, { id: 1, commitSha: "a", daysAgo: 1, results: ten.slice(0, 2) });
     const rows = await store.raw<{ n: number; keyed: number }>(

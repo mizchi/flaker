@@ -79,7 +79,8 @@ SELECT
   CASE
     WHEN lc.is_full IS NOT NULL THEN lc.is_full
     WHEN COALESCE(rs.n, 0) = 0 THEN FALSE
-    ELSE rs.n >= cfg.full_run_ratio * lg.max_n
+    -- Results without timestamps have no window to compare against: not full.
+    ELSE COALESCE(rs.n >= cfg.full_run_ratio * lg.max_n, FALSE)
   END AS is_full,
   wr.created_at
 FROM workflow_runs wr
