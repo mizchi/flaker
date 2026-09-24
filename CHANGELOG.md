@@ -13,6 +13,10 @@
 - `flaker explain context --json` no longer lists the `random` / `coverage-guided` / `gbdt` strategies in its `strategies` map and drops `environment.gbdtModelAvailable`.
 - `ApplyArtifact` JSON no longer has a top-level `emitted` field.
 
+### Fixed
+
+- `affected` and `hybrid` no longer throw `requires resolver and changedFiles` when there are no changed files (a clean checkout, a scheduled run). `affected` selects nothing and uses `fallback_strategy`; `hybrid` samples by weight. This broke `flaker apply`'s cold-start run and `run --gate iteration` on clean trees.
+
 ### Added
 
 - `flaker calibrate` (was `apply --target calibrate`).

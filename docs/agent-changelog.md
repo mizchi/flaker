@@ -135,7 +135,7 @@ Run all of these after a migration. Report any that you could not run.
 
 1. `pnpm flaker doctor`: config loads, ranges valid.
 2. `pnpm flaker plan`: prints a plan without errors.
-3. `pnpm flaker run --gate merge --dry-run --changed <some-file>`: the selection path works with the migrated `[gate.merge]`. `affected` and `hybrid` need changed files; outside a git checkout (or with a clean tree) pass `--changed` explicitly, or the run fails with `affected/hybrid mode requires resolver and changedFiles`, which is not a migration error. `--gate release` (`full`) needs no changed files.
+3. `pnpm flaker run --gate merge --dry-run`: the selection path works with the migrated `[gate.merge]`. With no changed files (a clean tree, or outside a git checkout) `hybrid` samples by weight and `affected` selects nothing and uses `fallback_strategy`; add `--changed <file>` to exercise the affected path itself.
 4. The one-shot scan from the top returns only intentional hits (for example this file, or a CHANGELOG).
 5. For each workflow step that runs flaker, run the same command locally with `--help` to confirm every flag exists (`pnpm flaker <cmd> --help`).
 

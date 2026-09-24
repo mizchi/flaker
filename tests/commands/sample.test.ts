@@ -500,3 +500,72 @@ describe("sample command with stable identity history", () => {
     });
   });
 });
+
+describe("sample command with no changed files", () => {
+  let store: DuckDBStore;
+  const listedTests = ["a", "b", "c", "d"].map((name) => ({
+    suite: `tests/${name}.test.ts`,
+    testName: `${name} works`,
+  }));
+
+  beforeEach(async () => {
+    store = new DuckDBStore(":memory:");
+    await store.initialize();
+  });
+
+  afterEach(async () => {
+    await store.close();
+  });
+
+  it("falls back from affected to the configured strategy instead of throwing", async () => {
+    const plan = await planSample({
+      store,
+      mode: "affected",
+      fallbackMode: "weighted",
+      count: 2,
+      seed: 42,
+      listedTests,
+    });
+
+    expect(plan.sampled).toHaveLength(2);
+    expect(plan.summary.strategy).toBe("weighted");
+  });
+
+  it("selects nothing for affected without a fallback", async () => {
+    const plan = await planSample({
+      store,
+      mode: "affected",
+      count: 2,
+      seed: 42,
+      listedTests,
+    });
+
+    expect(plan.sampled).toHaveLength(0);
+    expect(plan.summary.strategy).toBe("affected");
+  });
+
+  it("fills hybrid from weighted sampling", async () => {
+    const plan = await planSample({
+      store,
+      mode: "hybrid",
+      count: 3,
+      seed: 42,
+      listedTests,
+    });
+
+    expect(plan.sampled).toHaveLength(3);
+  });
+
+  it("still rejects changed files without a resolver", async () => {
+    await expect(
+      planSample({
+        store,
+        mode: "affected",
+        count: 2,
+        seed: 42,
+        changedFiles: ["src/a.ts"],
+        listedTests,
+      }),
+    ).rejects.toThrow("affected mode requires a resolver when changed files are given");
+  });
+});

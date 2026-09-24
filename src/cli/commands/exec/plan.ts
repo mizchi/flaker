@@ -236,11 +236,17 @@ async function selectByStrategy(
     const effectiveMode: SamplingMode = mode;
 
     if (mode === "affected" || mode === "hybrid") {
-      if (!opts.resolver || !opts.changedFiles) {
-        throw new Error(`${mode} mode requires resolver and changedFiles`);
+      // No changed files (a clean tree, or a scheduled run on main) means
+      // nothing is affected: affected selects nothing and falls through to
+      // fallbackMode below, hybrid fills its whole budget by weight.
+      const changedFiles = opts.changedFiles ?? [];
+      if (changedFiles.length > 0 && !opts.resolver) {
+        throw new Error(`${mode} mode requires a resolver when changed files are given`);
       }
       const allSuites = [...new Set(allTests.map((t) => t.suite))];
-      const affectedSuites = await opts.resolver.resolve(opts.changedFiles, allSuites);
+      const affectedSuites = changedFiles.length > 0 && opts.resolver
+        ? await opts.resolver.resolve(changedFiles, allSuites)
+        : [];
       if (mode === "affected") {
         return {
           sampled: allTests.filter((t) => affectedSuites.includes(t.suite)),
