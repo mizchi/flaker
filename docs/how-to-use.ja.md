@@ -259,6 +259,24 @@ flaker 上での identity mapping:
 
 同じドメインの initial 画像と interaction scenario が同じ suite の下にぶら下がるため、suite ベースの集計・affected-suites の扱いが自然になる。producer/consumer 双方が `schemaVersion` を明示できるので過去データとの整合も保たれる。
 
+### `flaker import --adapter selector-record|jev` — selector の判定
+
+テスト selector は、変更ごとにどのテストを走らせるかを決めます。flaker はその判定を保存し、実際に落ちたテストと突き合わせます (`selector_verdicts`、`misses`)。取り込む形式は `selector-record` v1 です。変更 1 件につき JSON オブジェクト 1 つで、selector 名、`head_sha`、判定時の gate の値、テストごとの `file`・`title_path`・`score`・`confidence`・`reason`・`selected` を持ちます。型、JSON Schema、parser は `@mizchi/flaker/contracts/selector-record-v1` から export しています ([`src/cli/contracts/selector-record-v1.ts`](../src/cli/contracts/selector-record-v1.ts))。
+
+```bash
+# selector-record v1 を直接書く selector
+flaker import selector-record.json --adapter selector-record
+
+# jev-test-filter の run record を、jev 自身の gate で変換して取り込む
+flaker import .jev-test-filter --adapter jev
+```
+
+- パスはファイルでもディレクトリでも構いません。ディレクトリなら直下の `*.json`、続いて `records/*.json` を取り込みます (jev-test-filter の配置)。`last.json` は最新 record のコピーなので duplicate として数えます。
+- record は内容で識別します。同じ record を再度取り込んでも何も変わらず、duplicate と報告されます。
+- すべてのテストを走らせる fallback になった jev record (`fallback` あり) は判定を持たないので skip します。
+- 不正なファイルは stderr に報告し、残りは取り込みます。その場合の終了コードは 1 です。
+- 各テストは `file` + `title_path` (+ `project`) で既知の `test_key` に照合します。flaker がまだ見ていないテストは `test_key = null` のまま `selector_verdicts` に残り、結果が入った後の import で照合されます。
+
 ### `flaker export` — 公開 dataset (flaker_v1)
 
 ストレージのテーブルは内部実装で、どのリリースでも変わりえます。バージョン付きで公開しているのは DuckDB の `flaker_v1` スキーマにある 9 つの dataset で、それぞれの JSON Schema を `@mizchi/flaker/contracts/flaker-v1-datasets` から export しています。全 dataset の共通キーは安定テスト ID の `test_key` です。

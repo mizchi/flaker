@@ -94,6 +94,10 @@
     "./contracts/flaker-v1-datasets": {
       "types": "./dist/cli/contracts/flaker-v1-datasets.d.ts",
       "default": "./dist/cli/contracts/flaker-v1-datasets.js"
+    },
+    "./contracts/selector-record-v1": {
+      "types": "./dist/cli/contracts/selector-record-v1.d.ts",
+      "default": "./dist/cli/contracts/selector-record-v1.js"
     }
   },
   "scripts": {
