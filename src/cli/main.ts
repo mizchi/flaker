@@ -12,6 +12,7 @@ import { registerDebugCommands, debugDoctorAction } from "./categories/debug.js"
 import { registerDevCommands } from "./categories/dev.js";
 import { registerApplyCommands } from "./categories/apply.js";
 import { registerCalibrateCommand } from "./categories/calibrate.js";
+import { FlakerUsageError } from "./errors.js";
 
 function isDirectCliExecution(): boolean {
   if (process.argv[1] == null) return false;
@@ -137,8 +138,12 @@ if (isDirectCliExecution()) {
   }
 
   program.parseAsync(process.argv).catch((err) => {
+    if (err instanceof FlakerUsageError) {
+      console.error(`Error: ${err.message}`);
+      process.exit(2);
+    }
     if (err instanceof Error) {
-      if (err.message.includes("Config file not found") || err.message.includes("flaker.toml")) {
+      if (err.message.includes("Config file not found")) {
         console.error(`Error: ${err.message}`);
         console.error(`Run 'flaker init' to create one.`);
         process.exit(1);

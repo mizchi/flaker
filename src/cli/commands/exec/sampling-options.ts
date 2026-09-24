@@ -1,3 +1,5 @@
+import { FlakerUsageError } from "../../errors.js";
+
 export const SAMPLING_MODES = ["weighted", "affected", "hybrid", "full"] as const;
 
 export type SamplingMode = (typeof SAMPLING_MODES)[number];
@@ -6,7 +8,7 @@ export function parseSamplingMode(raw: string): SamplingMode {
   if (isSamplingMode(raw)) {
     return raw;
   }
-  throw new Error(
+  throw new FlakerUsageError(
     `Unknown sampling strategy: ${raw}. Expected one of: ${SAMPLING_MODES.join(", ")}`,
   );
 }

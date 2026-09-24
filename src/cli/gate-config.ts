@@ -1,6 +1,7 @@
 import type { GateConfig, SamplingConfig } from "./config.js";
 import { parseSamplingMode, type SamplingMode } from "./commands/exec/sampling-options.js";
 import { LEGACY_PROFILE_TO_GATE, normalizeGateName, type GateName } from "./gate.js";
+import { FlakerUsageError } from "./errors.js";
 
 export interface ResolvedGate {
   name: GateName;
@@ -33,7 +34,7 @@ export function resolveGateName(explicit: string | undefined, env: Env = process
   const legacyProfile = nonBlank(env["FLAKER_PROFILE"]);
   if (legacyProfile) {
     const mapped = LEGACY_PROFILE_TO_GATE[legacyProfile];
-    throw new Error(
+    throw new FlakerUsageError(
       `FLAKER_PROFILE was replaced by FLAKER_GATE in 0.13.0` +
         (mapped ? ` (${legacyProfile} → ${mapped})` : "") +
         `. See docs/migration-0.12-to-0.13.md.`,
@@ -45,7 +46,7 @@ export function resolveGateName(explicit: string | undefined, env: Env = process
     (env["CI"] === "true" || env["GITHUB_ACTIONS"] === "true" ? "merge" : "iteration");
   const gate = normalizeGateName(raw);
   if (!gate) {
-    throw new Error(`Unknown gate '${raw}'. Expected one of: iteration, merge, release.`);
+    throw new FlakerUsageError(`Unknown gate '${raw}'. Expected one of: iteration, merge, release.`);
   }
   return gate;
 }

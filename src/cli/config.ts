@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "smol-toml";
+import { FlakerUsageError } from "./errors.js";
 import { LEGACY_PROFILE_TO_GATE, VALID_GATE_NAMES, type GateName } from "./gate.js";
 
 export interface SamplingConfig {
@@ -255,7 +256,7 @@ function checkLegacyKeys(parsed: Record<string, unknown>): void {
   }
 
   if (errors.length > 0) {
-    throw new Error(
+    throw new FlakerUsageError(
       `flaker.toml uses removed or renamed keys (see docs/migration-0.12-to-0.13.md and docs/how-to-use.md#config-migration):\n` +
       errors.map((e) => `  ${e}`).join("\n")
     );
