@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { DuckDBStore } from "../../src/cli/storage/duckdb.js";
-import { memoryStore, seedRun } from "./helpers.js";
+import { DAY, memoryStore, seedRun } from "./helpers.js";
 
 const ten = Array.from({ length: 10 }, (_, i) => ({
   suite: "tests/x.test.ts", testName: `t${i}`, status: "passed",
@@ -31,6 +31,22 @@ describe("flaker_v1 core views", () => {
       ["tests/b.test.ts", ["legacy name"]],
     ]);
     expect(rows[0].first_seen_at.getTime()).toBeLessThan(rows[0].last_seen_at.getTime());
+  });
+
+  it("tests: rows with the same created_at resolve to the latest stored row", async () => {
+    const at = new Date(Date.now() - DAY);
+    for (const [id, title] of [[1, "old"], [2, "new"]] as const) {
+      await store.insertWorkflowRun({
+        id, repo: "o/r", branch: "main", commitSha: `c${id}`, event: "push", source: "ci",
+        status: "completed", createdAt: at, durationMs: 1, workflowName: "ci", lane: null,
+      });
+      await store.insertTestResults([{
+        workflowRunId: id, suite: "tests/t.test.ts", testName: "t", status: "passed", durationMs: 1,
+        retryCount: 0, errorMessage: null, commitSha: `c${id}`, variant: null, titlePath: [title, "t"], createdAt: at,
+      }]);
+    }
+    const [row] = await store.raw<{ title_path: string }>(`SELECT title_path FROM flaker_v1.tests`);
+    expect(JSON.parse(row.title_path)).toEqual(["new", "t"]);
   });
 
   it("runs: is_full from the lane config, else >= 95% of the workflow's recent tests", async () => {

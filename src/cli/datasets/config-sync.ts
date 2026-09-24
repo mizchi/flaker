@@ -26,14 +26,22 @@ export function datasetSettingsFromConfig(config: FlakerConfig): DatasetSettings
 }
 
 export async function syncDatasetSettings(store: MetricStore, s: DatasetSettings): Promise<void> {
-  await store.raw(
-    `INSERT OR REPLACE INTO flaker_dataset_config
-       (id, flaky_window_days, flaky_threshold_ratio, co_failure_window_days, full_run_ratio)
-     VALUES (1, ?, ?, ?, ?)`,
-    [s.flakyWindowDays, s.flakyThresholdRatio, s.coFailureWindowDays, s.fullRunRatio],
-  );
-  await store.raw(`DELETE FROM flaker_lane_config`);
-  for (const [lane, isFull] of Object.entries(s.fullByLane)) {
-    await store.raw(`INSERT INTO flaker_lane_config (lane, is_full) VALUES (?, ?)`, [lane, isFull]);
+  // One transaction, so a reader never sees the settings row and lane table out of step.
+  await store.raw(`BEGIN TRANSACTION`);
+  try {
+    await store.raw(
+      `INSERT OR REPLACE INTO flaker_dataset_config
+         (id, flaky_window_days, flaky_threshold_ratio, co_failure_window_days, full_run_ratio)
+       VALUES (1, ?, ?, ?, ?)`,
+      [s.flakyWindowDays, s.flakyThresholdRatio, s.coFailureWindowDays, s.fullRunRatio],
+    );
+    await store.raw(`DELETE FROM flaker_lane_config`);
+    for (const [lane, isFull] of Object.entries(s.fullByLane)) {
+      await store.raw(`INSERT INTO flaker_lane_config (lane, is_full) VALUES (?, ?)`, [lane, isFull]);
+    }
+    await store.raw(`COMMIT`);
+  } catch (error) {
+    await store.raw(`ROLLBACK`);
+    throw error;
   }
 }

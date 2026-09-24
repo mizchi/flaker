@@ -13,23 +13,34 @@ export const NOW_UTC = "(now() AT TIME ZONE 'UTC')";
 const CORE_VIEWS = `
 CREATE SCHEMA IF NOT EXISTS flaker_v1;
 
+-- The latest stored row per test wins; ties on created_at go to the higher id.
 CREATE OR REPLACE VIEW flaker_v1.tests AS
+WITH ranked AS (
+  SELECT tr.*,
+    ROW_NUMBER() OVER (
+      PARTITION BY tr.test_id ORDER BY tr.created_at DESC NULLS LAST, tr.id DESC
+    ) AS rn,
+    ROW_NUMBER() OVER (
+      PARTITION BY tr.test_id, (tr.title_path IS NULL) ORDER BY tr.created_at DESC NULLS LAST, tr.id DESC
+    ) AS title_rn
+  FROM test_results tr
+  WHERE tr.test_id IS NOT NULL
+)
 SELECT
-  tr.test_id AS test_key,
-  arg_max(tr.suite, tr.created_at) AS suite,
-  arg_max(tr.test_name, tr.created_at) AS test_name,
-  arg_max(COALESCE(tr.task_id, tr.suite), tr.created_at) AS task_id,
-  arg_max(tr.variant, tr.created_at) AS variant,
-  arg_max(tr.suite, tr.created_at) AS file,
+  test_id AS test_key,
+  any_value(suite) FILTER (WHERE rn = 1) AS suite,
+  any_value(test_name) FILTER (WHERE rn = 1) AS test_name,
+  any_value(COALESCE(task_id, suite)) FILTER (WHERE rn = 1) AS task_id,
+  any_value(variant) FILTER (WHERE rn = 1) AS variant,
+  any_value(suite) FILTER (WHERE rn = 1) AS file,
   COALESCE(
-    arg_max(tr.title_path, tr.created_at) FILTER (WHERE tr.title_path IS NOT NULL),
-    to_json([arg_max(tr.test_name, tr.created_at)])
+    any_value(title_path) FILTER (WHERE title_path IS NOT NULL AND title_rn = 1),
+    to_json([any_value(test_name) FILTER (WHERE rn = 1)])
   ) AS title_path,
-  MIN(tr.created_at) AS first_seen_at,
-  MAX(tr.created_at) AS last_seen_at
-FROM test_results tr
-WHERE tr.test_id IS NOT NULL
-GROUP BY tr.test_id;
+  MIN(created_at) AS first_seen_at,
+  MAX(created_at) AS last_seen_at
+FROM ranked
+GROUP BY test_id;
 
 CREATE OR REPLACE VIEW flaker_v1.runs AS
 WITH cfg AS (SELECT * FROM flaker_dataset_config WHERE id = 1),

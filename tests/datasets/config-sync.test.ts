@@ -50,4 +50,20 @@ describe("dataset settings", () => {
     );
     expect(lanes).toEqual([{ lane: "c", is_full: true }]);
   });
+
+  it("leaves the previous settings in place when a write fails midway", async () => {
+    const base = { flakyWindowDays: 7, flakyThresholdRatio: 0.1, coFailureWindowDays: 30, fullRunRatio: 0.95 };
+    await syncDatasetSettings(store, { ...base, fullByLane: { a: true } });
+    await expect(syncDatasetSettings(store, {
+      ...base, flakyWindowDays: 3, fullByLane: { b: true, c: null as unknown as boolean },
+    })).rejects.toThrow();
+    const lanes = await store.raw<{ lane: string }>(`SELECT lane FROM flaker_lane_config ORDER BY lane`);
+    expect(lanes.map((l) => l.lane)).toEqual(["a"]);
+    const [cfg] = await store.raw<{ flaky_window_days: number }>(`SELECT flaky_window_days FROM flaker_dataset_config`);
+    expect(cfg.flaky_window_days).toBe(7);
+    // The connection is usable afterwards (no transaction left open).
+    await syncDatasetSettings(store, { ...base, fullByLane: { d: false } });
+    const after = await store.raw<{ lane: string }>(`SELECT lane FROM flaker_lane_config`);
+    expect(after.map((l) => l.lane)).toEqual(["d"]);
+  });
 });

@@ -160,7 +160,7 @@ CREATE TABLE IF NOT EXISTS selector_runs (
   source            VARCHAR NOT NULL DEFAULT 'real',
   gate              JSON,
   created_at        TIMESTAMP NOT NULL,
-  imported_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  imported_at       TIMESTAMP DEFAULT (now() AT TIME ZONE 'UTC')  -- naive UTC, not session-local
 );
 
 CREATE TABLE IF NOT EXISTS selector_run_tests (

@@ -72,4 +72,13 @@ describe("flaker_v1 selector views", () => {
     );
     expect(g).toEqual([{ decision: "tighten", cutoff: 1.5 }]);
   });
+
+  it("selector_runs.imported_at defaults to naive UTC whatever the session time zone", async () => {
+    await store.raw(`SET TimeZone = 'Asia/Tokyo'`);
+    await seedSelectorRun(store, { id: "tz", headSha: "H", tests: [] });
+    const [row] = await store.raw<{ imported_at: Date }>(
+      `SELECT imported_at FROM selector_runs WHERE selector_run_id = 'tz'`,
+    );
+    expect(Math.abs(row.imported_at.getTime() - Date.now())).toBeLessThan(60_000);
+  });
 });
