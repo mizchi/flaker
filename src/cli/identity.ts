@@ -61,10 +61,26 @@ function compareCodeUnits(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-// MoonBit's JSON parser rejects lone-surrogate escapes, so every string is
-// made well-formed (lone surrogates become U+FFFD) before either core sees it.
+// Names are stored well-formed (lone surrogates become U+FFFD). Ids are
+// computed from the raw names, escaped by `escapeForId`.
 function wellFormed(value: string): string {
   return value.toWellFormed();
+}
+
+// Mirrors `escape_for_id` in src/identity/identity_core.mbt: lone surrogates,
+// and U+FFFD itself, become U+FFFD followed by four upper-case hex digits.
+// Well-formed and reversible, so names that differ only in which lone
+// surrogate they hold keep distinct ids (#103).
+function escapeForId(value: string): string {
+  if (value.isWellFormed() && !value.includes("\uFFFD")) return value;
+  let out = "";
+  for (const char of value) {
+    const code = char.codePointAt(0)!;
+    out += (code >= 0xd800 && code <= 0xdfff) || code === 0xfffd
+      ? `\uFFFD${code.toString(16).toUpperCase().padStart(4, "0")}`
+      : char;
+  }
+  return out;
 }
 
 function toCoreVariant(
@@ -74,7 +90,7 @@ function toCoreVariant(
 
   const entries = Object.entries(variant)
     .filter(([, value]) => value != null)
-    .map(([key, value]) => [wellFormed(key), wellFormed(String(value))] as const)
+    .map(([key, value]) => [key, String(value)] as const)
     .sort(([a], [b]) => compareCodeUnits(a, b));
 
   if (entries.length === 0) return null;
@@ -90,20 +106,20 @@ function fromCoreVariant(
   return Object.fromEntries(
     [...variant]
       .sort((a, b) => compareCodeUnits(a.key, b.key))
-      .map((entry) => [entry.key, entry.value] as const),
+      .map((entry) => [wellFormed(entry.key), wellFormed(entry.value)] as const),
   );
 }
 
 function toCoreInput(input: TestIdentityFields): CoreStableTestIdentityInput {
   const base: CoreStableTestIdentityInput = {
-    suite: wellFormed(input.suite),
-    test_name: wellFormed(input.testName),
+    suite: input.suite,
+    test_name: input.testName,
   };
   if (input.taskId != null) {
-    base.task_id = wellFormed(input.taskId);
+    base.task_id = input.taskId;
   }
   if (input.filter != null) {
-    base.filter = wellFormed(input.filter);
+    base.filter = input.filter;
   }
   const variant = toCoreVariant(input.variant);
   if (variant) {
@@ -128,7 +144,7 @@ function sortCoreVariant(
 function createStableTestIdFallback(
   input: CoreStableTestIdentityInput,
 ): string {
-  const quote = (value: string) => JSON.stringify(value);
+  const quote = (value: string) => JSON.stringify(escapeForId(value));
   const taskId = input.task_id ?? input.suite;
   const filter = input.filter != null ? quote(input.filter) : "null";
   const entries = sortCoreVariant(input.variant);
@@ -207,10 +223,29 @@ export function normalizeVariant(
   return fromCoreVariant(toCoreVariant(variant));
 }
 
+/**
+ * The core for one input. MoonBit's JSON parser rejects lone-surrogate
+ * escapes, so an input holding a lone surrogate goes to the TS fallback,
+ * which computes the id the MoonBit core would.
+ */
+function coreFor(input: CoreStableTestIdentityInput): IdentityCoreExports {
+  const strings = [
+    input.suite,
+    input.test_name,
+    input.task_id,
+    input.filter,
+    ...(input.variant ?? []).flatMap((entry) => [entry.key, entry.value]),
+  ];
+  return strings.every((value) => value == null || value.isWellFormed())
+    ? identityCore
+    : tsFallbackCore;
+}
+
 export function createStableTestId(input: TestIdentityFields): string {
   void loadIdentityCore();
+  const coreInput = toCoreInput(input);
   return JSON.parse(
-    identityCore.create_stable_test_id_json(JSON.stringify(toCoreInput(input))),
+    coreFor(coreInput).create_stable_test_id_json(JSON.stringify(coreInput)),
   ) as string;
 }
 
@@ -218,13 +253,14 @@ export function resolveTestIdentity<T extends TestIdentityFields>(
   input: T,
 ): T & ResolvedTestIdentity {
   void loadIdentityCore();
+  const coreInput = toCoreInput(input);
   const resolved = JSON.parse(
-    identityCore.resolve_test_identity_json(JSON.stringify(toCoreInput(input))),
+    coreFor(coreInput).resolve_test_identity_json(JSON.stringify(coreInput)),
   ) as CoreResolvedStableTestIdentityOutput;
   return {
     ...input,
-    taskId: resolved.task_id,
-    filter: resolved.filter ?? null,
+    taskId: wellFormed(resolved.task_id),
+    filter: resolved.filter != null ? wellFormed(resolved.filter) : null,
     variant: fromCoreVariant(resolved.variant),
     testId: resolved.test_id,
   };

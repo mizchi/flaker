@@ -8,6 +8,7 @@
 
 ### Fixed
 
+- Test names that differ only in which lone surrogate they contain (`"a\uD800"` and `"a\uDC00"`) get distinct stable test ids; both became U+FFFD before the id was built, so their results merged. The id text now writes a lone surrogate, and U+FFFD itself, as U+FFFD followed by its four hex digits, in both the MoonBit core and the TypeScript fallback. Stored names stay well-formed. **Ids change** for tests whose suite, name, task id, filter or variant contains a lone surrogate or U+FFFD; their history before the upgrade stays under the old id. No built-in adapter produces such names from a well-formed report (#103).
 - `DuckDBStore.close()` releases the database file lock at once. With the old binding the lock stayed until the instance was garbage-collected, so an in-process caller that closed a file-backed store could not hand the file to another process (#106).
 - Quarantines that `flaker apply` records (`quarantined_test_identities.created_at`) are dated in UTC, like every other timestamp flaker writes. They defaulted to `CURRENT_TIMESTAMP`, which DuckDB stores as the session's local wall-clock time, so on a machine outside UTC `flaker_v1.quarantine.since` was hours off. Rows written before this release keep their time; they cannot be corrected without knowing the writer's time zone (#102).
 

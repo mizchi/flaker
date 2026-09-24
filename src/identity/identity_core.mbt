@@ -16,8 +16,61 @@ fn normalize_variant(
 }
 
 ///|
+fn hex4(code : Int) -> String {
+  let digits = "0123456789ABCDEF"
+  let buf = StringBuilder::new()
+  for shift in [12, 8, 4, 0] {
+    buf.write_char(digits.code_unit_at((code >> shift) & 0xF).unsafe_to_char())
+  }
+  buf.to_string()
+}
+
+///|
+/// The id text's form of a string: lone surrogates, and U+FFFD itself, become
+/// U+FFFD followed by four upper-case hex digits. Well-formed and reversible,
+/// so names that differ only in which lone surrogate they hold keep distinct
+/// ids (#103). Strings with neither are unchanged.
+fn escape_for_id(value : String) -> String {
+  let len = value.length()
+  let mut plain = true
+  for i in 0..<len {
+    let c = value.code_unit_at(i).to_int()
+    if (c >= 0xD800 && c <= 0xDFFF) || c == 0xFFFD {
+      plain = false
+      break
+    }
+  }
+  if plain {
+    return value
+  }
+  let buf = StringBuilder::new()
+  let mut i = 0
+  while i < len {
+    let c = value.code_unit_at(i).to_int()
+    if c >= 0xD800 && c <= 0xDBFF && i + 1 < len {
+      let d = value.code_unit_at(i + 1).to_int()
+      if d >= 0xDC00 && d <= 0xDFFF {
+        buf.write_char(
+          Int::unsafe_to_char(0x10000 + ((c - 0xD800) << 10) + (d - 0xDC00)),
+        )
+        i += 2
+        continue
+      }
+    }
+    if (c >= 0xD800 && c <= 0xDFFF) || c == 0xFFFD {
+      buf.write_char('\u{FFFD}')
+      buf.write_string(hex4(c))
+    } else {
+      buf.write_char(Int::unsafe_to_char(c))
+    }
+    i += 1
+  }
+  buf.to_string()
+}
+
+///|
 fn quote_json(value : String) -> String {
-  value.to_json().stringify()
+  escape_for_id(value).to_json().stringify()
 }
 
 ///|
