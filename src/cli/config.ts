@@ -317,6 +317,8 @@ export function loadConfigWithDiagnostics(dir: string): LoadedConfigDiagnostics 
   const parsed = parse(content) as unknown as Record<string, unknown>;
   checkLegacyKeys(parsed);
   const config = deepMerge(DEFAULT_CONFIG, parsed);
+  // Fail on load, not later in collect or export, when a lane entry is malformed.
+  normalizeWorkflowLanes(config.workflow_lanes);
   return { config, warnings: [] };
 }
 
@@ -382,6 +384,13 @@ export function validateConfigRanges(config: FlakerConfig): ConfigRangeError[] {
   check("promotion.false_negative_rate_max_percentage", config.promotion.false_negative_rate_max_percentage, 0, 100, "0-100");
   check("promotion.pass_correlation_min_percentage", config.promotion.pass_correlation_min_percentage, 0, 100, "0-100");
   check("promotion.holdout_fnr_max_percentage", config.promotion.holdout_fnr_max_percentage, 0, 100, "0-100");
+
+  try {
+    normalizeWorkflowLanes(config.workflow_lanes);
+  } catch (error) {
+    if (!(error instanceof FlakerUsageError)) throw error;
+    errors.push({ path: "workflow_lanes", value: error.message, expected: "a lane name or { lane, full }" });
+  }
 
   const validConfidence = new Set(["low", "moderate", "high"]);
   if (!validConfidence.has(config.promotion.data_confidence_min)) {
