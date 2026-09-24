@@ -118,6 +118,8 @@ describe("--where is only a filter on the selected dataset", () => {
     ["an E-string escape", "commit_sha = E'\\' OR 1=1 --'"],
     ["a dollar-quoted string", "commit_sha = $$ ' $$"],
     ["getenv", "commit_sha = getenv('HOME')"],
+    ["current_setting", "commit_sha = current_setting('temp_directory')"],
+    ["getvariable", "commit_sha = getvariable('x')"],
   ] as const;
 
   for (const [label, where] of rejected) {
@@ -126,6 +128,17 @@ describe("--where is only a filter on the selected dataset", () => {
         .rejects.toThrow(FlakerUsageError);
     });
   }
+
+  it("rejects quoted table-function names, whichever layer catches them", async () => {
+    for (const where of [
+      `EXISTS (FROM "query_table"('test_results'))`,
+      `"query_table"('test_results') IS NOT NULL`,
+      `"read_text"('x') IS NOT NULL`,
+      `"duckdb_settings"() IS NOT NULL`,
+    ]) {
+      await expect(runExportDataset({ store, dataset: "runs", format: "json", where }), where).rejects.toThrow();
+    }
+  });
 
   describe("PIVOT_WIDER / PIVOT_LONGER cannot read files or storage tables", () => {
     const secretFile = () => {

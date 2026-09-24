@@ -583,7 +583,7 @@ flaker query "SELECT suite, test_name, status, COUNT(*) as cnt
 
 Run SQL directly against DuckDB. Full access to window functions, FILTER clauses, and other DuckDB analytics features.
 
-The query sees the flaker database only. DuckDB's external access is turned off before it runs, so `read_csv(…)`, `FROM 'file.parquet'` and similar cannot read files; to get data out, use `flaker export`. The write-statement check is a guard against mistakes, not a sandbox.
+The query sees the flaker database only. DuckDB's external access is turned off before it runs, so `read_csv(…)`, `FROM 'file.parquet'` and similar cannot read files; to get data out, use `flaker export`. It also opens the database read-only and takes one statement (a trailing `;` is fine), so `SELECT 1; CREATE TABLE …` is rejected and no statement can change the database.
 
 ---
 

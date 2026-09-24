@@ -17,7 +17,7 @@ import {
 } from "../commands/status/summary.js";
 import { type GateName, VALID_GATE_NAMES } from "../gate.js";
 import { parseTagOption, WorkflowFilterError } from "../workflow-filter.js";
-import { FILESYSTEM_FUNCTIONS } from "../commands/analyze/sql-guard.js";
+import { assertReadOnlyQuery } from "../commands/analyze/sql-guard.js";
 
 export async function analyzeKpiAction(opts: { windowDays: string; json?: boolean }): Promise<void> {
   const config = loadConfig(process.cwd());
@@ -249,22 +249,16 @@ export async function analyzeContextAction(opts: { json?: boolean }): Promise<vo
 }
 
 export async function analyzeQueryAction(sql: string): Promise<void> {
-  // Early, readable rejections. The real barrier to file access is
-  // disableExternalAccess below; this is not a sandbox for the database itself.
-  const stripped = sql.replace(/--[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "").trim();
-  const normalized = stripped.toUpperCase();
-  const writePatterns = /^(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|COPY\s|ATTACH|LOAD|INSTALL)/;
-  if (writePatterns.test(normalized)) {
-    console.error("Error: query command only supports read-only (SELECT/WITH) queries.");
-    process.exit(1);
-  }
-  // Block DuckDB filesystem functions
-  if (FILESYSTEM_FUNCTIONS.test(stripped)) {
-    console.error("Error: flaker query does not run file or network table functions (read_*, parquet_*, glob, ...); it queries the flaker database only.");
-    process.exit(1);
-  }
+  // Readable rejections first. What holds is the store below: read-only, with
+  // external access off, so neither a write nor a file read can succeed.
+  assertReadOnlyQuery(sql);
   const config = loadConfig(process.cwd());
-  const store = new DuckDBStore(resolve(config.storage.path));
+  const path = resolve(config.storage.path);
+  // Create or migrate the schema and views, then reopen the file read-only.
+  const setup = new DuckDBStore(path);
+  await setup.initialize();
+  await setup.close();
+  const store = new DuckDBStore(path, { readOnly: true });
   await store.initialize();
 
   try {

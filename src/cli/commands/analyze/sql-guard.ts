@@ -19,8 +19,67 @@ const FORBIDDEN_WORDS = new Set([
   "PIVOT", "UNPIVOT", "SUMMARIZE", "DESCRIBE", "SHOW", "COPY", "ATTACH", "DETACH",
   "INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER", "TRUNCATE", "PRAGMA",
   "CALL", "SET", "RESET", "LOAD", "INSTALL", "EXPORT", "IMPORT", "EXECUTE", "PREPARE",
-  "GETENV", "QUERY", "QUERY_TABLE",
+  "GETENV", "CURRENT_SETTING", "GETVARIABLE", "QUERY", "QUERY_TABLE",
 ]);
+
+/**
+ * SQL with every string literal, quoted identifier and comment replaced by a
+ * space, read the way DuckDB's lexer reads them: `''` and `""` are escaped
+ * quotes, an `E'…'` string also escapes with `\`, and block comments nest.
+ * `hasComment` says whether a comment was removed. Dollar-quoted strings and
+ * `$n` parameters are not read, so `$` outside a literal is refused: a caller
+ * cannot tell where such a string would end.
+ */
+export function maskSqlLiterals(sql: string): { code: string; hasComment: boolean } {
+  let code = "";
+  let hasComment = false;
+  let i = 0;
+  const isIdent = (ch: string | undefined) => ch !== undefined && /[A-Za-z0-9_$]/.test(ch);
+  while (i < sql.length) {
+    const ch = sql[i];
+    if (ch === "-" && sql[i + 1] === "-") {
+      const end = sql.indexOf("\n", i);
+      i = end < 0 ? sql.length : end;
+      hasComment = true;
+      code += " ";
+      continue;
+    }
+    if (ch === "/" && sql[i + 1] === "*") {
+      let depth = 1;
+      i += 2;
+      while (depth > 0) {
+        if (i >= sql.length) throw new FlakerUsageError("unterminated /* comment");
+        if (sql[i] === "/" && sql[i + 1] === "*") { depth++; i += 2; }
+        else if (sql[i] === "*" && sql[i + 1] === "/") { depth--; i += 2; }
+        else i++;
+      }
+      hasComment = true;
+      code += " ";
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      // `E'…'` (the E starting its own token) takes backslash escapes.
+      const escapes = ch === "'" && /[eE]/.test(sql[i - 1] ?? "") && !isIdent(sql[i - 2]);
+      let j = i + 1;
+      for (;;) {
+        if (j >= sql.length) throw new FlakerUsageError("unterminated quote");
+        if (escapes && sql[j] === "\\") { j += 2; continue; }
+        if (sql[j] === ch) {
+          if (sql[j + 1] === ch) { j += 2; continue; }
+          break;
+        }
+        j++;
+      }
+      i = j + 1;
+      code += " ";
+      continue;
+    }
+    if (ch === "$") throw new FlakerUsageError("'$' (dollar quotes, parameters) is not supported");
+    code += ch;
+    i++;
+  }
+  return { code, hasComment };
+}
 
 /**
  * A user-supplied SQL fragment (a WHERE condition): one row-level expression.
@@ -36,24 +95,19 @@ export function assertSafeSqlFragment(fragment: string, flag: string): void {
     throw new FlakerUsageError(`${flag} must be a condition over the dataset's columns: ${why}`);
   };
   if (/[\\$]/.test(fragment)) fail("'\\' and '$' are not allowed");
+  let masked: ReturnType<typeof maskSqlLiterals>;
+  try {
+    masked = maskSqlLiterals(fragment);
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : String(error));
+  }
+  if (masked.hasComment) fail("no comments");
+  const outside = masked.code;
+  if (outside.includes(";")) fail("no ';'");
   let depth = 0;
-  let outside = "";
-  for (let i = 0; i < fragment.length; i++) {
-    const ch = fragment[i];
-    if (ch === "'" || ch === '"') {
-      const end = fragment.indexOf(ch, i + 1);
-      if (end < 0) fail("unterminated quote");
-      // A doubled quote is an escaped quote: the scan simply resumes after it.
-      i = end;
-      outside += " ";
-      continue;
-    }
-    if (ch === ";") fail("no ';'");
-    if (ch === "-" && fragment[i + 1] === "-") fail("no comments");
-    if (ch === "/" && fragment[i + 1] === "*") fail("no comments");
+  for (const ch of outside) {
     if (ch === "(") depth++;
     if (ch === ")" && --depth < 0) fail("unbalanced ')'");
-    outside += ch;
   }
   if (depth !== 0) fail("unbalanced '('");
   if (FILESYSTEM_FUNCTIONS.test(outside)) fail("no filesystem or network functions");
@@ -62,12 +116,38 @@ export function assertSafeSqlFragment(fragment: string, flag: string): void {
   }
 }
 
+const WRITE_STATEMENT = /^(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|COPY|ATTACH|DETACH|LOAD|INSTALL|CHECKPOINT|EXPORT|IMPORT|VACUUM)\b/i;
+
+/**
+ * The lexical check for `flaker query`: exactly one statement (a trailing `;`
+ * is fine), not a write, and no file table function by name. Readable
+ * rejections only: the query also runs on a read-only database with external
+ * access turned off, which is what holds if this check is wrong.
+ */
+export function assertReadOnlyQuery(sql: string): void {
+  const fail = (why: string): never => {
+    throw new FlakerUsageError(`flaker query runs one read-only SELECT over the flaker database: ${why}`);
+  };
+  let code: string;
+  try {
+    code = maskSqlLiterals(sql).code;
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : String(error));
+  }
+  const body = code.replace(/[;\s]+$/, "");
+  if (body.includes(";")) fail("one statement only (no ';' between statements)");
+  if (WRITE_STATEMENT.test(body.trim())) fail("write statements are not allowed");
+  if (FILESYSTEM_FUNCTIONS.test(body)) {
+    fail("file and network table functions (read_*, parquet_*, glob, ...) are not run; use flaker export to get data out");
+  }
+}
+
 type Json = { [key: string]: unknown };
 const isObject = (v: unknown): v is Json => typeof v === "object" && v !== null && !Array.isArray(v);
 const isEmpty = (v: unknown) => v === null || v === undefined || (Array.isArray(v) && v.length === 0);
 
 /** Keys that only appear on a node that reads a relation. */
-const RELATION_KEYS = new Set(["subquery", "node", "from_table", "source", "table_name", "function"]);
+const RELATION_KEYS = new Set(["subquery", "node", "from_table", "source", "table_name"]);
 
 function findRelation(value: unknown): string | null {
   if (Array.isArray(value)) {
@@ -94,6 +174,9 @@ function findRelation(value: unknown): string | null {
  * subquery or any relation. The lexical `assertSafeSqlFragment` runs first for
  * readable errors; this check is what holds when a grammar slips past it
  * (PIVOT_WIDER / PIVOT_LONGER open a subquery without SELECT, FROM or TABLE).
+ * A table function called in the condition (even under a quoted name, like
+ * `"read_text"('x')`) is a FUNCTION node here, not a relation; DuckDB's binder
+ * rejects it ("table function used as scalar") when the query is bound.
  */
 export function assertRowFilterTree(tree: unknown, dataset: string, flag: string): void {
   const fail = (why: string): never => {

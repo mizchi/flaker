@@ -586,7 +586,7 @@ flaker query "SELECT suite, test_name, status, COUNT(*) as cnt
 
 DuckDB に直接 SQL を投げられます。ウィンドウ関数、FILTER 句など DuckDB の分析機能をフル活用できます。
 
-クエリが見られるのは flaker のデータベースだけです。実行前に DuckDB の external access を切るので、`read_csv(…)` や `FROM 'file.parquet'` などでファイルは読めません。データを外に出すときは `flaker export` を使ってください。書き込み文のチェックは誤操作よけで、サンドボックスではありません。
+クエリが見られるのは flaker のデータベースだけです。実行前に DuckDB の external access を切るので、`read_csv(…)` や `FROM 'file.parquet'` などでファイルは読めません。データを外に出すときは `flaker export` を使ってください。データベースは読み取り専用で開き、受け付けるのは 1 文だけです（末尾の `;` は可）。`SELECT 1; CREATE TABLE …` のような複文は拒否され、どの文もデータベースを変更できません。
 
 ---
 
