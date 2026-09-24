@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import duckdb from "duckdb";
+import { DuckDBInstance } from "@duckdb/node-api";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
 
 const OLD_DDL = readFileSync(
@@ -13,18 +13,16 @@ const OLD_DDL = readFileSync(
 
 /** A database file as flaker 0.13.0 left it: its DDL and a run with one result. */
 async function write013Database(path: string): Promise<void> {
-  await new Promise<void>((done, fail) => {
-    const db = new duckdb.Database(path, (err: unknown) => { if (err) fail(err); });
-    db.connect().exec(`${OLD_DDL}
+  const instance = await DuckDBInstance.create(path);
+  const conn = await instance.connect();
+  await conn.run(`${OLD_DDL}
       INSERT INTO workflow_runs (id, repo, branch, commit_sha, event, status, created_at, duration_ms, workflow_name)
         VALUES (1, 'o/r', 'main', 'a', 'push', 'completed', TIMESTAMP '2026-09-20 00:00:00', 1, 'ci');
       INSERT INTO test_results (id, workflow_run_id, test_id, task_id, suite, test_name, status, duration_ms, retry_count, commit_sha, created_at)
         VALUES (nextval('test_results_id_seq'), 1, 'k1', 'tests/a.test.ts', 'tests/a.test.ts', 'A works', 'passed', 1, 0, 'a', TIMESTAMP '2026-09-20 00:00:00');
-    `, (err: unknown) => {
-      if (err) return fail(err);
-      db.close((closeErr: unknown) => (closeErr ? fail(closeErr) : done()));
-    });
-  });
+  `);
+  conn.closeSync();
+  instance.closeSync();
 }
 
 describe("a flaker 0.13.0 database", () => {

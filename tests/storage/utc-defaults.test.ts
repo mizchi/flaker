@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import duckdb from "duckdb";
+import { DuckDBInstance } from "@duckdb/node-api";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
 
 const OLD_DDL = readFileSync(
@@ -12,13 +12,11 @@ const OLD_DDL = readFileSync(
 );
 
 async function write013Database(path: string): Promise<void> {
-  await new Promise<void>((done, fail) => {
-    const db = new duckdb.Database(path, (err: unknown) => { if (err) fail(err); });
-    db.connect().exec(OLD_DDL, (err: unknown) => {
-      if (err) return fail(err);
-      db.close((closeErr: unknown) => (closeErr ? fail(closeErr) : done()));
-    });
-  });
+  const instance = await DuckDBInstance.create(path);
+  const conn = await instance.connect();
+  await conn.run(OLD_DDL);
+  conn.closeSync();
+  instance.closeSync();
 }
 
 /** Seconds between a naive-UTC timestamp read back from DuckDB and now. */

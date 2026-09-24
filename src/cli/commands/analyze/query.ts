@@ -4,6 +4,15 @@ export async function runQuery(store: MetricStore, sql: string): Promise<unknown
   return store.raw(sql);
 }
 
+/** Lists, structs and maps as JSON (BIGINTs inside them as strings). */
+function formatCell(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object" && !(value instanceof Date)) {
+    return JSON.stringify(value, (_key, v) => (typeof v === "bigint" ? v.toString() : v));
+  }
+  return String(value);
+}
+
 export function formatQueryResult(rows: Record<string, unknown>[]): string {
   if (rows.length === 0) {
     return "No results.";
@@ -11,7 +20,7 @@ export function formatQueryResult(rows: Record<string, unknown>[]): string {
 
   const headers = Object.keys(rows[0]);
   const stringRows = rows.map((row) =>
-    headers.map((h) => String(row[h] ?? "")),
+    headers.map((h) => formatCell(row[h])),
   );
 
   const allRows = [headers, ...stringRows];

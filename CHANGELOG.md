@@ -2,8 +2,13 @@
 
 ## Unreleased
 
+### Changed
+
+- The DuckDB binding moves from the deprecated `duckdb` package to `@duckdb/node-api` (1.4.4, the same DuckDB version). Its native part ships as a prebuilt per-platform package, so nothing is compiled at install time and `pnpm.onlyBuiltDependencies` is no longer needed. Query results keep their JS types; in `flaker query` output, lists, structs and maps now print as JSON.
+
 ### Fixed
 
+- `DuckDBStore.close()` releases the database file lock at once. With the old binding the lock stayed until the instance was garbage-collected, so an in-process caller that closed a file-backed store could not hand the file to another process (#106).
 - Quarantines that `flaker apply` records (`quarantined_test_identities.created_at`) are dated in UTC, like every other timestamp flaker writes. They defaulted to `CURRENT_TIMESTAMP`, which DuckDB stores as the session's local wall-clock time, so on a machine outside UTC `flaker_v1.quarantine.since` was hours off. Rows written before this release keep their time; they cannot be corrected without knowing the writer's time zone (#102).
 
 ## 0.14.0

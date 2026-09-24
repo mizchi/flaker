@@ -83,4 +83,12 @@ describe("query command", () => {
     expect(table).toContain("99");
     expect(table).toContain("world");
   });
+
+  it("formats lists, structs and maps as JSON", async () => {
+    const rows = await runQuery(store, "SELECT [1, 2] AS l, {'a': 1::BIGINT} AS st, MAP {'k': 1} AS m");
+    const table = formatQueryResult(rows as Record<string, unknown>[]);
+    expect(table).toContain("[1,2]");
+    expect(table).toContain('{"a":"1"}');
+    expect(table).toContain('[{"key":"k","value":1}]');
+  });
 });

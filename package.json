@@ -137,16 +137,11 @@
     "node": ">=24"
   },
   "packageManager": "pnpm@10.27.0",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "duckdb"
-    ]
-  },
   "dependencies": {
+    "@duckdb/node-api": "1.4.4-r.4",
     "@octokit/rest": "^22.0.1",
     "adm-zip": "^0.5.17",
     "commander": "^14.0.3",
-    "duckdb": "^1.4.4",
     "smol-toml": "^1.6.1"
   },
   "devDependencies": {

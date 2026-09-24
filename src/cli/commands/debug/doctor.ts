@@ -120,7 +120,7 @@ export async function runDoctor(cwd: string, deps?: Partial<DoctorDeps>): Promis
 }
 
 const REMEDIATION: Record<string, string> = {
-  duckdb: "Run 'pnpm rebuild duckdb' or 'npm rebuild duckdb'",
+  duckdb: "Reinstall dependencies ('pnpm install --force' or 'npm install') so @duckdb/node-api finds its platform binding",
   moonbit: "Install MoonBit from https://moonbitlang.com (optional, fallback available)",
 };
 

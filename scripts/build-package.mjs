@@ -36,7 +36,7 @@ rmSync(distDir, { recursive: true, force: true });
 await build({
   input: resolve(repoRoot, "src/cli/entry.ts"),
   platform: "node",
-  external: ["duckdb"],
+  external: ["@duckdb/node-api"],
   treeshake: false,
   output: {
     file: cliOutputFile,
