@@ -92,7 +92,7 @@ describe("run command", () => {
     const result = await runTests({
       store,
       runner,
-      mode: "random",
+      mode: "weighted",
       count: 1,
       quarantineManifestEntries: manifestEntries,
     });
@@ -233,7 +233,7 @@ describe("run command", () => {
     const result = await runTests({
       store,
       runner,
-      mode: "random",
+      mode: "weighted",
       count: 1,
     });
 

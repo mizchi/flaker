@@ -50,7 +50,7 @@ describe("validateConfigRanges", () => {
   it("rejects holdout_ratio above 1", () => {
     const config: FlakerConfig = {
       ...baseConfig,
-      sampling: { strategy: "random", holdout_ratio: 1.5 },
+      sampling: { strategy: "weighted", holdout_ratio: 1.5 },
     };
     const errors = validateConfigRanges(config);
     expect(errors.some((e) => e.path === "sampling.holdout_ratio")).toBe(true);

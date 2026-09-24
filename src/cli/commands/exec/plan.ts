@@ -1,7 +1,7 @@
 import type { MetricStore } from "../../storage/types.js";
 import type { DependencyResolver } from "../../resolvers/types.js";
 import type { TestId } from "../../runners/types.js";
-import type { ClusterSamplingMode, SamplingMode } from "./sampling-options.js";
+import type { SamplingMode } from "./sampling-options.js";
 import {
   loadCore,
   type FlakerCore,
@@ -15,19 +15,11 @@ import {
   loadQuarantineBridge,
   type QuarantineManifestEntry,
 } from "../../quarantine-manifest.js";
-import { extractFeatures, type GBDTModel } from "../../eval/gbdt.js";
-import { readFileSync, existsSync } from "node:fs";
-import { resolve } from "node:path";
 import {
   createListedTestKey,
   createMetaKey,
   buildListedTestIndex,
 } from "../dev/test-key.js";
-import {
-  applyClusterSamplingMode,
-  buildFailureClusters,
-  getDefaultClusterQuery,
-} from "../../failure-clusters.js";
 
 export interface SampleOpts {
   store: MetricStore;
@@ -44,9 +36,7 @@ export interface SampleOpts {
   coFailureDays?: number;
   coFailureAlpha?: number;
   holdoutRatio?: number;
-  modelPath?: string;
   samplingMeta?: PrecomputedSamplingMeta;
-  clusterMode?: ClusterSamplingMode;
 }
 
 export interface SamplingSummary {
@@ -62,7 +52,6 @@ export interface SamplingSummary {
   estimatedSavedTests: number;
   estimatedSavedMinutes: number | null;
   fallbackReason: string | null;
-  clusterMode?: ClusterSamplingMode;
   // Optional per-test selection metadata (minimal: filled with placeholder values)
   // TODO: populate with real tier/score/reason from planner internals
   reasons?: Array<{
@@ -162,15 +151,8 @@ export async function planSample(opts: SampleOpts): Promise<SamplePlan> {
 
   const count = resolveCount(opts, allTests.length);
   const seed = opts.seed ?? Date.now();
-  const { sampled: initialSampled, effectiveMode } = await selectByStrategy(
+  const { sampled, effectiveMode } = await selectByStrategy(
     allTests, count, seed, opts, core,
-  );
-  const sampled = await applyFailureClusterMode(
-    allTests,
-    initialSampled,
-    effectiveMode,
-    count,
-    opts,
   );
 
   const holdout = selectHoldout(allTests, sampled, opts.holdoutRatio ?? 0, seed);
@@ -189,40 +171,8 @@ export async function planSample(opts: SampleOpts): Promise<SamplePlan> {
       sampled,
       holdoutCount: holdout.length,
       fallbackReason: meta.fallbackReason,
-      clusterMode: opts.clusterMode,
     }),
   };
-}
-
-async function applyFailureClusterMode(
-  allTests: TestMeta[],
-  sampled: TestMeta[],
-  effectiveMode: SamplingMode,
-  count: number,
-  opts: SampleOpts,
-): Promise<TestMeta[]> {
-  if (
-    opts.clusterMode == null
-    || opts.clusterMode === "off"
-    || (effectiveMode !== "weighted" && effectiveMode !== "hybrid")
-  ) {
-    return sampled;
-  }
-
-  const defaults = getDefaultClusterQuery();
-  const pairs = await opts.store.queryTestCoFailures({
-    windowDays: opts.coFailureDays ?? defaults.windowDays,
-    minCoFailures: defaults.minCoFailures,
-    minCoRate: defaults.minCoRate,
-  });
-
-  return applyClusterSamplingMode({
-    allTests,
-    sampled,
-    clusters: buildFailureClusters(pairs),
-    count,
-    mode: opts.clusterMode,
-  });
 }
 
 async function applyCoFailureBoosts(
@@ -283,7 +233,7 @@ async function selectByStrategy(
   const pickPrimary = async (
     mode: SamplingMode,
   ): Promise<{ sampled: TestMeta[]; effectiveMode: SamplingMode }> => {
-    let effectiveMode: SamplingMode = mode;
+    const effectiveMode: SamplingMode = mode;
 
     if (mode === "affected" || mode === "hybrid") {
       if (!opts.resolver || !opts.changedFiles) {
@@ -303,80 +253,6 @@ async function selectByStrategy(
       };
     }
 
-    if (mode === "gbdt") {
-      const sampled = sampleByGBDT(allTests, count, core, opts.modelPath);
-      if (sampled.length > 0 || allTests.length === 0) {
-        return { sampled, effectiveMode };
-      }
-      effectiveMode = "weighted";
-      return {
-        sampled: core.sampleWeighted(allTests, count, seed),
-        effectiveMode,
-      };
-    }
-
-    if (mode === "coverage-guided") {
-      if (!opts.changedFiles || opts.changedFiles.length === 0) {
-        throw new Error("coverage-guided mode requires changedFiles");
-      }
-      const coverageRows = await opts.store.raw<{
-        test_id: string;
-        suite: string;
-        test_name: string;
-        edge: string;
-      }>("SELECT test_id, suite, test_name, edge FROM test_coverage");
-
-      if (coverageRows.length === 0) {
-        effectiveMode = "weighted";
-        return {
-          sampled: core.sampleWeighted(allTests, count, seed),
-          effectiveMode,
-        };
-      }
-
-      // Build changed edges: edges whose file path matches any changed file
-      const changedFileSet = new Set(opts.changedFiles);
-      const changedEdges = new Set<string>();
-      for (const row of coverageRows) {
-        const filePart = row.edge.split(":")[0];
-        if (changedFileSet.has(filePart)) {
-          changedEdges.add(row.edge);
-        }
-      }
-
-      if (changedEdges.size === 0) {
-        effectiveMode = "weighted";
-        return {
-          sampled: core.sampleWeighted(allTests, count, seed),
-          effectiveMode,
-        };
-      }
-
-      // Build coverage map: suite -> edges
-      const coverageMap = new Map<string, { test_name: string; edges: string[] }>();
-      for (const row of coverageRows) {
-        const existing = coverageMap.get(row.suite);
-        if (existing) {
-          existing.edges.push(row.edge);
-        } else {
-          coverageMap.set(row.suite, { test_name: row.test_name, edges: [row.edge] });
-        }
-      }
-
-      const coverages = [...coverageMap.entries()].map(([suite, data]) => ({
-        suite,
-        test_name: data.test_name,
-        edges: [...new Set(data.edges)],
-      }));
-
-      const result = core.selectByCoverage(coverages, [...changedEdges], count);
-      const selectedSuites = new Set(result.selected);
-      return {
-        sampled: allTests.filter((t) => selectedSuites.has(t.suite)),
-        effectiveMode,
-      };
-    }
-
     if (mode === "full") {
       return {
         sampled: allTests,
@@ -385,16 +261,10 @@ async function selectByStrategy(
     }
 
     if (mode === "weighted") {
-      return {
-        sampled: core.sampleWeighted(allTests, count, seed),
-        effectiveMode,
-      };
+      return { sampled: core.sampleWeighted(allTests, count, seed), effectiveMode };
     }
-
-    return {
-      sampled: core.sampleRandom(allTests, count, seed),
-      effectiveMode,
-    };
+    const unreachable: never = mode;
+    throw new Error(`Unhandled sampling mode: ${String(unreachable)}`);
   };
 
   const primary = await pickPrimary(opts.mode);
@@ -420,7 +290,6 @@ interface BuildSamplingSummaryOpts {
   sampled: TestMeta[];
   holdoutCount: number;
   fallbackReason: string | null;
-  clusterMode?: ClusterSamplingMode;
 }
 
 function roundMetric(value: number): number {
@@ -456,7 +325,6 @@ function buildSamplingSummary(opts: BuildSamplingSummaryOpts): SamplingSummary {
     estimatedSavedTests: Math.max(candidateCount - selectedCount, 0),
     estimatedSavedMinutes,
     fallbackReason: opts.fallbackReason,
-    clusterMode: opts.clusterMode,
     // Minimal: populate reasons with placeholder tier/score/reason
     // TODO: populate with real tier/score/reason from planner internals
     reasons: opts.sampled.map((t) => ({
@@ -478,7 +346,6 @@ export function formatSamplingSummary(
     "# Sampling Summary",
     "",
     `  Strategy:                 ${summary.strategy}`,
-    `  Cluster mode:             ${summary.clusterMode ?? "off"}`,
     `  Selected tests:           ${summary.selectedCount} / ${summary.candidateCount}${summary.sampleRatio != null ? ` (${summary.sampleRatio}%)` : ""}`,
     `  Estimated saved tests:    ${summary.estimatedSavedTests}`,
     `  Estimated saved minutes:  ${summary.estimatedSavedMinutes ?? "N/A"}`,
@@ -603,36 +470,4 @@ function selectHoldout(
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr.slice(0, holdoutCount);
-}
-
-function loadGBDTModel(modelPath?: string): GBDTModel | null {
-  if (modelPath && existsSync(modelPath)) {
-    return JSON.parse(readFileSync(modelPath, "utf-8")) as GBDTModel;
-  }
-  // Try default location
-  const defaultPath = resolve(".flaker", "models", "gbdt.json");
-  if (existsSync(defaultPath)) {
-    return JSON.parse(readFileSync(defaultPath, "utf-8")) as GBDTModel;
-  }
-  return null;
-}
-
-function sampleByGBDT(
-  allTests: TestMeta[],
-  count: number,
-  core: FlakerCore,
-  modelPath?: string,
-): TestMeta[] {
-  const model = loadGBDTModel(modelPath);
-  if (!model) {
-    return []; // signal to caller to fall back
-  }
-
-  const scored = allTests.map((test) => {
-    const features = extractFeatures(test);
-    const score = core.predictGBDT(model, features);
-    return { test, score };
-  });
-  scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, count).map((s) => s.test);
 }

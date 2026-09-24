@@ -13,7 +13,7 @@ describe("sampling options", () => {
 
   it("rejects unknown sampling modes instead of falling back silently", () => {
     expect(() => parseSamplingMode("strategy=affected")).toThrowError(
-      "Unknown sampling strategy: strategy=affected. Expected one of: random, weighted, affected, hybrid, gbdt",
+      "Unknown sampling strategy: strategy=affected. Expected one of: weighted, affected, hybrid, full",
     );
   });
 

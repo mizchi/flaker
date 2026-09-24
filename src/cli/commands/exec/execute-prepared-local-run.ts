@@ -42,7 +42,6 @@ export async function executePreparedLocalRun(input: {
     cwd: input.cwd,
     coFailureDays: input.prepared.coFailureDays,
     holdoutRatio: input.prepared.holdoutRatio,
-    clusterMode: input.prepared.clusterMode,
     dryRun: input.dryRun,
     explain: input.explain,
   });

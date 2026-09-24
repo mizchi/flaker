@@ -33,7 +33,6 @@ describe("CLI help", () => {
     expect(runHelp).toContain("--dry-run");
     expect(runHelp).toContain("--explain");
     expect(runHelp).toContain("--gate");
-    expect(runHelp).toContain("--cluster-mode");
     expect(runHelp).toContain("--skip-flaky-tagged");
     // gateReviewHelp, gateExplainHelp, gateHistoryHelp assertions removed — gate dropped in 0.8.0.
     // quarantineSuggestHelp, quarantineApplyHelp assertions removed — quarantine dropped in 0.8.0.

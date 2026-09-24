@@ -1,10 +1,5 @@
 import type { GateConfig, SamplingConfig } from "./config.js";
-import {
-  parseClusterSamplingMode,
-  parseSamplingMode,
-  type ClusterSamplingMode,
-  type SamplingMode,
-} from "./commands/exec/sampling-options.js";
+import { parseSamplingMode, type SamplingMode } from "./commands/exec/sampling-options.js";
 import { LEGACY_PROFILE_TO_GATE, normalizeGateName, type GateName } from "./gate.js";
 
 export interface ResolvedGate {
@@ -13,8 +8,6 @@ export interface ResolvedGate {
   sample_percentage?: number;
   holdout_ratio?: number;
   co_failure_window_days?: number;
-  cluster_mode?: ClusterSamplingMode;
-  model_path?: string;
   skip_quarantined?: boolean;
   skip_flaky_tagged?: boolean;
   max_duration_seconds?: number;
@@ -68,8 +61,6 @@ export function resolveGate(
     sample_percentage: sampling?.sample_percentage,
     holdout_ratio: sampling?.holdout_ratio,
     co_failure_window_days: sampling?.co_failure_window_days,
-    cluster_mode: sampling?.cluster_mode,
-    model_path: sampling?.model_path,
     skip_quarantined: sampling?.skip_quarantined,
     skip_flaky_tagged: sampling?.skip_flaky_tagged,
   };
@@ -85,8 +76,6 @@ export function resolveGate(
     sample_percentage: merged.sample_percentage,
     holdout_ratio: merged.holdout_ratio,
     co_failure_window_days: merged.co_failure_window_days,
-    cluster_mode: parseClusterSamplingMode(merged.cluster_mode),
-    model_path: merged.model_path,
     skip_quarantined: merged.skip_quarantined,
     skip_flaky_tagged: merged.skip_flaky_tagged,
     max_duration_seconds: gateConfig?.max_duration_seconds,

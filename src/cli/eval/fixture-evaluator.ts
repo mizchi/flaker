@@ -85,8 +85,13 @@ export async function evaluateFixture(
   const resolver = createFixtureResolver(fixture);
   const samplingMeta = await prepareSamplingMeta(store, [], core);
   const strategyFilter = opts.strategies ? new Set(opts.strategies) : null;
+  const baselineTests = samplingMeta.tests.map((t) => ({
+    ...t,
+    co_failure_boost: t.co_failure_boost ?? 0,
+  }));
   const strategies = [
-    { name: "random", mode: "random" as const, useCoFailure: false, useResolver: false },
+    // "random" is an evaluation baseline only (core.sampleRandom); it is not a run strategy.
+    { name: "random", mode: null, useCoFailure: false, useResolver: false },
     { name: "weighted", mode: "weighted" as const, useCoFailure: false, useResolver: false },
     { name: "weighted+co-failure", mode: "weighted" as const, useCoFailure: true, useResolver: false },
     { name: "hybrid+co-failure", mode: "hybrid" as const, useCoFailure: true, useResolver: true },
@@ -112,25 +117,27 @@ export async function evaluateFixture(
         ? commit.changed_files.map((f) => f.file_path)
         : undefined;
 
-      const plan = await planSample({
-        store,
-        count: sampleCount,
-        mode: strategy.mode,
-        seed: 42,
-        changedFiles,
-        resolver: strategy.useResolver ? resolver : undefined,
-        samplingMeta,
-      });
+      const sampled = strategy.mode == null
+        ? core.sampleRandom(baselineTests, sampleCount, 42)
+        : (await planSample({
+            store,
+            count: sampleCount,
+            mode: strategy.mode,
+            seed: 42,
+            changedFiles,
+            resolver: strategy.useResolver ? resolver : undefined,
+            samplingMeta,
+          })).sampled;
 
-      const sampledSuites = new Set(plan.sampled.map((t) => t.suite));
+      const sampledSuites = new Set(sampled.map((t) => t.suite));
       sampledSuitesPerCommit.push(sampledSuites);
       const actualFailures = commit.test_results.filter((r) => r.status === "failed");
       const detectedInSample = actualFailures.filter((f) => sampledSuites.has(f.suite));
 
       totalFailures += actualFailures.length;
       detectedFailures += detectedInSample.length;
-      totalSampled += plan.sampled.length;
-      totalSampledFailures += plan.sampled.filter((t) =>
+      totalSampled += sampled.length;
+      totalSampledFailures += sampled.filter((t) =>
         commit.test_results.some((r) => r.suite === t.suite && r.status === "failed"),
       ).length;
     }

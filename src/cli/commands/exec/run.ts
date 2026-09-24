@@ -3,7 +3,7 @@ import {
   planSample,
   type SamplingSummary,
 } from "./plan.js";
-import type { ClusterSamplingMode, SamplingMode } from "./sampling-options.js";
+import type { SamplingMode } from "./sampling-options.js";
 import type { QuarantineManifestEntry } from "../../quarantine-manifest.js";
 import type { DependencyResolver } from "../../resolvers/types.js";
 import {
@@ -37,7 +37,6 @@ export interface RunOpts {
   holdoutRatio?: number;
   dryRun?: boolean;
   explain?: boolean;
-  clusterMode?: ClusterSamplingMode;
 }
 
 export interface RunCommandResult extends ExecuteResult {
@@ -171,7 +170,6 @@ export async function runTests(opts: RunOpts): Promise<RunCommandResult> {
     listedTests,
     coFailureDays: opts.coFailureDays,
     holdoutRatio: opts.holdoutRatio,
-    clusterMode: opts.clusterMode,
   });
   const tests = enrichSampledTests(plan.sampled, listedTests);
   const holdoutTests = enrichSampledTests(plan.holdout, listedTests);

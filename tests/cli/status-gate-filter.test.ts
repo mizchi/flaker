@@ -27,7 +27,7 @@ describe("formatStatusSummary with filtered gates", () => {
       activity: { totalRuns: 0, ciRuns: 0, localRuns: 0, passedResults: 0, failedResults: 0 },
       health: { dataConfidence: "low", matchedCommits: 0, sampleRatio: null, brokenTests: 0, intermittentFlaky: 0, flakyTrend: 0 },
       gates: {
-        iteration: { strategy: "random", samplePercentage: 20, maxDurationSeconds: 60, adaptive: false },
+        iteration: { strategy: "weighted", samplePercentage: 20, maxDurationSeconds: 60, adaptive: false },
         merge: { strategy: "hybrid", samplePercentage: 30, maxDurationSeconds: null, adaptive: true },
         release: { strategy: "full", samplePercentage: null, maxDurationSeconds: null, adaptive: false },
       },

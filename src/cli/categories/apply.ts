@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Command } from "commander";
 import { loadConfig, writeSamplingConfig } from "../config.js";
@@ -221,10 +221,8 @@ export async function applyAction(opts: {
         );
         const hasResolver =
           config.affected.resolver !== "" && config.affected.resolver !== "none";
-        const hasGBDTModel = existsSync(resolve(".flaker", "models", "gbdt.json"));
         const profile = await analyzeProject(store, {
           hasResolver,
-          hasGBDTModel,
           windowDays: 90,
         });
         const sampling = recommendSampling(profile);

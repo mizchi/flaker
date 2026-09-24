@@ -21,9 +21,7 @@ import type { MetricStore } from "../../storage/types.js";
 import {
   parseSampleCount,
   parseSamplePercentage,
-  parseClusterSamplingMode,
   parseSamplingMode,
-  type ClusterSamplingMode,
   type SamplingMode,
 } from "./sampling-options.js";
 
@@ -37,8 +35,6 @@ export interface RunCliOpts {
   changed?: string;
   coFailureDays?: string;
   holdoutRatio?: string;
-  modelPath?: string;
-  clusterMode?: string;
 }
 
 export interface PreparedRunRequest {
@@ -53,8 +49,6 @@ export interface PreparedRunRequest {
   changedFiles?: string[];
   coFailureDays?: number;
   holdoutRatio?: number;
-  modelPath?: string;
-  clusterMode?: ClusterSamplingMode;
   resolver?: DependencyResolver;
   quarantineManifestEntries?: QuarantineManifestEntry[];
   adaptiveReason?: string;
@@ -183,11 +177,6 @@ export async function prepareRunRequest(
     holdoutRatio: input.opts.holdoutRatio
       ? parseFloat(input.opts.holdoutRatio)
       : resolvedGate.holdout_ratio,
-    modelPath: input.opts.modelPath ?? resolvedGate.model_path,
-    clusterMode:
-      parseClusterSamplingMode(input.opts.clusterMode)
-      ?? resolvedGate.cluster_mode
-      ?? "off",
     resolver,
     quarantineManifestEntries,
     adaptiveReason,

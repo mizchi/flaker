@@ -10,8 +10,6 @@ function makeGate(overrides?: Partial<ResolvedGate>): ResolvedGate {
     sample_percentage: 25,
     holdout_ratio: 0.1,
     co_failure_window_days: 90,
-    cluster_mode: "spread",
-    model_path: undefined,
     skip_quarantined: true,
     skip_flaky_tagged: true,
     max_duration_seconds: 600,

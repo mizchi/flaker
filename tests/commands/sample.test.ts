@@ -95,16 +95,6 @@ describe("sample command", () => {
     await store.close();
   });
 
-  it("random returns correct count", async () => {
-    const sampled = await runSample({
-      store,
-      count: 5,
-      mode: "random",
-      seed: 42,
-    });
-    expect(sampled).toHaveLength(5);
-  });
-
   it("weighted returns correct count", async () => {
     const sampled = await runSample({
       store,
@@ -119,7 +109,7 @@ describe("sample command", () => {
     const sampled = await runSample({
       store,
       percentage: 50,
-      mode: "random",
+      mode: "weighted",
       seed: 42,
     });
     expect(sampled).toHaveLength(10);
@@ -158,7 +148,7 @@ describe("sample command without history", () => {
   it("falls back to listedTests when the store has no test history", async () => {
     const sampled = await runSample({
       store,
-      mode: "random",
+      mode: "weighted",
       count: 2,
       seed: 42,
       listedTests: [
@@ -242,7 +232,7 @@ describe("sample command without history", () => {
   it("marks listedTests cold start as a fallback reason", async () => {
     const plan = await planSample({
       store,
-      mode: "random",
+      mode: "weighted",
       count: 2,
       seed: 42,
       listedTests: [
@@ -453,7 +443,7 @@ describe("sample command with stable identity history", () => {
     const sampled = await runSample({
       store,
       count: 10,
-      mode: "random",
+      mode: "weighted",
       seed: 42,
     });
 
@@ -498,7 +488,7 @@ describe("sample command with stable identity history", () => {
     const sampled = await runSample({
       store,
       count: 10,
-      mode: "random",
+      mode: "weighted",
       seed: 42,
     });
 

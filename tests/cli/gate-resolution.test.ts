@@ -53,18 +53,16 @@ window_days = 14
 detection_threshold_ratio = 0.02
 
 [gate.release]
-strategy = "random"
+strategy = "weighted"
 sample_percentage = 30
-cluster_mode = "spread"
 
 [gate.merge]
 strategy = "full"
 max_duration_seconds = 300
 
 [gate.iteration]
-strategy = "random"
+strategy = "weighted"
 sample_percentage = 10
-cluster_mode = "pack"
 adaptive = true
 adaptive_fnr_low_ratio = 0.01
 adaptive_fnr_high_ratio = 0.04
@@ -76,18 +74,16 @@ skip_flaky_tagged = true
 
     expect(config.gate).toBeDefined();
     expect(config.gate?.release).toEqual({
-      strategy: "random",
+      strategy: "weighted",
       sample_percentage: 30,
-      cluster_mode: "spread",
     });
     expect(config.gate?.merge).toEqual({
       strategy: "full",
       max_duration_seconds: 300,
     });
     expect(config.gate?.iteration).toMatchObject({
-      strategy: "random",
+      strategy: "weighted",
       sample_percentage: 10,
-      cluster_mode: "pack",
       adaptive: true,
       adaptive_fnr_low_ratio: 0.01,
       adaptive_fnr_high_ratio: 0.04,
@@ -204,13 +200,12 @@ describe("resolveGate", () => {
   it("merges gate over sampling defaults", () => {
     const result = resolveGate(
       "release",
-      { release: { strategy: "random", sample_percentage: 30, cluster_mode: "spread" } },
-      { strategy: "random", sample_percentage: 50, holdout_ratio: 0.1, cluster_mode: "pack", skip_quarantined: true, skip_flaky_tagged: true },
+      { release: { strategy: "weighted", sample_percentage: 30 } },
+      { strategy: "weighted", sample_percentage: 50, holdout_ratio: 0.1, skip_quarantined: true, skip_flaky_tagged: true },
     );
-    expect(result.strategy).toBe("random");
+    expect(result.strategy).toBe("weighted");
     expect(result.sample_percentage).toBe(30); // gate wins
     expect(result.holdout_ratio).toBe(0.1); // from sampling
-    expect(result.cluster_mode).toBe("spread"); // gate wins
     expect(result.skip_flaky_tagged).toBe(true); // from sampling
   });
 
@@ -224,16 +219,15 @@ describe("resolveGate", () => {
   });
 
   it("falls back to sampling when the gate has no section", () => {
-    const result = resolveGate("release", {}, { strategy: "random", sample_percentage: 20, cluster_mode: "pack" });
-    expect(result.strategy).toBe("random");
+    const result = resolveGate("release", {}, { strategy: "weighted", sample_percentage: 20 });
+    expect(result.strategy).toBe("weighted");
     expect(result.sample_percentage).toBe(20);
-    expect(result.cluster_mode).toBe("pack");
   });
 
   it("does not expose adaptive fields", () => {
     const result = resolveGate(
       "iteration",
-      { iteration: { strategy: "random", adaptive: true, adaptive_step: 2 } },
+      { iteration: { strategy: "weighted", adaptive: true, adaptive_step: 2 } },
       undefined,
     );
     expect(result).not.toHaveProperty("adaptive");
@@ -243,11 +237,11 @@ describe("resolveGate", () => {
   it("handles max_duration_seconds and fallback_strategy", () => {
     const result = resolveGate(
       "merge",
-      { merge: { strategy: "full", max_duration_seconds: 300, fallback_strategy: "random" } },
+      { merge: { strategy: "full", max_duration_seconds: 300, fallback_strategy: "weighted" } },
       undefined,
     );
     expect(result.max_duration_seconds).toBe(300);
-    expect(result.fallback_strategy).toBe("random");
+    expect(result.fallback_strategy).toBe("weighted");
   });
 
   it("uses 'weighted' as default strategy when no gate or sampling", () => {

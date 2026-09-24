@@ -3,19 +3,11 @@ import { join } from "node:path";
 import { parse } from "smol-toml";
 import { LEGACY_PROFILE_TO_GATE, VALID_GATE_NAMES, type GateName } from "./gate.js";
 
-export interface CoverageConfig {
-  format: string; // istanbul | v8 | playwright
-  input: string; // path to coverage JSON or directory
-  granularity?: string; // statement (default) | function | branch
-}
-
 export interface SamplingConfig {
   strategy: string;
   sample_percentage?: number;           // was `percentage`
   holdout_ratio?: number;
   co_failure_window_days?: number;      // was `co_failure_days`
-  cluster_mode?: "off" | "spread" | "pack";
-  model_path?: string;
   skip_quarantined?: boolean;
   skip_flaky_tagged?: boolean;
   calibrated_at?: string;
@@ -29,8 +21,6 @@ export interface GateConfig {
   sample_percentage?: number;           // was `percentage`
   holdout_ratio?: number;
   co_failure_window_days?: number;      // was `co_failure_days`
-  cluster_mode?: "off" | "spread" | "pack";
-  model_path?: string;
   skip_quarantined?: boolean;
   skip_flaky_tagged?: boolean;
   adaptive?: boolean;
@@ -87,7 +77,6 @@ export interface FlakerConfig {
     runtime_apply?: boolean;
   };
   flaky: { window_days: number; detection_threshold_ratio: number };
-  coverage?: CoverageConfig;
   sampling?: SamplingConfig;
   gate?: Partial<Record<GateName, GateConfig>>;
   promotion: PromotionThresholds;
@@ -176,6 +165,23 @@ const LEGACY_GATE_KEYS: LegacyKeyEntry[] = [
   { section: "gate.*", oldKey: "adaptive_fnr_high", newKey: "adaptive_fnr_high_ratio", unitNote: "0.0-1.0" },
 ];
 
+const REMOVED_IN_0_13 = ["cluster_mode", "model_path"] as const;
+const REMOVED_STRATEGIES = new Set(["random", "gbdt", "coverage-guided"]);
+
+function checkRemovedKeys(sectionLabel: string, section: Record<string, unknown>, errors: string[]): void {
+  for (const key of REMOVED_IN_0_13) {
+    if (key in section) errors.push(`\`${key}\` in [${sectionLabel}] was removed in 0.13.0`);
+  }
+  const strategy = section["strategy"];
+  if (typeof strategy === "string" && REMOVED_STRATEGIES.has(strategy)) {
+    errors.push(`strategy "${strategy}" in [${sectionLabel}] was removed in 0.13.0; use weighted, affected, hybrid or full`);
+  }
+  const fallback = section["fallback_strategy"];
+  if (typeof fallback === "string" && REMOVED_STRATEGIES.has(fallback)) {
+    errors.push(`fallback_strategy "${fallback}" in [${sectionLabel}] was removed in 0.13.0; use weighted, affected, hybrid or full`);
+  }
+}
+
 function isTable(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -208,9 +214,18 @@ function checkLegacyKeys(parsed: Record<string, unknown>): void {
           errors.push(`[gate.${name}] is not a gate; use one of iteration, merge, release`);
         } else if (!isTable(value)) {
           errors.push(`\`gate.${name}\` must be a table ([gate.${name}])`);
+        } else {
+          checkRemovedKeys(`gate.${name}`, value, errors);
         }
       }
     }
+  }
+
+  if (isTable(parsed.sampling)) {
+    checkRemovedKeys("sampling", parsed.sampling, errors);
+  }
+  if ("coverage" in parsed) {
+    errors.push("[coverage] was removed in 0.13.0");
   }
 
   for (const entry of LEGACY_KEYS) {
@@ -356,8 +371,6 @@ export function writeSamplingConfig(dir: string, sampling: SamplingConfig): void
   if (sampling.sample_percentage != null) lines.push(`sample_percentage = ${sampling.sample_percentage}`);
   if (sampling.holdout_ratio != null) lines.push(`holdout_ratio = ${sampling.holdout_ratio}`);
   if (sampling.co_failure_window_days != null) lines.push(`co_failure_window_days = ${sampling.co_failure_window_days}`);
-  if (sampling.cluster_mode != null) lines.push(`cluster_mode = "${sampling.cluster_mode}"`);
-  if (sampling.model_path != null) lines.push(`model_path = "${sampling.model_path}"`);
   if (sampling.skip_quarantined != null) lines.push(`skip_quarantined = ${sampling.skip_quarantined}`);
   if (sampling.calibrated_at != null) lines.push(`calibrated_at = "${sampling.calibrated_at}"`);
   if (sampling.detected_flaky_rate_ratio != null) lines.push(`detected_flaky_rate_ratio = ${sampling.detected_flaky_rate_ratio}`);

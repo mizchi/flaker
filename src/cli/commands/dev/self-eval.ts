@@ -22,7 +22,7 @@ export interface Scenario {
   expectedMinCount: number;
   expectedMaxCount: number;
   sampleCount: number;
-  strategy: "random" | "weighted" | "affected" | "hybrid";
+  strategy: "weighted" | "affected" | "hybrid";
 }
 
 export interface ScenarioResult {
@@ -109,7 +109,7 @@ export function getScenarios(): Scenario[] {
       expectedMinCount: 1,
       expectedMaxCount: 2,
       sampleCount: 2,
-      strategy: "random",
+      strategy: "weighted",
     },
     {
       name: "regression-detection",

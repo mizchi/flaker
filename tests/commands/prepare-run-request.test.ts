@@ -144,7 +144,7 @@ describe("prepareRunRequest", () => {
     expect(runInsights).toHaveBeenCalled();
   });
 
-  it("does not create a resolver when strategy is random", async () => {
+  it("does not create a resolver when strategy is weighted", async () => {
     const createResolver = vi.fn();
 
     const prepared = await prepareRunRequest({
@@ -154,7 +154,7 @@ describe("prepareRunRequest", () => {
         gate: {
           ...baseConfig.gate,
           iteration: {
-            strategy: "random",
+            strategy: "weighted",
           },
         },
       },
@@ -169,7 +169,7 @@ describe("prepareRunRequest", () => {
       },
     });
 
-    expect(prepared.mode).toBe("random");
+    expect(prepared.mode).toBe("weighted");
     expect(prepared.resolver).toBeUndefined();
     expect(createResolver).not.toHaveBeenCalled();
   });

@@ -11,7 +11,6 @@ export interface ProjectProfile {
   hasCoFailureData: boolean;
   commitCount: number;
   hasResolver: boolean;
-  hasGBDTModel: boolean;
   /** Tests that fail 100% of runs — broken, not flaky. */
   brokenTestCount: number;
   /** Tests with intermittent failures (0 < failRate < 100%). */
@@ -30,7 +29,7 @@ export interface CalibrationResult {
  */
 export async function analyzeProject(
   store: MetricStore,
-  opts: { hasResolver: boolean; hasGBDTModel: boolean; windowDays?: number; now?: Date },
+  opts: { hasResolver: boolean; windowDays?: number; now?: Date },
 ): Promise<ProjectProfile> {
   const window = opts.windowDays ?? 90;
   const now = opts.now ?? new Date();
@@ -135,7 +134,6 @@ export async function analyzeProject(
     hasCoFailureData,
     commitCount,
     hasResolver: opts.hasResolver,
-    hasGBDTModel: opts.hasGBDTModel,
     brokenTestCount,
     intermittentFlakyCount,
     confidence,
@@ -148,18 +146,7 @@ export async function analyzeProject(
 export function recommendSampling(profile: ProjectProfile): SamplingConfig {
   const now = new Date().toISOString().slice(0, 10);
 
-  let strategy: string;
-  if (profile.testCount < 50) {
-    strategy = "random";
-  } else if (profile.hasResolver && profile.trueFlakyRate < 0.20) {
-    strategy = "hybrid";
-  } else if (profile.hasGBDTModel && profile.commitCount >= 100 && profile.trueFlakyRate >= 0.15) {
-    strategy = "gbdt";
-  } else if (profile.hasResolver) {
-    strategy = "hybrid";
-  } else {
-    strategy = profile.hasGBDTModel && profile.commitCount >= 100 ? "gbdt" : "weighted";
-  }
+  const strategy = profile.hasResolver ? "hybrid" : "weighted";
 
   let percentage: number;
   if (profile.testCount < 100) {
@@ -195,7 +182,7 @@ export function formatCalibrationReport(result: CalibrationResult): string {
   // Data sufficiency warning
   if (p.confidence === "insufficient") {
     lines.push("⚠ Insufficient data (< 5 commits). Recommendations are unreliable.");
-    lines.push("  Run `flaker collect --days 30` to gather more history.");
+    lines.push("  Run `flaker import --ci --days 30` to gather more history.");
     lines.push("");
   } else if (p.confidence === "low") {
     lines.push("⚠ Low confidence (" + p.commitCount + " commits). Collect 50+ for reliable calibration.");
@@ -223,7 +210,6 @@ export function formatCalibrationReport(result: CalibrationResult): string {
   }
 
   lines.push(`  Resolver:           ${p.hasResolver ? "yes" : "no"}`);
-  lines.push(`  GBDT model:         ${p.hasGBDTModel ? "yes" : "no"}`);
 
   lines.push("");
   lines.push("## Recommended [sampling] config");
@@ -239,7 +225,7 @@ export function formatCalibrationReport(result: CalibrationResult): string {
     lines.push(`  1. Fix or quarantine ${p.brokenTestCount} broken test(s) — they inflate flaky metrics`);
   }
   if (p.confidence === "insufficient" || p.confidence === "low") {
-    lines.push(`  ${p.brokenTestCount > 0 ? "2" : "1"}. Collect more CI data: \`flaker collect --days 30\``);
+    lines.push(`  ${p.brokenTestCount > 0 ? "2" : "1"}. Collect more CI data: \`flaker import --ci --days 30\``);
     lines.push(`     Then re-run: \`flaker collect calibrate\``);
   } else {
     lines.push(`  ${p.brokenTestCount > 0 ? "2" : "1"}. Apply config: \`flaker collect calibrate\` (without --dry-run)`);
@@ -254,9 +240,7 @@ export function formatCalibrationReport(result: CalibrationResult): string {
 function strategyExplanation(strategy: string): string {
   switch (strategy) {
     case "hybrid": return "dependency graph + co-failure + weighted fill";
-    case "gbdt": return "ML model ranking";
     case "weighted": return "prioritize by flaky rate + co-failure";
-    case "random": return "uniform random (small suite)";
     default: return strategy;
   }
 }
@@ -282,7 +266,6 @@ export function buildExplainContext(
       coFailureStrength: p.coFailureStrength,
       hasCoFailureData: p.hasCoFailureData,
       hasResolver: p.hasResolver,
-      hasGBDTModel: p.hasGBDTModel,
     },
     recommendation: {
       strategy: s.strategy,

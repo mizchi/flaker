@@ -13,7 +13,6 @@ describe("gate integration", () => {
     sample_percentage: 30,
     holdout_ratio: 0.1,
     co_failure_window_days: 90,
-    cluster_mode: "spread",
     skip_flaky_tagged: true,
   };
 
@@ -22,7 +21,6 @@ describe("gate integration", () => {
     merge: { strategy: "hybrid", sample_percentage: 25, adaptive: true },
     iteration: {
       strategy: "affected",
-      cluster_mode: "pack",
       max_duration_seconds: 60,
       fallback_strategy: "weighted",
       skip_flaky_tagged: false,
@@ -41,14 +39,12 @@ describe("gate integration", () => {
     expect(g.strategy).toBe("hybrid");
     expect(g.sample_percentage).toBe(25);
     expect(g.holdout_ratio).toBe(0.1); // inherited from sampling
-    expect(g.cluster_mode).toBe("spread"); // inherited from sampling
     expect(g.skip_flaky_tagged).toBe(true);
   });
 
   it("iteration gate uses affected with time budget", () => {
     const g = resolveGate("iteration", gates, sampling);
     expect(g.strategy).toBe("affected");
-    expect(g.cluster_mode).toBe("pack");
     expect(g.max_duration_seconds).toBe(60);
     expect(g.fallback_strategy).toBe("weighted");
     expect(g.skip_flaky_tagged).toBe(false);

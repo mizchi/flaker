@@ -15,7 +15,7 @@ select = [
   "tests/commands/calibrate.test.ts",
   "tests/commands/insights.test.ts",
   "tests/commands/self-eval.test.ts",
-  "tests/commands/sample-holdout-gbdt.test.ts",
+  "tests/commands/sample-holdout.test.ts",
   "tests/eval/*.test.ts",
   "tests/kpi/*.test.ts",
   "tests/integration-e2e-flow.test.ts",
