@@ -38,7 +38,7 @@ flaker の表面 API は肥大化している。
 ```
 
 - gate (score → selected の判定) は selector にだけ存在する。flaker は gate パラメータを供給するだけで、判定ロジックは複製しない。
-- flaker 自前の選択は API key を持たないユーザー向けに `affected` と `weighted` (と `full`) だけ残す。
+- flaker 自前の選択は API key を持たないユーザー向けに `affected` / `weighted` / `hybrid` / `full` だけ残す。`hybrid` は `init` が merge gate の既定として生成している。holdout は選択ではなく計測 (promotion 判定の根拠) なので残す。
 
 ## 3 層構造
 
@@ -162,21 +162,21 @@ gate の値は `flaker.toml` に持たない。正は DB の `gate_calibration` 
 
 | 残す / 新設 | 統合 / 削除 |
 |---|---|
-| `init` `import` `status` `query` `doctor` | `--profile` は `--gate` に統合 |
+| `init` `import` `status` `query` `doctor` | `run --profile` を削除して `--gate` に一本化。設定も `[profile.local\|ci\|scheduled]` → `[gate.iteration\|merge\|release]`、環境変数も `FLAKER_PROFILE` → `FLAKER_GATE`。旧形式は移行案内付きで hard error |
 | **`export`** (dataset と projection の出力) | `apply --emit` / `--target` / `--incident-*` を削除し、`ops` group も撤去 |
-| **`calibrate`** (トップレベル化) | strategy `hybrid` `gbdt` `coverage-guided` `random`、adaptive / holdout / cluster |
-| `run` (`affected` / `weighted` / `full` のみ) | `dev` は公開面から外し、隠しコマンドにする |
-| `quarantine` `debug` `explain` | `explain context` と `explain bundle` は `export --projection` に移す |
-| `plan` / `apply` (reconcile のみ) | dead module とヘルプの参照切れ (`setup init`) を削除 |
-| | KPI は MoonBit `build_sampling_kpi` に一本化 |
+| **`calibrate`** (トップレベル化) | strategy `random` `gbdt` `coverage-guided`、`cluster_mode`、`model_path`、adaptive 系キー、`[coverage]`、`dev train` |
+| **`import --ci [--days <n>]`** (CI artifact の収集。`apply --target collect_ci` の置き換え) | `dev` は公開面から外し、隠しコマンドにする |
+| `run` (`affected` / `weighted` / `hybrid` / `full`、`fallback_strategy` と holdout は維持) | `explain context` と `explain bundle` は `export --projection` に移す (フェーズ 2 の後) |
+| `quarantine` `debug` `explain` | dead module (`commands/gate/`, `commands/policy/`, `commands/collect/{local,coverage}.ts`, `commands/exec/affected.ts`, `registerAnalyzeCommands`) を削除 |
+| `plan` / `apply` (reconcile のみ) | KPI は MoonBit `build_sampling_kpi` に一本化 (dataset 層に載せ替えるフェーズ 2 以降) |
 
-`init` のヘルプが参照している `setup init` は存在しないので、`init` 自体を正とする。
+`commands/setup/init.ts` は `flaker init` の実装なので dead ではない。`init` のヘルプにある `setup init` への言及だけを消す。
 
 ## フェーズ
 
 1. **jev-test-filter 上流**: `--context`、per-SHA record (`RunRecord` v2)、unsure 系の CLI flag。minor リリース (0.2.0)。
 2. **flaker テスト DB 層 + jev 連携 (追加のみ)**: `flaker_v1` の 9 dataset と JSON Schema、`export`、`import --adapter selector-record|jev`、`calibrate`、`jev-context` projection。minor リリース。
-3. **flaker 表面整理 (破壊的変更)**: 上表の統合と削除、`status` / `explain` を dataset 層の上に載せ替え、migration guide (`docs/migration-*.md` / `.ja.md`)。バージョン番号 (1.0 にするか) はこのフェーズの着手時に決める。
+3. **flaker 表面整理 (破壊的変更)**: 上表の統合と削除と migration guide (`docs/migration-*.md` / `.ja.md`)。dataset 層に依存しない部分 (gate への一本化、strategy 削除、`calibrate` / `import --ci`、`apply` / `ops` / `dev` の整理、dead module 削除) はフェーズ 2 を待たずに先行してよい。`explain` の移設、`status` の載せ替え、KPI の一本化はフェーズ 2 の後に行う。
 4. **mutation 評価**: `calibrate --mutate`。
 
 各フェーズは別 PR にする。フェーズ 2 はフェーズ 1 のリリースに依存し、フェーズ 3 と 4 は互いに独立している。

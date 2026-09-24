@@ -38,7 +38,7 @@ Measured on flaker itself (`HEAD~3..HEAD`, 7 files changed): 47 of 824 tests sel
 ```
 
 - The gate (score → selected) exists only in the selector. flaker supplies gate parameters and does not duplicate the decision logic.
-- flaker keeps only `affected` and `weighted` (plus `full`) as its own selection, for users without an API key.
+- flaker keeps only `affected`, `weighted`, `hybrid` and `full` as its own selection, for users without an API key. `hybrid` is what `init` generates for the merge gate. Holdout stays because it is measurement (the basis of the promotion decision), not selection.
 
 ## Three layers
 
@@ -162,21 +162,21 @@ Reports show real and mutation results separately. Mutations are distributed dif
 
 | Keep / new | Merge / remove |
 |---|---|
-| `init` `import` `status` `query` `doctor` | `--profile` merged into `--gate` |
+| `init` `import` `status` `query` `doctor` | `run --profile` removed in favour of `--gate`. Config moves from `[profile.local\|ci\|scheduled]` to `[gate.iteration\|merge\|release]`, and the environment variable from `FLAKER_PROFILE` to `FLAKER_GATE`. The old forms are a hard error that points to the migration guide |
 | **`export`** (datasets and projections) | `apply --emit` / `--target` / `--incident-*` removed, and the `ops` group with them |
-| **`calibrate`** (promoted to top level) | strategies `hybrid` `gbdt` `coverage-guided` `random`; adaptive / holdout / cluster modes |
-| `run` (`affected` / `weighted` / `full` only) | `dev` leaves the public surface as a hidden command |
-| `quarantine` `debug` `explain` | `explain context` and `explain bundle` move to `export --projection` |
-| `plan` / `apply` (reconcile only) | dead modules and the dangling `setup init` reference in the help are removed |
-| | KPI unified on MoonBit `build_sampling_kpi` |
+| **`calibrate`** (promoted to top level) | strategies `random` `gbdt` `coverage-guided`; `cluster_mode`, `model_path`, the adaptive keys, `[coverage]`, `dev train` |
+| **`import --ci [--days <n>]`** (collect CI artifacts; replaces `apply --target collect_ci`) | `dev` leaves the public surface as a hidden command |
+| `run` (`affected` / `weighted` / `hybrid` / `full`; `fallback_strategy` and holdout stay) | `explain context` and `explain bundle` move to `export --projection` (after phase 2) |
+| `quarantine` `debug` `explain` | dead modules removed (`commands/gate/`, `commands/policy/`, `commands/collect/{local,coverage}.ts`, `commands/exec/affected.ts`, `registerAnalyzeCommands`) |
+| `plan` / `apply` (reconcile only) | KPI unified on MoonBit `build_sampling_kpi` (from phase 2 on, when it moves onto the dataset layer) |
 
-The `init` help refers to a `setup init` that does not exist, so `init` itself becomes the canonical command.
+`commands/setup/init.ts` implements `flaker init` and is not dead; only the help text's mention of `setup init` goes.
 
 ## Phases
 
 1. **jev-test-filter upstream:** `--context`, per-SHA records (`RunRecord` v2), CLI flags for the unsure parameters. Minor release (0.2.0).
 2. **flaker test-DB layer + jev integration (additive only):** the nine `flaker_v1` datasets with their JSON Schemas, `export`, `import --adapter selector-record|jev`, `calibrate`, and the `jev-context` projection. Minor release.
-3. **flaker surface cleanup (breaking):** the merges and removals in the table above, `status` and `explain` rebuilt on the dataset layer, and a migration guide (`docs/migration-*.md` / `.ja.md`). Whether this becomes 1.0 is decided when the phase starts.
+3. **flaker surface cleanup (breaking):** the merges and removals in the table above, and a migration guide (`docs/migration-*.md` / `.ja.md`). The parts that do not depend on the dataset layer (the single gate vocabulary, strategy removal, `calibrate` / `import --ci`, the `apply` / `ops` / `dev` cleanup, dead modules) may land before phase 2. Moving `explain`, rebuilding `status` and unifying the KPI engines wait for phase 2.
 4. **Mutation evaluation:** `calibrate --mutate`.
 
 Each phase is its own PR. Phase 2 depends on the phase 1 release; phases 3 and 4 are independent of each other.
