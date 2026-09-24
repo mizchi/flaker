@@ -1,0 +1,4 @@
+{"testResults":[{"name":"tests/init.test.ts","assertionResults":[
+  {"ancestorTitles":["init"],"fullName":"init writes toml","status":"failed","title":"writes toml","duration":5,"failureMessages":["boom"]},
+  {"ancestorTitles":["init"],"fullName":"init reads toml","status":"passed","title":"reads toml","duration":5,"failureMessages":[]}
+]}]}
