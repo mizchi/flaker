@@ -14,6 +14,7 @@ import { registerApplyCommands } from "./categories/apply.js";
 import { registerCalibrateCommand } from "./categories/calibrate.js";
 import { registerExportCommand } from "./categories/export.js";
 import { FlakerUsageError } from "./errors.js";
+import { loadIdentityCore } from "./identity.js";
 
 function isDirectCliExecution(): boolean {
   if (process.argv[1] == null) return false;
@@ -31,6 +32,12 @@ function isDirectCliExecution(): boolean {
 
 export function createProgram(): Command {
   const program = new Command();
+  // Every command computes test ids with the MoonBit core once it has loaded;
+  // waiting here keeps the first records from going through the TS fallback.
+  // --help and --version exit before this hook runs.
+  program.hook("preAction", async () => {
+    await loadIdentityCore();
+  });
   registerApplyCommands(program);
   registerCalibrateCommand(program);
   registerExportCommand(program);
