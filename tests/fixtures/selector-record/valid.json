@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "kind": "flaker-selector-record",
+  "selector": "jev",
+  "selector_version": null,
+  "created_at": "2026-09-20T10:00:00.000Z",
+  "head_sha": "c0ffee0000000000000000000000000000000001",
+  "base_sha": null,
+  "context_digest": null,
+  "source": "real",
+  "gate": { "cutoff": 2, "unsure_below": 0.5, "unsure_margin": 1 },
+  "tests": [
+    { "file": "tests/init.test.ts", "title_path": ["init", "writes toml"], "score": 1.2, "confidence": 0.9, "reason": "below", "selected": false },
+    { "file": "tests/p.spec.ts", "title_path": ["P", "p"], "project": "chromium", "runner_file": "p.spec.ts", "score": null, "confidence": null, "reason": "missing", "selected": true }
+  ]
+}

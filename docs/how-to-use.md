@@ -259,6 +259,24 @@ Identity mapping on the flaker side:
 
 Because both the initial image and interaction scenarios for the same domain live under the same suite, suite-based aggregation and affected-suites handling stay natural. Both producer and consumer can declare `schemaVersion`, so historical data stays consistent.
 
+### `flaker import --adapter selector-record|jev` — selector decisions
+
+A test selector decides, for one change, which tests to run. flaker stores those decisions so they can be compared with what really failed (`selector_verdicts`, `misses`). The format it ingests is `selector-record` v1: one JSON object per change with the selector's name, `head_sha`, the gate values it decided under, and one entry per test with `file`, `title_path`, `score`, `confidence`, `reason` and `selected`. The type, the JSON Schema and the parser are exported from `@mizchi/flaker/contracts/selector-record-v1` ([`src/cli/contracts/selector-record-v1.ts`](../src/cli/contracts/selector-record-v1.ts)).
+
+```bash
+# A selector that writes selector-record v1 directly
+flaker import selector-record.json --adapter selector-record
+
+# jev-test-filter's run records, converted with jev's own gate
+flaker import .jev-test-filter --adapter jev
+```
+
+- The path may be a file or a directory. A directory imports its `*.json` and then `records/*.json`, which is jev-test-filter's layout. `last.json` is a copy of the latest record, so it counts as a duplicate.
+- Records are keyed by their content: importing the same record again is a no-op and is reported as a duplicate.
+- A jev record that fell back to running everything (`fallback` set) carries no decisions and is skipped.
+- An invalid file, or one the database rejects, is reported on stderr and the rest are still imported; the command then exits with code 1. A directory with no records prints a warning and exits with code 0.
+- Each test is matched to a known `test_key` by `file` + `title_path` (+ `project`). A test flaker has not seen yet stays in `selector_verdicts` with `test_key = null`, and is matched on the next selector import (or `flaker calibrate --selector`) once its results are in.
+
 ### `flaker export` — public datasets (flaker_v1)
 
 The storage tables are internal and may change in any release. The public, versioned view of the data is the DuckDB schema `flaker_v1`: nine datasets, each with a JSON Schema exported from `@mizchi/flaker/contracts/flaker-v1-datasets`. Every dataset shares the key `test_key`, the stable test ID.

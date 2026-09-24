@@ -4,8 +4,10 @@
     "noEmit": false,
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": false
+    "sourceMap": false,
+    "types": ["node"]
   },
+  "include": [],
   "files": [
     "src/cli/reporting/stable-test-identity.ts",
     "src/cli/reporting/playwright-report-contract.ts",
@@ -28,6 +30,7 @@
     "src/cli/reporting/flaker-config-summary-core.ts",
     "src/cli/reporting/flaker-config-selection-core.ts",
     "src/cli/reporting/flaker-config-report.ts",
-    "src/cli/contracts/flaker-v1-datasets.ts"
+    "src/cli/contracts/flaker-v1-datasets.ts",
+    "src/cli/contracts/selector-record-v1.ts"
   ]
 }

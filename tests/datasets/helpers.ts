@@ -71,7 +71,7 @@ export interface SeedVerdict {
   confidence?: number | null;
 }
 
-/** Writes selector tables directly; 2b replaces this with insertSelectorRecord. */
+/** Writes selector tables directly, bypassing insertSelectorRecord on purpose so view tests can set a known test_key. */
 export async function seedSelectorRun(store: DuckDBStore, run: {
   id: string;
   headSha: string | null;

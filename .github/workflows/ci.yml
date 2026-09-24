@@ -57,6 +57,7 @@ jobs:
       - name: Test
         run: >
           pnpm exec vitest run
+          tests/package/jev-bundled.test.ts
           tests/adapters/playwright.test.ts
           tests/reporting/*.test.ts
           tests/commands/collect.test.ts

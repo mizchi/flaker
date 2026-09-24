@@ -8,6 +8,8 @@
 - `flaker export <dataset> [--format json|jsonl|csv|parquet] [--since <date>] [--where <expr>] [-o <file>]`.
 - `[workflow_lanes]` entries may be `{ lane = "…", full = true }` to mark lanes that run the whole suite (`runs.is_full`).
 - Vitest and Playwright results keep their title path (`test_results.title_path`), which is how selectors name a test.
+- `flaker import --adapter selector-record|jev <file|dir>` stores a selector's per-test decisions in `selector_verdicts`. `jev` converts jev-test-filter's run records with jev's own gate; a directory imports `*.json` and `records/*.json`, and re-importing a record is a no-op.
+- `selector-record` v1, the format selectors hand their decisions to flaker in, with its JSON Schema exported as `@mizchi/flaker/contracts/selector-record-v1`.
 
 ### Changed
 
