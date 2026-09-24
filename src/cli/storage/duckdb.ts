@@ -578,6 +578,14 @@ export class DuckDBStore implements MetricStore {
     return s.replace(/'/g, "''");
   }
 
+  /** COPY the result of a parameter-free SELECT to a Parquet file. */
+  async copySelectToParquet(selectSql: string, outputPath: string): Promise<void> {
+    mkdirSync(dirname(outputPath), { recursive: true });
+    await this.run(
+      `COPY (${selectSql}) TO '${this.sanitizeSqlLiteral(outputPath)}' (FORMAT PARQUET)`,
+    );
+  }
+
   async exportRunToParquet(workflowRunId: number, outputDir: string): Promise<ExportResult> {
     mkdirSync(outputDir, { recursive: true });
 

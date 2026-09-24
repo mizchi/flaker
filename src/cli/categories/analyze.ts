@@ -17,6 +17,7 @@ import {
 } from "../commands/status/summary.js";
 import { type GateName, VALID_GATE_NAMES } from "../gate.js";
 import { parseTagOption, WorkflowFilterError } from "../workflow-filter.js";
+import { FILESYSTEM_FUNCTIONS } from "../commands/analyze/sql-guard.js";
 
 export async function analyzeKpiAction(opts: { windowDays: string; json?: boolean }): Promise<void> {
   const config = loadConfig(process.cwd());
@@ -257,8 +258,7 @@ export async function analyzeQueryAction(sql: string): Promise<void> {
     process.exit(1);
   }
   // Block DuckDB filesystem functions
-  const dangerousFns = /\b(READ_CSV_AUTO|READ_CSV|READ_PARQUET|READ_JSON_AUTO|READ_JSON|READ_BLOB|READ_TEXT|WRITE_CSV|HTTPFS)\s*\(/i;
-  if (dangerousFns.test(stripped)) {
+  if (FILESYSTEM_FUNCTIONS.test(stripped)) {
     console.error("Error: filesystem/network functions are not allowed in query command.");
     process.exit(1);
   }
