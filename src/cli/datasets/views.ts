@@ -78,4 +78,78 @@ FROM test_results tr
 WHERE tr.test_id IS NOT NULL;
 `;
 
-export const FLAKER_V1_VIEWS_SQL = [CORE_VIEWS].join("\n");
+const FAILURE_SQL = (alias: string) =>
+  `(${alias}.status IN ('failed', 'flaky') OR (${alias}.retry_count > 0 AND ${alias}.status = 'passed'))`;
+
+const HISTORY_VIEWS = `
+CREATE OR REPLACE VIEW flaker_v1.flaky AS
+WITH cfg AS (SELECT * FROM flaker_dataset_config WHERE id = 1),
+recent AS (
+  SELECT tr.test_id, tr.commit_sha, tr.status, tr.retry_count
+  FROM test_results tr CROSS JOIN cfg
+  WHERE tr.test_id IS NOT NULL
+    AND tr.created_at > ${NOW_UTC} - to_days(cfg.flaky_window_days)
+),
+flips AS (
+  SELECT test_id, COUNT(*) FILTER (WHERE statuses > 1)::INTEGER AS flip_commits
+  FROM (
+    SELECT test_id, commit_sha,
+      COUNT(DISTINCT status) FILTER (WHERE status IN ('passed', 'failed')) AS statuses
+    FROM recent
+    GROUP BY test_id, commit_sha
+  )
+  GROUP BY test_id
+),
+agg AS (
+  SELECT
+    r.test_id,
+    COUNT(*)::INTEGER AS runs,
+    COUNT(*) FILTER (WHERE ${FAILURE_SQL("r")})::INTEGER AS failures,
+    COUNT(*) FILTER (WHERE r.status = 'flaky' OR (r.retry_count > 0 AND r.status = 'passed'))::INTEGER AS retried
+  FROM recent r
+  GROUP BY r.test_id
+)
+SELECT
+  agg.test_id AS test_key,
+  cfg.flaky_window_days AS window_days,
+  agg.runs,
+  agg.failures,
+  ROUND(agg.failures * 1.0 / agg.runs, 4)::DOUBLE AS flaky_rate,
+  (agg.failures * 1.0 / agg.runs >= cfg.flaky_threshold_ratio
+    AND (agg.retried > 0 OR COALESCE(flips.flip_commits, 0) > 0)) AS is_flaky,
+  ${NOW_UTC} AS computed_at
+FROM agg
+CROSS JOIN cfg
+LEFT JOIN flips ON flips.test_id = agg.test_id;
+
+CREATE OR REPLACE VIEW flaker_v1.quarantine AS
+SELECT
+  test_id AS test_key,
+  reason,
+  created_at AS since,
+  CASE WHEN reason LIKE 'plan:%' THEN 'auto' ELSE 'manual' END AS source
+FROM quarantined_test_identities;
+
+CREATE OR REPLACE VIEW flaker_v1.co_failures AS
+WITH cfg AS (SELECT * FROM flaker_dataset_config WHERE id = 1)
+SELECT
+  cc.file_path AS changed_file,
+  tr.test_id AS test_key,
+  COUNT(DISTINCT cc.commit_sha) FILTER (WHERE ${FAILURE_SQL("tr")})::INTEGER AS co_failures,
+  COUNT(DISTINCT cc.commit_sha)::INTEGER AS changes,
+  ROUND(
+    COUNT(DISTINCT cc.commit_sha) FILTER (WHERE ${FAILURE_SQL("tr")}) * 1.0
+      / COUNT(DISTINCT cc.commit_sha),
+    4
+  )::DOUBLE AS strength,
+  cfg.co_failure_window_days AS window_days
+FROM commit_changes cc
+JOIN test_results tr ON tr.commit_sha = cc.commit_sha
+CROSS JOIN cfg
+WHERE tr.test_id IS NOT NULL
+  AND tr.created_at > ${NOW_UTC} - to_days(cfg.co_failure_window_days)
+GROUP BY cc.file_path, tr.test_id, cfg.co_failure_window_days
+HAVING COUNT(DISTINCT cc.commit_sha) FILTER (WHERE ${FAILURE_SQL("tr")}) > 0;
+`;
+
+export const FLAKER_V1_VIEWS_SQL = [CORE_VIEWS, HISTORY_VIEWS].join("\n");
