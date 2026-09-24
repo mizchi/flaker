@@ -4,8 +4,10 @@
     "noEmit": false,
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": false
+    "sourceMap": false,
+    "types": ["node"]
   },
+  "include": [],
   "files": [
     "src/cli/reporting/stable-test-identity.ts",
     "src/cli/reporting/playwright-report-contract.ts",

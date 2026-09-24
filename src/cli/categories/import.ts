@@ -8,6 +8,8 @@ import { runCollectCi, formatCollectSummary, describeEmptyCollect } from "../com
 import { parseWorkflowRunSource } from "../run-source.js";
 import { parseTagOption, WorkflowFilterError } from "../workflow-filter.js";
 import { parsePositiveIntOption } from "../commands/exec/sampling-options.js";
+import { openDatasetStore } from "../datasets/open.js";
+import { isSelectorAdapter, runImportSelector, formatImportSelector } from "../commands/import/selector.js";
 
 export function detectAdapter(filePath: string): string | undefined {
   const lower = filePath.toLowerCase();
@@ -21,8 +23,8 @@ export function registerImportCommands(program: Command): void {
   const importCmd = program
     .command("import")
     .description("Ingest external reports")
-    .argument("[file]", "File to import (extension auto-detects adapter: .xml→junit, .parquet→parquet, .json→playwright)")
-    .option("--adapter <type>", "Adapter type override (vitest, playwright, junit, parquet, vrt-migration, vrt-bench, custom)")
+    .argument("[file]", "File (or, with --adapter jev|selector-record, a directory) to import")
+    .option("--adapter <type>", "Adapter type override (vitest, playwright, junit, parquet, vrt-migration, vrt-bench, custom, selector-record, jev)")
     .option("--custom-command <cmd>", "Custom adapter command (required with --adapter custom)")
     .option("--commit <sha>", "Commit SHA")
     .option("--branch <branch>", "Branch name")
@@ -82,6 +84,19 @@ export function registerImportCommands(program: Command): void {
       }
       if (!file) {
         importCmd.help();
+        return;
+      }
+      if (isSelectorAdapter(opts.adapter)) {
+        const config = loadConfig(process.cwd());
+        const store = await openDatasetStore(process.cwd(), config);
+        try {
+          const result = await runImportSelector({ store, path: resolve(file), adapter: opts.adapter });
+          console.log(formatImportSelector(result));
+          for (const bad of result.invalid) process.stderr.write(`${bad.file}: ${bad.error}\n`);
+          if (result.invalid.length > 0) process.exitCode = 1;
+        } finally {
+          await store.close();
+        }
         return;
       }
       const inferredAdapter = opts.adapter ?? detectAdapter(file);

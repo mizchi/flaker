@@ -19,9 +19,7 @@ describe("jev-test-filter is bundled, not a runtime dependency", () => {
     expect(pkg.devDependencies?.["jev-test-filter"]).toMatch(/^\^0\.1\./);
   });
 
-  // Red until the CLI bundle reaches the jev adapter (phase 2b, Task B6):
-  // unskip it there.
-  it.skip("the bundle carries jev's gate", () => {
+  it("the bundle carries jev's gate", () => {
     expect(readFileSync(MAIN, "utf8")).toContain("unsureMargin");
   });
 });
