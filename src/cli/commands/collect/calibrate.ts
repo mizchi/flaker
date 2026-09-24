@@ -246,9 +246,9 @@ export function formatCalibrationReport(result: CalibrationResult): string {
   }
   if (p.confidence === "insufficient" || p.confidence === "low") {
     lines.push(`  ${p.brokenTestCount > 0 ? "2" : "1"}. Collect more CI data: \`flaker import --ci --days 30\``);
-    lines.push(`     Then re-run: \`flaker collect calibrate\``);
+    lines.push(`     Then re-run: \`flaker calibrate\``);
   } else {
-    lines.push(`  ${p.brokenTestCount > 0 ? "2" : "1"}. Apply config: \`flaker collect calibrate\` (without --dry-run)`);
+    lines.push(`  ${p.brokenTestCount > 0 ? "2" : "1"}. Apply config: \`flaker calibrate\` (without --dry-run)`);
     lines.push(`  ${p.brokenTestCount > 0 ? "3" : "2"}. Run tests: \`flaker run\``);
   }
   lines.push("");

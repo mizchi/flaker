@@ -369,7 +369,7 @@ function describeSamplingFallback(reason: string): SamplingFallbackHint | null {
     case "cold-start-listed-tests":
       return {
         detail: "No historical test results were found, so flaker sampled from listed tests.",
-        nextAction: "Run `flaker collect` or `flaker import`, then keep recording local runs.",
+        nextAction: "Run `flaker import --ci` or `flaker import <file>`, then keep recording local runs.",
         historyTarget: "Aim for >= 5 runs/test (10 is better) before trusting flake trends.",
       };
     default:

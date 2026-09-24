@@ -286,7 +286,7 @@ describe("sample command without history", () => {
     expect(output).toContain("CI pass when local pass:  97.2%");
     expect(output).toContain("Fallback reason:          cold-start-listed-tests");
     expect(output).toContain("Fallback details:         No historical test results were found");
-    expect(output).toContain("Next action:              Run `flaker collect` or `flaker import`");
+    expect(output).toContain("Next action:              Run `flaker import --ci` or `flaker import <file>`");
     expect(output).toContain("History target:           Aim for >= 5 runs/test");
   });
 
