@@ -128,7 +128,7 @@ flaker の表面 API は肥大化している。
 3. **採用ルール: 締めるのは即時、緩めるのは慎重に**
    - 観測済みの真の失敗を 1 件でも落とす候補は不採用。
    - 現行設定で miss があれば、全ての真の失敗を拾う候補のうち選択数が最小のものに即座に切り替える (`decision = tighten`)。
-   - 既定値より緩める (選択数を減らす) のは、`source = real` の真の失敗が `min_failures` 件以上 (既定 20) あって、recall の Wilson 95% 下限が `recall_target` (既定 0.98) 以上のときに限る (`decision = loosen`)。
+   - 既定値より緩める (選択数を減らす) のは、`source = real` の真の失敗が `min_failures` 件以上 (既定 20) あって、recall の Wilson 95% 下限が `recall_target` (既定 0.90) 以上のときに限る (`decision = loosen`)。
    - どちらでもなければ現行値を維持し、理由を `rationale` に残す (`decision = keep`)。
    - 同点なら既定値に近い候補を選ぶ。
 4. **出力**: 結果は `gate_calibration` に 1 行追加する。ファイルは書かない。`--dry-run` なら行も追加しない。`--json` で機械可読の結果を出す。context ファイルが必要なら続けて `flaker export --projection jev-context` を実行する。
@@ -140,7 +140,7 @@ flaker の表面 API は肥大化している。
 ```toml
 [selector]
 type = "jev"
-recall_target = 0.98
+recall_target = 0.90
 min_failures = 20
 max_hinted_tests = 200
 ```

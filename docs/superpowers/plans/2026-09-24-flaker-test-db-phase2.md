@@ -6,7 +6,7 @@
 
 **Architecture:** The storage tables stay internal. They gain a few additive columns and tables (`test_results.title_path`, `selector_runs`, `selector_run_tests`, `gate_calibrations`, and two small settings tables that hold the config values the views need). `flaker_v1` is a DuckDB schema of views over those tables, created on every `DuckDBStore.initialize()`, so an external reader of the `.duckdb` file sees the same rows the CLI does. Every public shape (dataset rows, `selector-record` v1, `jev-context` v1) is a TypeScript type plus a JSON Schema object in `src/cli/contracts/`. The decision logic lives in pure functions: test-key matching, calibration adoption, Wilson bound and projection building. The gate itself (score → selected) is never reimplemented. flaker calls jev-test-filter's `./gate` export, which rolldown bundles into `dist/cli/main.js`.
 
-**Tech Stack:** TypeScript (Node 24, ESM, `module: Node16`), commander 14, DuckDB via the `duckdb` npm binding, vitest 4, rolldown, and `ajv` (new devDependency, tests only). Also `jev-test-filter` (new devDependency, bundled; needs 0.2.0). No MoonBit changes: `test_key` is the existing `test_results.test_id`, computed at insert time by `resolveTestIdentity` (MoonBit `create_stable_test_id`, TS fallback).
+**Tech Stack:** TypeScript (Node 24, ESM, `module: Node16`), commander 14, DuckDB via the `duckdb` npm binding, vitest 4, rolldown, and `ajv` (new devDependency, tests only). Also `jev-test-filter` (new devDependency, bundled; needs 0.1.3). No MoonBit changes: `test_key` is the existing `test_results.test_id`, computed at insert time by `resolveTestIdentity` (MoonBit `create_stable_test_id`, TS fallback).
 
 **Release:** additive minor, `0.14.0`, after sub-phase 2c merges. Each sub-phase (2a, 2b, 2c) is its own PR that leaves `main` releasable. Cut the release with the `flaker-manual-release` skill, not in this plan.
 
@@ -14,16 +14,16 @@
 
 ## Open questions for the owner (decide before 2c)
 
-1. **Shape of the calibrate command.** Today `flaker calibrate` recommends `[sampling]` and writes it to `flaker.toml`. This plan adds `flaker calibrate --selector [name]` for the jev gate and leaves bare `calibrate` unchanged, because phase 2 is additive. The alternative is to make bare `calibrate` switch to the selector path whenever `[selector]` exists. That is also technically additive, but it silently changes what an existing command does once one config line is added. **Plan assumes the explicit flag.** Phase 3 can flip the default.
-2. **Loosening thresholds are much stricter than they look.** With every real failure caught (p̂ = 1), the Wilson 95% lower bound is n / (n + 3.8415). `recall_target = 0.98` therefore needs **n ≥ 189 real failures** (0.9801 at 189, 0.9800 is not reached at 188). `min_failures = 20` never binds. For comparison, 20 failures give 0.839 and 50 give 0.929. **Plan implements the spec defaults (0.98 / 20) unchanged.** In practice this means "tighten only" for a long time. Say whether that is intended, or whether `recall_target` should default lower (for example 0.90, reached at n ≥ 35).
-3. **`flaker query` default search path.** The spec says `query` defaults to `flaker_v1` and needs `--internal` for storage tables. That breaks every existing `flaker query "SELECT … FROM test_results"`, so it is not additive. **Plan leaves `query` as it is.** The views are reachable as `flaker_v1.<dataset>`, and the switch moves to phase 3 with the migration guide. Confirm.
+1. **Shape of the calibrate command.** Today `flaker calibrate` recommends `[sampling]` and writes it to `flaker.toml`. This plan adds `flaker calibrate --selector [name]` for the jev gate and leaves bare `calibrate` unchanged, because phase 2 is additive. The alternative is to make bare `calibrate` switch to the selector path whenever `[selector]` exists. That is also technically additive, but it silently changes what an existing command does once one config line is added. **Decided (2026-09-24): explicit flag.** Phase 3 can flip the default.
+2. **Loosening thresholds are much stricter than they look.** With every real failure caught (p̂ = 1), the Wilson 95% lower bound is n / (n + 3.8415). `recall_target = 0.98` therefore needs **n ≥ 189 real failures** (0.9801 at 189, 0.9800 is not reached at 188). `min_failures = 20` never binds. For comparison, 20 failures give 0.839 and 50 give 0.929. **Decided (2026-09-24): default `recall_target = 0.90`** (reached at n ≥ 35 real failures), `min_failures = 20`.
+3. **`flaker query` default search path.** The spec says `query` defaults to `flaker_v1` and needs `--internal` for storage tables. That breaks every existing `flaker query "SELECT … FROM test_results"`, so it is not additive. **Decided (2026-09-24): `query` stays as it is;** the views are reachable as `flaker_v1.<dataset>`, and the switch moves to phase 3 with the migration guide.
 
 ## Decisions this plan locks in (no owner input needed)
 
 | Topic | Decision | Why |
 |---|---|---|
-| jev gate dependency | Add `jev-test-filter@^0.2.0` as a **devDependency**. Import it only through `jev-test-filter/gate` (runtime) and `jev-test-filter/types` (`testId` at runtime, the rest type-only). rolldown bundles it into `dist/cli/main.js`, so the published flaker has **no runtime dependency** on jev and does not pull in `@ast-grep/napi`. A contract test asserts that flaker's replay equals jev's own `replay()` on fixture records. | Keeps the gate logic in one place, as the spec requires. A port would need a sync test anyway and would drift the day jev changes a rule. Bundling `./gate` costs about 3 KB of pure JS. Importing jev's main entry (`"."`) instead would drag in `@ast-grep/napi`, so `src/` never imports `"jev-test-filter"` bare. Only tests do. |
-| jev release needed | `jev-test-filter` **0.2.0** (spec phase 1). It must export from `./gate`: `gate(tests, answers, touched, opts, quarantined)`, `decide`, `resolveGate`, `gateOptions`, `DEFAULT_CUTOFF`, `DEFAULT_UNSURE_BELOW`, `DEFAULT_UNSURE_MARGIN`. From `./types` it must export: `testId`, `RunRecord`, `RunRecordV2`, `RecordGate`, `JevContext`, `Reason` including `"quarantined"`. All of this exists on jev's `feat/context-and-records` branch, which is currently mid-rebase and unpublished (npm has 0.1.0–0.1.2 only). 2a does not need it. 2b and 2c are blocked on it. | npm 0.1.2's `./gate` has no `quarantined` parameter and no `resolveGate`. |
+| jev gate dependency | Add `jev-test-filter@^0.1.3` as a **devDependency**. Import it only through `jev-test-filter/gate` (runtime) and `jev-test-filter/types` (`testId` at runtime, the rest type-only). rolldown bundles it into `dist/cli/main.js`, so the published flaker has **no runtime dependency** on jev and does not pull in `@ast-grep/napi`. A contract test asserts that flaker's replay equals jev's own `replay()` on fixture records. | Keeps the gate logic in one place, as the spec requires. A port would need a sync test anyway and would drift the day jev changes a rule. Bundling `./gate` costs about 3 KB of pure JS. Importing jev's main entry (`"."`) instead would drag in `@ast-grep/napi`, so `src/` never imports `"jev-test-filter"` bare. Only tests do. |
+| jev release needed | `jev-test-filter` **0.1.3** (spec phase 1, released as a patch). It must export from `./gate`: `gate(tests, answers, touched, opts, quarantined)`, `decide`, `resolveGate`, `gateOptions`, `DEFAULT_CUTOFF`, `DEFAULT_UNSURE_BELOW`, `DEFAULT_UNSURE_MARGIN`. From `./types` it must export: `testId`, `RunRecord`, `RunRecordV2`, `RecordGate`, `JevContext`, `Reason` including `"quarantined"`. All of this is merged on jev `main` (955bdf4) and released as 0.1.3. 2a does not need it. 2b and 2c are blocked on it. | npm 0.1.2's `./gate` has no `quarantined` parameter and no `resolveGate`. |
 | Where contracts live | `src/cli/contracts/*.ts`, not `src/contracts/`. | `src/contracts/` is the MoonBit contracts package (`types.mbt`, `moon.pkg`) and is outside the npm `files` list. The published TS contracts already live under `src/cli/…` (`src/cli/reporting/*-contract.ts`, exposed via `package.json` `exports` and `tsconfig.reporting.json`). Each schema is a TS object, so it ships in the bundle and needs no copy step. |
 | `title_path` | New column `test_results.title_path JSON`, filled by the vitest adapter (`[...ancestorTitles, title]`) and the playwright adapter (describe titles + spec title). The `tests` view falls back to `[test_name]` for rows that predate it. | Selectors key tests by `file` + `title_path`. `test_name` alone loses the structure: vitest stores `fullName` joined with spaces, and playwright stores only the leaf title. |
 | Matching selector tests to `test_key` | A pure matcher runs in tiers. A tier wins only if it yields exactly one candidate. (1) same file (or `runner_file`) + project + equal `title_path`; (2) `test_name == title_path.join(" ")` (legacy vitest rows); (3) `test_name == last(title_path)` and `task_id == title_path[-2]` (legacy playwright rows). Anything ambiguous or unmatched gets `test_key = NULL`. Keys resolve at import and again before calibrate and export, so a CI run imported later still matches. | Stable IDs cannot be recomputed from `file` + `title_path`, because adapters spell `suite`/`test_name`/`task_id` differently. |
@@ -2072,7 +2072,7 @@ Expected: `pnpm pack:check` lists `dist/cli/contracts/flaker-v1-datasets.{js,d.t
 
 # Sub-phase 2b — `import --adapter selector-record|jev`
 
-**Blocked on jev-test-filter 0.2.0 being on npm.** Check with `npm view jev-test-filter@0.2.0 exports --json`. It must list `./gate` and `./types`. Before publish, develop against the local branch with `pnpm add -D jev-test-filter@link:../jev-test-filter` (after `npm run build` there), and **do not commit** the `link:` specifier. Replace it with `^0.2.0` before the PR.
+**Needs jev-test-filter 0.1.3 on npm.** Check with `npm view jev-test-filter@0.1.3 exports --json`. It must list `./gate` and `./types`. Before publish, develop against the local branch with `pnpm add -D jev-test-filter@link:../jev-test-filter` (after `npm run build` there), and **do not commit** the `link:` specifier. Replace it with `^0.1.3` before the PR.
 
 ### Task B1: Worktree, dependency, and a bundling guard
 
@@ -2086,7 +2086,7 @@ Expected: `pnpm pack:check` lists `dist/cli/contracts/flaker-v1-datasets.{js,d.t
 git -C /Users/mz/ghq/github.com/mizchi/flaker worktree add ../flaker-test-db-2b -b feat/test-db-2b main
 cd ../flaker-test-db-2b
 pnpm install
-pnpm add -D jev-test-filter@^0.2.0
+pnpm add -D jev-test-filter@^0.1.3
 ```
 
 - [ ] **Step 2: Write the failing guard test**
@@ -3270,7 +3270,7 @@ function withToml(extra: string): string {
 describe("[selector]", () => {
   it("defaults when absent", () => {
     expect(resolveSelectorConfig(loadConfig(withToml("")))).toEqual({
-      type: "jev", recall_target: 0.98, min_failures: 20, max_hinted_tests: 200,
+      type: "jev", recall_target: 0.9, min_failures: 20, max_hinted_tests: 200,
     });
   });
 
@@ -3315,7 +3315,7 @@ export interface SelectorConfig {
 
 export const DEFAULT_SELECTOR: SelectorConfig = {
   type: "jev",
-  recall_target: 0.98,
+  recall_target: 0.9,
   min_failures: 20,
   max_hinted_tests: 200,
 };
