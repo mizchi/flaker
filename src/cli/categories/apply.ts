@@ -162,7 +162,6 @@ export async function applyAction(opts: {
         const prepared = await prepareRunRequest({
           cwd,
           config,
-          store,
           opts: { gate: "iteration" },
           deps: {
             detectChangedFiles,

@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { prepareRunRequest } from "../../src/cli/commands/exec/prepare-run-request.js";
 import type { FlakerConfig } from "../../src/cli/config.js";
-import type { MetricStore } from "../../src/cli/storage/types.js";
 
 const baseConfig: FlakerConfig = {
   repo: { owner: "mizchi", name: "flaker" },
@@ -46,7 +45,6 @@ describe("prepareRunRequest", () => {
     const prepared = await prepareRunRequest({
       cwd: "/repo",
       config: baseConfig,
-      store: {} as MetricStore,
       opts: {
         gate: "merge",
         strategy: "",
@@ -91,7 +89,6 @@ describe("prepareRunRequest", () => {
           runtime_apply: true,
         },
       },
-      store: {} as MetricStore,
       opts: {
         gate: "merge",
         strategy: "full",
@@ -123,7 +120,6 @@ describe("prepareRunRequest", () => {
           },
         },
       },
-      store: {} as MetricStore,
       opts: {
         gate: "iteration",
         strategy: "",

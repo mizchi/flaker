@@ -14,7 +14,6 @@ import {
   resolveFallbackSamplingMode,
   type ResolvedGate,
 } from "../../gate-config.js";
-import type { MetricStore } from "../../storage/types.js";
 import {
   parseSampleCount,
   parseSamplePercentage,
@@ -60,7 +59,6 @@ export interface PrepareRunRequestDeps {
 interface PrepareRunRequestOpts {
   cwd: string;
   config: FlakerConfig;
-  store: MetricStore;
   opts: RunCliOpts;
   deps?: PrepareRunRequestDeps;
 }

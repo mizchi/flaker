@@ -43,7 +43,6 @@ export async function execRunAction(rawOpts: SamplingCliOpts & { runner: string;
     const prepared = await prepareRunRequest({
       cwd,
       config,
-      store,
       opts: rawOpts,
       deps: {
         detectChangedFiles,
