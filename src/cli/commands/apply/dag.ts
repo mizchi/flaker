@@ -103,3 +103,20 @@ async function dispatch(action: PlannedAction, deps: ExecutorDeps): Promise<unkn
       return deps.quarantineApply();
   }
 }
+
+/**
+ * Run the plan through the DAG executor, then report results in plan order.
+ * executeDag itself returns results in wave order (independent peers such as
+ * cold_start_run finish in the first wave), which is not what users read.
+ */
+export async function executeInPlanOrder(
+  actions: PlannedAction[],
+  deps: ExecutorDeps,
+): Promise<DagExecutionResult> {
+  const dagResult = await executeDag(actions, deps);
+  const byKind = new Map(dagResult.executed.map((e) => [e.kind, e]));
+  const executed = actions
+    .map((a) => byKind.get(a.kind))
+    .filter((e): e is DagExecutedAction => e !== undefined);
+  return { executed };
+}

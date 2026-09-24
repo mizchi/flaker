@@ -14,7 +14,7 @@ import { executePreparedLocalRun } from "../commands/exec/execute-prepared-local
 import { createConfiguredResolver } from "./shared-resolver.js";
 import { detectChangedFiles } from "../core/git.js";
 import { loadQuarantineManifestIfExists } from "../quarantine-manifest.js";
-import { executeDag } from "../commands/apply/dag.js";
+import { executeInPlanOrder } from "../commands/apply/dag.js";
 import type { ExecutorDeps } from "../commands/apply/executor.js";
 import {
   writeArtifact,
@@ -199,7 +199,7 @@ export async function applyAction(opts: {
           return;
         }
       }
-      const planDagResult = await executeDag(planned.actions, deps);
+      const planDagResult = await executeInPlanOrder(planned.actions, deps);
       if (!opts.json) {
         for (const exec of planDagResult.executed) {
           const mark =
@@ -229,8 +229,7 @@ export async function applyAction(opts: {
       return;
     }
 
-    const dagResult = await executeDag(actions, deps);
-    const result = { executed: dagResult.executed };
+    const result = await executeInPlanOrder(actions, deps);
 
     if (opts.json) {
       console.log(JSON.stringify(result, null, 2));
