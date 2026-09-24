@@ -8,7 +8,7 @@ import type { MetricStore, WorkflowRun, TestResult } from "../../storage/types.j
 import { toStoredTestResult } from "../../storage/test-result-mapper.js";
 import { collectCommitChanges } from "./commit-changes.js";
 import { exportRunParquet } from "../export-parquet.js";
-import type { FlakerConfig } from "../../config.js";
+import { normalizeWorkflowLanes, type FlakerConfig } from "../../config.js";
 
 export interface GitHubClient {
   listWorkflowRuns(): Promise<{
@@ -465,7 +465,7 @@ export async function runCollectCi(opts: RunCollectCiOpts): Promise<RunCollectCi
     customCommand: config.adapter.command,
     storagePath: config.storage.path,
     workflowPaths: config.collect?.workflow_paths,
-    workflowLanes: config.workflow_lanes,
+    workflowLanes: normalizeWorkflowLanes(config.workflow_lanes).lanes,
   });
 
   const exitCode = resolveCollectExitCode(result, { failOnErrors });
