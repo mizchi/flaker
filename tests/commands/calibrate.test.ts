@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { recommendSampling, type ProjectProfile } from "../../src/cli/commands/collect/calibrate.js";
-import { writeSamplingConfig, loadConfig, type SamplingConfig } from "../../src/cli/config.js";
+import { calibrateSampling, recommendSampling, type ProjectProfile } from "../../src/cli/commands/collect/calibrate.js";
+import { writeSamplingConfig, loadConfig, type FlakerConfig, type SamplingConfig } from "../../src/cli/config.js";
+import type { MetricStore } from "../../src/cli/storage/types.js";
 import { writeFileSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -127,6 +128,51 @@ describe("recommendSampling", () => {
     };
     const result = recommendSampling(profile);
     expect(result.calibrated_at).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+function makeFakeStore(): MetricStore {
+  return {
+    raw: async <T>(): Promise<T[]> => [],
+  } as unknown as MetricStore;
+}
+
+function makeConfig(resolver: string): FlakerConfig {
+  return {
+    repo: { owner: "a", name: "b" },
+    storage: { path: ".flaker/data" },
+    adapter: { type: "playwright" },
+    runner: { type: "vitest", command: "pnpm test" },
+    affected: { resolver, config: "" },
+    quarantine: { auto: true, flaky_rate_threshold_percentage: 30, min_runs: 5 },
+    flaky: { window_days: 14, detection_threshold_ratio: 0.02 },
+    promotion: {
+      matched_commits_min: 20,
+      false_negative_rate_max_percentage: 5,
+      pass_correlation_min_percentage: 95,
+      holdout_fnr_max_percentage: 10,
+      data_confidence_min: "moderate",
+    },
+  };
+}
+
+describe("calibrateSampling", () => {
+  it("recommends weighted when [affected].resolver is empty", async () => {
+    const result = await calibrateSampling(makeFakeStore(), makeConfig(""));
+    expect(result.sampling.strategy).toBe("weighted");
+    expect(result.profile.hasResolver).toBe(false);
+  });
+
+  it('recommends weighted when [affected].resolver is "none"', async () => {
+    const result = await calibrateSampling(makeFakeStore(), makeConfig("none"));
+    expect(result.sampling.strategy).toBe("weighted");
+    expect(result.profile.hasResolver).toBe(false);
+  });
+
+  it("recommends hybrid when a resolver is configured", async () => {
+    const result = await calibrateSampling(makeFakeStore(), makeConfig("git"));
+    expect(result.sampling.strategy).toBe("hybrid");
+    expect(result.profile.hasResolver).toBe(true);
   });
 });
 

@@ -1,5 +1,5 @@
 import type { MetricStore } from "../../storage/types.js";
-import type { SamplingConfig } from "../../config.js";
+import type { FlakerConfig, SamplingConfig } from "../../config.js";
 
 export interface ProjectProfile {
   testCount: number;
@@ -170,6 +170,26 @@ export function recommendSampling(profile: ProjectProfile): SamplingConfig {
     detected_co_failure_strength_ratio: profile.coFailureStrength,
     detected_test_count: profile.testCount,
   };
+}
+
+/**
+ * Analyze the project and recommend [sampling] in one call. Shared by the
+ * top-level `flaker calibrate` command and the `apply` calibrate step so
+ * both derive `hasResolver` from config the same way.
+ */
+export async function calibrateSampling(
+  store: MetricStore,
+  config: FlakerConfig,
+  opts: { windowDays?: number; now?: Date } = {},
+): Promise<CalibrationResult> {
+  const hasResolver = config.affected.resolver !== "" && config.affected.resolver !== "none";
+  const profile = await analyzeProject(store, {
+    hasResolver,
+    windowDays: opts.windowDays ?? 90,
+    now: opts.now,
+  });
+  const sampling = recommendSampling(profile);
+  return { profile, sampling };
 }
 
 /**

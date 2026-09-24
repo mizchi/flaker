@@ -40,4 +40,13 @@ describe("flaker calibrate", () => {
     expect(res.status).toBe(0);
     expect(readFileSync(join(dir, "flaker.toml"), "utf8")).toMatch(/\[sampling\]\nstrategy = "hybrid"/);
   });
+
+  it("rejects a non-numeric --window-days", () => {
+    const dir = repo();
+    const before = readFileSync(join(dir, "flaker.toml"), "utf8");
+    const res = spawnSync("node", [CLI, "calibrate", "--window-days", "abc"], { cwd: dir, encoding: "utf8" });
+    expect(res.status).toBe(2);
+    expect(res.stderr).toMatch(/Invalid --window-days value: abc\. Expected a positive integer\./);
+    expect(readFileSync(join(dir, "flaker.toml"), "utf8")).toBe(before);
+  });
 });

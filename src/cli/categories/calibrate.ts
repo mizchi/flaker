@@ -3,9 +3,8 @@ import type { Command } from "commander";
 import { loadConfig, writeSamplingConfig } from "../config.js";
 import { DuckDBStore } from "../storage/duckdb.js";
 import {
-  analyzeProject,
+  calibrateSampling,
   formatCalibrationReport,
-  recommendSampling,
 } from "../commands/collect/calibrate.js";
 
 export interface CalibrateCliOpts {
@@ -14,18 +13,29 @@ export interface CalibrateCliOpts {
   json?: boolean;
 }
 
+/** Parses `--window-days`, returning null (and printing an error) if invalid. */
+function parseWindowDays(raw: string): number | null {
+  const windowDays = Number(raw);
+  if (!Number.isInteger(windowDays) || windowDays <= 0) {
+    console.error(`Invalid --window-days value: ${raw}. Expected a positive integer.`);
+    return null;
+  }
+  return windowDays;
+}
+
 export async function calibrateAction(opts: CalibrateCliOpts): Promise<void> {
+  const windowDays = parseWindowDays(opts.windowDays);
+  if (windowDays == null) {
+    process.exitCode = 2;
+    return;
+  }
+
   const cwd = process.cwd();
   const config = loadConfig(cwd);
   const store = new DuckDBStore(resolve(cwd, config.storage.path));
   await store.initialize();
   try {
-    const hasResolver = config.affected.resolver !== "" && config.affected.resolver !== "none";
-    const profile = await analyzeProject(store, {
-      hasResolver,
-      windowDays: Number(opts.windowDays),
-    });
-    const sampling = recommendSampling(profile);
+    const { profile, sampling } = await calibrateSampling(store, config, { windowDays });
     const written = !opts.dryRun;
     if (written) writeSamplingConfig(cwd, sampling);
     if (opts.json) {

@@ -216,16 +216,8 @@ export async function applyAction(opts: {
       collectCi: async ({ windowDays }) =>
         runCollectCi({ store, config, cwd, days: windowDays }),
       calibrate: async () => {
-        const { analyzeProject, recommendSampling } = await import(
-          "../commands/collect/calibrate.js"
-        );
-        const hasResolver =
-          config.affected.resolver !== "" && config.affected.resolver !== "none";
-        const profile = await analyzeProject(store, {
-          hasResolver,
-          windowDays: 90,
-        });
-        const sampling = recommendSampling(profile);
+        const { calibrateSampling } = await import("../commands/collect/calibrate.js");
+        const { sampling } = await calibrateSampling(store, config, { windowDays: 90 });
         writeSamplingConfig(cwd, sampling);
         return { sampling };
       },
