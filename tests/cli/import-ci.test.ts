@@ -36,4 +36,12 @@ describe("flaker import --ci", () => {
     expect(res.status).toBe(2);
     expect(res.stderr).toContain("Invalid --days value: abc. Expected a positive integer.");
   });
+  for (const args of [["--days", "5"], ["--branch-filter", "main"], ["report.json", "--days", "5"]]) {
+    it(`rejects ${args.join(" ")} without --ci`, () => {
+      const res = spawnSync("node", [CLI, "import", ...args], { encoding: "utf8" });
+      expect(res.status).toBe(2);
+      expect(res.stderr).toContain("error: --days and --branch-filter require --ci");
+      expect(res.stdout).not.toContain("Usage: flaker import");
+    });
+  }
 });

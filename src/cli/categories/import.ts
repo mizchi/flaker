@@ -41,6 +41,12 @@ export function registerImportCommands(program: Command): void {
         ci?: boolean; days: string; branchFilter?: string;
       },
     ) => {
+      const ciOnlyFlagUsed =
+        importCmd.getOptionValueSource("days") === "cli" || opts.branchFilter != null;
+      if (!opts.ci && ciOnlyFlagUsed) {
+        process.stderr.write("error: --days and --branch-filter require --ci\n");
+        process.exit(2);
+      }
       if (opts.ci) {
         if (file) {
           process.stderr.write("error: --ci does not take a file\n");
