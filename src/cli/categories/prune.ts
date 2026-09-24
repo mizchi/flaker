@@ -37,7 +37,7 @@ export function registerPruneCommand(program: Command): void {
   program
     .command("prune")
     .description("Delete history older than a number of days, then checkpoint the database")
-    .requiredOption("--older-than <days>", "Remove runs, results, selector records and sampling runs older than this")
+    .requiredOption("--older-than <days>", "Remove runs, results, selector records, sampling runs and mutation trials older than this")
     .option("--dry-run", "Report what would be removed without deleting")
     .option("--json", "Print the result as JSON")
     .addHelpText(

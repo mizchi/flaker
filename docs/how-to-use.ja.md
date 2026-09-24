@@ -290,7 +290,7 @@ flaker import .jev-test-filter --adapter jev
 | `quarantine` | 隔離中のテスト。`reason`, `since`, `source` (`auto` / `manual`) |
 | `co_failures` | 「このファイルが変わったときにこのテストが落ちた」の集計。`changed_file`, `co_failures`, `changes`, `strength`。`changes` は window 内でそのファイルを変更し、かつそのテストの結果がある commit の数。`co_failures` はそのうちテストが一度でも失敗した commit の数。commit 上の失敗 1 件で数え、その commit が変更した全ファイルに計上する |
 | `selector_verdicts` | selector のテストごとの判定。`score`, `confidence`, `reason`, `selected` |
-| `misses` | selector 自身の取りこぼし。selector が選ばなかったのに同じコミットの full run で実際に失敗したテストで、判定 1 件につき 1 行。採点するのは `real` の selector run と real の full run の組だけで、`head_sha` ごとに最新の selector run だけを数えるので、同じコミットで selector を走らせ直しても取りこぼしは重複しない。record 自身が quarantine していた判定 (`reason = quarantined`) は取りこぼしに含めない。mutation の採点は mutation フェーズで入る |
+| `misses` | selector 自身の取りこぼし。selector が選ばなかったのに同じコミットの full run で実際に失敗したテストで、判定 1 件につき 1 行。採点するのは `real` の selector run と real の full run の組だけで、`head_sha` ごとに最新の selector run だけを数えるので、同じコミットで selector を走らせ直しても取りこぼしは重複しない。record 自身が quarantine していた判定 (`reason = quarantined`) は取りこぼしに含めない。mutation の record は代わりに `calibrate --mutate` が採点する |
 | `gate_calibration` | selector gate の calibrate 結果の履歴。最新行が現行値 |
 
 `source = mutation` のランは `flaky`・`co_failures`・`misses` に一切入りません。
@@ -329,7 +329,7 @@ flaker prune --older-than 180 --dry-run   # 消える量を確認
 flaker prune --older-than 180             # 削除して CHECKPOINT
 ```
 
-`flaker prune` は `--older-than <days>` より古い履歴を、テーブル間の整合を保って削除します。workflow run はその結果と collected artifact ごと、selector record はその verdict ごと、sampling run はそのテストごと消し、commit changes は残る run や selector record がそのコミットを参照しなくなったものだけを消します。gate calibration は selector ごとの最新行を残します。quarantine・coverage・設定は状態なので残します。削除後に CHECKPOINT し、テーブルごとの削除件数を表示します (`--dry-run` は何も消さずに削除予定件数を表示、`--json` は同じ内容を JSON で出力)。
+`flaker prune` は `--older-than <days>` より古い履歴を、テーブル間の整合を保って削除します。workflow run はその結果と collected artifact ごと、mutation の試行は kill したテストごと、selector record はその verdict ごと、sampling run はそのテストごと消し、commit changes は残る run や selector record がそのコミットを参照しなくなったものだけを消します。gate calibration は selector ごとの最新行を残します。quarantine・coverage・設定は状態なので残します。削除後に CHECKPOINT し、テーブルごとの削除件数を表示します (`--dry-run` は何も消さずに削除予定件数を表示、`--json` は同じ内容を JSON で出力)。
 
 `<days>` は `max(90, [sampling].co_failure_window_days) + [flaky].window_days` 以上 (既定で 104) が必要です。90 日は既定の窓で最長のもの (`calibrate --window-days`, `calibrate --selector --window-days`, `explain insights`) で、run の `is_full` は同じ workflow の flaky window 分さかのぼった run と比べて決まるためです。短い値は終了コード 2 になります。`calibrate` に長めの `--window-days` を渡している場合は、その日数 + flaky window 以上を残してください。DuckDB はシングルライターなので、他の flaker コマンドがデータベースを開いていない場所 (データベースを持っている定期ジョブなど) で実行してください。
 
@@ -347,9 +347,20 @@ flaker calibrate --selector                              # gate_calibration に�
 flaker export --projection jev-context -o .flaker/context.json
 ```
 
-`flaker calibrate --selector [name]` は real な selector record を、その `head_sha` の full run と結合します。`head_sha` ごとに最新の record だけを数えるので、同じコミットで selector を何度走らせても同じ regression を重ねて数えません。mutation の record は対象外です。正解はその run で落ちたテストから flaky と quarantine を除いたものです。record 自身が quarantine していたテストの失敗は selector の取りこぼしではないので、別に数えて報告します。そのうえで、すべての record を jev 自身の gate (`jev-test-filter/gate` を bundle したもの、API 呼び出しなし) で `cutoff × unsure_below × unsure_margin` の grid にわたってオフライン再判定します。採用規則は「締めるのは即座に、緩めるのは慎重に」です。現在の gate が失敗を取りこぼしていれば、即座に切り替えます (`tighten`)。切り替え先は、すべての record で現在の gate が選ぶテストをすべて選び続ける候補に限り、その中から取りこぼしが最も少なく、次に選択テスト数が最も少ないものを選びます。すべての失敗を拾う候補がなくても、現在の gate より取りこぼしが少ない候補があれば、その中で最も少ないものを採用します。取りこぼしを減らせる候補がなければ、テストを多く選んでも拾えないので gate を維持し、取りこぼしを報告します。選択テストを減らす (`loosen`) には、取りこぼしがゼロで、real な失敗が `min_failures` 件以上あり、recall の Wilson 95% 下限が `recall_target` 以上である必要があります。どちらでもなければ現状を維持し、理由を `rationale` に残します (`keep`)。同点なら jev の既定値に近い候補を選びます。1 回の実行で `gate_calibration` に 1 行追記します。`--dry-run` は何も追記せず、`--json` は結果を snake_case のキーの JSON で出力します (`decision.real_failures`、`decision.recall_lb95`、`decision.rationale`、`without_full_run`、`unmatched`)。どの判定にも照合できない失敗は `unmatched` として一覧にし、取りこぼしには数えません。レポートは context digest ごとにも分けて出します。
+`flaker calibrate --selector [name]` は real な selector record を、その `head_sha` の full run と結合します。`head_sha` ごとに最新の record だけを数えるので、同じコミットで selector を何度走らせても同じ regression を重ねて数えません。mutation の record は代わりに試行と突き合わせます (後述)。正解はその run で落ちたテストから flaky と quarantine を除いたものです。record 自身が quarantine していたテストの失敗は selector の取りこぼしではないので、別に数えて報告します。そのうえで、すべての record を jev 自身の gate (`jev-test-filter/gate` を bundle したもの、API 呼び出しなし) で `cutoff × unsure_below × unsure_margin` の grid にわたってオフライン再判定します。採用規則は「締めるのは即座に、緩めるのは慎重に」です。現在の gate が失敗を取りこぼしていれば、即座に切り替えます (`tighten`)。切り替え先は、すべての record で現在の gate が選ぶテストをすべて選び続ける候補に限り、その中から取りこぼしが最も少なく、次に選択テスト数が最も少ないものを選びます。すべての失敗を拾う候補がなくても、現在の gate より取りこぼしが少ない候補があれば、その中で最も少ないものを採用します。取りこぼしを減らせる候補がなければ、テストを多く選んでも拾えないので gate を維持し、取りこぼしを報告します。選択テストを減らす (`loosen`) には、取りこぼしがゼロで、real な失敗が `min_failures` 件以上あり、recall の Wilson 95% 下限が `recall_target` 以上である必要があります。どちらでもなければ現状を維持し、理由を `rationale` に残します (`keep`)。同点なら jev の既定値に近い候補を選びます。1 回の実行で `gate_calibration` に 1 行追記します。`--dry-run` は何も追記せず、`--json` は結果を snake_case のキーの JSON で出力します (`decision.real_failures`、`decision.recall_lb95`、`decision.rationale`、`without_full_run`、`unmatched`)。どの判定にも照合できない失敗は `unmatched` として一覧にし、取りこぼしには数えません。レポートは context digest ごとにも分けて出します。
 
 この下限は見た目より厳しい条件です。real な失敗 n 件をすべて拾えたとき、Wilson 95% 下限は n / (n + 3.8415) で、20 件なら 0.839、35 件なら 0.901、50 件なら 0.929 です。緩めるには取りこぼしがゼロでなければならないので、既定の `recall_target = 0.90` では少なくとも 35 件の real な失敗をすべて拾っている必要があり、`min_failures = 20` より多くなります。緩めるのを見送ったときは rationale にそう書きます。`recall_target = 0.98` なら 189 件が必要です (189 件で 0.9801、188 件では 0.9800 に届きません)。
+
+#### mutation による試行 — `flaker calibrate --mutate <n>`
+
+```bash
+flaker calibrate --mutate 10 --dry-run             # 試す mutation の一覧
+TYPESAFE_API_KEY=… flaker calibrate --mutate 10    # 実行してから calibrate
+```
+
+本物の regression はまれなので、calibration が根拠を集めるには何週間もかかることがあります。`--mutate <n>` は根拠を人工的に作ります。直近 `--commits` 件 (既定 20) のコミットで変更された JS/TS のソースファイル (テスト・型宣言・ビルド出力は除く) から `n` 個の mutation を選びます。種類は比較演算子の反転 (`===` ↔ `!==`、前後に空白のある `<` ↔ `>=` など)、論理演算子や boolean の return の反転、関数本体の先頭への `return;` の挿入です。`--seed` で選び方を再現できます。HEAD の一時的な `git worktree` の中で (作業ツリーには一切触れません。`node_modules` は symlink で共有し、`--setup <cmd>` はそこで 1 回だけ実行します。ビルドなどに使います)、まず mutation なしのツリーで `[runner]` を通して全件を走らせ、mutation ごとにそれをコミットし、HEAD に対して selector を走らせ (`--selector-command`、既定は `jev-test-filter` で、`--base <HEAD> --context <jev-context> --json` を付けて起動)、もう一度全件を走らせます。mutation が *kill* したテストとは、mutation ありのツリーで落ち、なしのツリーで通ったテストです。selector の record は `source = mutation` で保存し、試行は `flaker_v1.runs` に `source = mutation` の full run として現れます。kill は `results`・`flaky`・`co_failures`・`misses` にも、他のコマンドが読む履歴にも入りません。その後、通常の `calibrate --selector` を実行します。
+
+mutation は締める方向にしか働きません。selector が選ばなかった kill は本物の失敗と同じく取りこぼしなので、gate を締め、緩めることを止めます。一方で mutation の kill は `real_failures` に数えないので、緩める条件に近づくことはありません。mutation の分布は本物の変更とは違うので、recall の下限から外しています。`--json` には `mutation_trials` (試行ごとの mutation、コミット、record、実行したテスト数と kill 数、またはスキップした理由) と `mutation` (`records`、`failures`、`without_trial`、`unmatched`) が加わります。selector がフォールバックした試行 (API キーなし、API エラー) は record を書かないので、全件を走らせずにスキップします。`--dry-run` は mutation を一覧にするだけで何も実行しません。`flaker prune` は cutoff より古い試行を削除します。
 
 `flaker export --projection jev-context` は、jev-test-filter が `--context` で読む context を書き出します。中身は `gate_calibration` の最新の gate とその根拠、`skip` (quarantine 中のテスト)、`tests` (hint: selector がそのテストを取りこぼしたコミット数と、一緒に落ちたファイル最大 5 件。`co_failures` のうち同時失敗 2 回以上のもの) です。flaky と quarantine 中のテストには hint を付けません。`digest` は `skip` と `tests` だけの sha256 なので、gate が変わっても変わりません。型と JSON Schema は `@mizchi/flaker/contracts/jev-context-v1` から export しています。context を読むには jev-test-filter 0.1.3 以降が必要です。projection は常に JSON で、`--format`・`--since`・`--where`・dataset 引数を付けると終了コード 2 になります。
 

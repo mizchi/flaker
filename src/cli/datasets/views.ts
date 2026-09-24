@@ -87,7 +87,21 @@ FROM workflow_runs wr
 CROSS JOIN cfg
 LEFT JOIN run_sizes rs ON rs.workflow_run_id = wr.id
 LEFT JOIN largest lg ON lg.workflow_run_id = wr.id
-LEFT JOIN flaker_lane_config lc ON lc.lane = wr.lane;
+LEFT JOIN flaker_lane_config lc ON lc.lane = wr.lane
+UNION ALL
+-- A mutation trial runs the whole suite on the mutated tree. Its run_id is
+-- negative so it never collides with a workflow run's.
+SELECT
+  -mt.run_id AS run_id,
+  'mutation' AS source,
+  'flaker calibrate --mutate' AS workflow_name,
+  NULL AS lane,
+  mt.commit_sha,
+  NULL AS branch,
+  'mutation' AS event,
+  TRUE AS is_full,
+  mt.created_at
+FROM mutation_trials mt;
 
 CREATE OR REPLACE VIEW flaker_v1.results AS
 SELECT
@@ -231,8 +245,8 @@ WHERE ru.is_full
 GROUP BY ru.commit_sha, r.test_key;
 
 -- misses: the selector's own misses, on the same evidence calibration uses.
--- Only real selector runs are scored, against real full runs; scoring mutation
--- verdicts against mutation runs comes with the mutation phase. One selector
+-- Only real selector runs are scored, against real full runs; mutation
+-- records are scored against their trials by calibrate --mutate. One selector
 -- run per (selector, head_sha) counts, the latest, so re-running the selector
 -- on a commit does not repeat a miss. A verdict the record quarantined is not
 -- a miss: the selector could never have picked that test.

@@ -9,6 +9,7 @@ export interface UnmatchedFailure {
 }
 
 export interface LoadedCalibration {
+  /** Real records first, then mutation records. */
   records: CalibrationRecord[];
   /** Selector runs with no full run on their head (or no head at all). */
   withoutFullRun: number;
@@ -16,12 +17,25 @@ export interface LoadedCalibration {
   superseded: number;
   /** Real failures on a record's head that no verdict of that record names. */
   unmatched: UnmatchedFailure[];
+  mutation: MutationEvidence;
+}
+
+export interface MutationEvidence {
+  /** Mutation records scored against their trial. */
+  records: number;
+  /** Tests the trials killed that the records name. */
+  failures: number;
+  /** Mutation selector runs whose head is no trial of this database. */
+  withoutTrial: number;
+  /** Killed tests no verdict of the record names. */
+  unmatched: number;
 }
 
 /**
  * Real selector runs in the window, one per head (the latest), joined to the
- * failures of a full real run on that head. Mutation selector runs are left
- * out, as in the misses view: they are scored against mutation runs later.
+ * failures of a full real run on that head; and mutation selector runs, one
+ * per trial, joined to the tests that trial killed. Flaky and quarantined
+ * tests are ground truth for neither.
  */
 export async function loadCalibrationRecords(
   store: MetricStore,
@@ -67,7 +81,10 @@ export async function loadCalibrationRecords(
   for (const run of runIds) if (run.head_sha !== null) latestByHead.set(run.head_sha, run);
   const kept = runIds.filter((run) => run.head_sha === null || latestByHead.get(run.head_sha) === run);
 
-  const out: LoadedCalibration = { records: [], withoutFullRun: 0, superseded: runIds.length - kept.length, unmatched: [] };
+  const out: LoadedCalibration = {
+    records: [], withoutFullRun: 0, superseded: runIds.length - kept.length, unmatched: [],
+    mutation: { records: 0, failures: 0, withoutTrial: 0, unmatched: 0 },
+  };
   for (const run of kept) {
     if (run.head_sha === null || !fullHeads.has(run.head_sha)) {
       out.withoutFullRun++;
@@ -84,5 +101,66 @@ export async function loadCalibrationRecords(
       selectorRunId: run.selector_run_id, source: run.source, contextDigest: run.context_digest, verdicts, failures,
     });
   }
+  out.records.push(...await loadMutationRecords(store, opts.selector, since, out.mutation));
   return out;
+}
+
+async function loadMutationRecords(
+  store: MetricStore,
+  selector: string,
+  since: string,
+  evidence: MutationEvidence,
+): Promise<CalibrationRecord[]> {
+  const runs = await store.raw<{ selector_run_id: string; head_sha: string | null; context_digest: string | null; trial: bigint | number | null }>(
+    `SELECT sr.selector_run_id, sr.head_sha, sr.context_digest,
+       (SELECT MAX(mt.run_id) FROM mutation_trials mt WHERE mt.commit_sha = sr.head_sha) AS trial
+     FROM selector_runs sr
+     WHERE sr.selector = ? AND sr.source = 'mutation' AND sr.created_at >= ?::TIMESTAMP
+     ORDER BY sr.created_at, sr.selector_run_id`,
+    [selector, since],
+  );
+  if (runs.length === 0) return [];
+  const verdictRows = await store.raw<{ selector_run_id: string; test_key: string | null; score: number | null; confidence: number | null; reason: string }>(
+    `SELECT selector_run_id, test_key, score, confidence, reason
+     FROM flaker_v1.selector_verdicts
+     WHERE selector = ? AND source = 'mutation' AND created_at >= ?::TIMESTAMP`,
+    [selector, since],
+  );
+  const kills = new Map<number, string[]>();
+  for (const row of await store.raw<{ run_id: bigint | number; test_id: string }>(
+    `SELECT run_id, test_id FROM mutation_failures
+     WHERE test_id NOT IN (SELECT test_key FROM flaker_v1.flaky WHERE is_flaky)
+       AND test_id NOT IN (SELECT test_key FROM flaker_v1.quarantine)
+     ORDER BY test_id`,
+  )) {
+    const list = kills.get(Number(row.run_id)) ?? [];
+    list.push(row.test_id);
+    kills.set(Number(row.run_id), list);
+  }
+  const byRun = new Map<string, CalibrationRecord["verdicts"]>();
+  for (const v of verdictRows) {
+    const list = byRun.get(v.selector_run_id) ?? [];
+    list.push({ testKey: v.test_key, score: v.score, confidence: v.confidence, reason: v.reason });
+    byRun.set(v.selector_run_id, list);
+  }
+  // One record per trial, the latest.
+  const latest = new Map<number, (typeof runs)[number]>();
+  for (const run of runs) {
+    if (run.trial === null) evidence.withoutTrial++;
+    else latest.set(Number(run.trial), run);
+  }
+  const records: CalibrationRecord[] = [];
+  for (const [trial, run] of [...latest.entries()].sort((a, b) => a[0] - b[0])) {
+    const verdicts = byRun.get(run.selector_run_id) ?? [];
+    const named = new Set(verdicts.map((v) => v.testKey).filter((k): k is string => k !== null));
+    const failures = (kills.get(trial) ?? []).filter((key) => {
+      if (named.has(key)) return true;
+      evidence.unmatched++;
+      return false;
+    });
+    evidence.records++;
+    evidence.failures += failures.length;
+    records.push({ selectorRunId: run.selector_run_id, source: "mutation", contextDigest: run.context_digest, verdicts, failures });
+  }
+  return records;
 }
