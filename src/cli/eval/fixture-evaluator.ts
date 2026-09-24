@@ -147,6 +147,7 @@ export async function evaluateFixture(
     results.push({ strategy: strategy.name, ...metrics, holdoutFNR });
   }
 
+  // Kept deliberately as a research baseline for `dev eval-fixture`, even though this strategy was removed from `run` in 0.13.0.
   // Coverage-guided strategy (via MoonBit core)
   if (strategyFilter?.has("coverage-guided") ?? true) {
     const coverages = generateSyntheticCoverage(fixture);
@@ -178,6 +179,7 @@ export async function evaluateFixture(
     results.push({ strategy: "coverage-guided", ...metrics, holdoutFNR });
   }
 
+  // Kept deliberately as a research baseline for `dev eval-fixture`, even though this strategy was removed from `run` in 0.13.0.
   // GBDT strategy (via MoonBit core): train on first 75% of commits, predict on eval commits
   if (strategyFilter?.has("gbdt") ?? true) {
     const trainCommits = fixture.commits.slice(0, evalStart);
