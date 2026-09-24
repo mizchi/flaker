@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { prepareRunRequest } from "../../src/cli/commands/exec/prepare-run-request.js";
 import type { FlakerConfig } from "../../src/cli/config.js";
-import type { MetricStore } from "../../src/cli/storage/types.js";
 
 const baseConfig: FlakerConfig = {
   repo: { owner: "mizchi", name: "flaker" },
@@ -21,14 +20,13 @@ const baseConfig: FlakerConfig = {
     holdout_ratio: 0.1,
     co_failure_window_days: 90,
   },
-  profile: {
-    ci: {
+  gate: {
+    merge: {
       strategy: "hybrid",
       sample_percentage: 25,
-      adaptive: true,
       max_duration_seconds: 300,
     },
-    local: {
+    iteration: {
       strategy: "affected",
       fallback_strategy: "weighted",
     },
@@ -36,7 +34,7 @@ const baseConfig: FlakerConfig = {
 };
 
 describe("prepareRunRequest", () => {
-  it("resolves gate/profile options and prepares resolver + manifest for hybrid runs", async () => {
+  it("resolves gate options and prepares resolver + manifest for hybrid runs", async () => {
     const resolver = { resolveAffectedTests: vi.fn() };
     const detectChangedFiles = vi.fn(() => ["src/ignored.ts"]);
     const loadManifest = vi.fn(() => ({
@@ -47,7 +45,6 @@ describe("prepareRunRequest", () => {
     const prepared = await prepareRunRequest({
       cwd: "/repo",
       config: baseConfig,
-      store: {} as MetricStore,
       opts: {
         gate: "merge",
         strategy: "",
@@ -58,13 +55,11 @@ describe("prepareRunRequest", () => {
         detectChangedFiles,
         loadQuarantineManifestIfExists: loadManifest,
         createResolver,
-        computeKpi: async () => ({ sampling: { falseNegativeRate: null } }),
-        runInsights: async () => ({ summary: { totalTests: 0, ciOnlyCount: 0 } }),
       },
     });
 
     expect(prepared.gateName).toBe("merge");
-    expect(prepared.resolvedProfile.name).toBe("ci");
+    expect(prepared.resolvedGate.name).toBe("merge");
     expect(prepared.mode).toBe("hybrid");
     expect(prepared.changedFiles).toEqual(["src/app.ts", "src/lib.ts"]);
     expect(prepared.quarantineManifestEntries).toEqual([{ id: "q1" }]);
@@ -94,15 +89,12 @@ describe("prepareRunRequest", () => {
           runtime_apply: true,
         },
       },
-      store: {} as MetricStore,
       opts: {
         gate: "merge",
         strategy: "full",
       },
       deps: {
         loadQuarantineManifestIfExists: loadManifest,
-        computeKpi: async () => ({ sampling: { falseNegativeRate: null } }),
-        runInsights: async () => ({ summary: { totalTests: 0, ciOnlyCount: 0 } }),
       },
     });
 
@@ -114,51 +106,20 @@ describe("prepareRunRequest", () => {
     expect(prepared.quarantineManifestEntries).toEqual([{ id: "q-runtime" }]);
   });
 
-  it("applies adaptive percentage and exposes notes for display", async () => {
-    const computeKpi = vi.fn(async () => ({
-      sampling: { falseNegativeRate: 0.01 },
-    }));
-    const runInsights = vi.fn(async () => ({
-      summary: { totalTests: 10, ciOnlyCount: 0 },
-    }));
-
-    const prepared = await prepareRunRequest({
-      cwd: "/repo",
-      config: baseConfig,
-      store: {} as MetricStore,
-      opts: {
-        gate: "merge",
-        strategy: "",
-      },
-      deps: {
-        detectChangedFiles: () => [],
-        computeKpi,
-        runInsights,
-      },
-    });
-
-    expect(prepared.percentage).toBe(20);
-    expect(prepared.adaptiveReason).toContain("reduced");
-    expect(prepared.timeBudgetSeconds).toBe(300);
-    expect(computeKpi).toHaveBeenCalled();
-    expect(runInsights).toHaveBeenCalled();
-  });
-
-  it("does not create a resolver when strategy is random", async () => {
+  it("does not create a resolver when strategy is weighted", async () => {
     const createResolver = vi.fn();
 
     const prepared = await prepareRunRequest({
       cwd: "/repo",
       config: {
         ...baseConfig,
-        profile: {
-          ...baseConfig.profile,
-          local: {
-            strategy: "random",
+        gate: {
+          ...baseConfig.gate,
+          iteration: {
+            strategy: "weighted",
           },
         },
       },
-      store: {} as MetricStore,
       opts: {
         gate: "iteration",
         strategy: "",
@@ -169,7 +130,7 @@ describe("prepareRunRequest", () => {
       },
     });
 
-    expect(prepared.mode).toBe("random");
+    expect(prepared.mode).toBe("weighted");
     expect(prepared.resolver).toBeUndefined();
     expect(createResolver).not.toHaveBeenCalled();
   });

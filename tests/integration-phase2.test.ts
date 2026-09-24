@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DuckDBStore } from "../src/cli/storage/duckdb.js";
-import { runQuarantine } from "../src/cli/commands/policy/quarantine.js";
 import { runBisect } from "../src/cli/commands/debug/bisect.js";
 import { runSample } from "../src/cli/commands/exec/plan.js";
 import { SimpleResolver } from "../src/cli/resolvers/simple.js";
@@ -33,13 +32,6 @@ describe("Phase 2 integration", () => {
   });
 
   afterEach(async () => { await store.close(); });
-
-  it("auto-quarantine identifies flaky tests", async () => {
-    await runQuarantine({ store, action: "auto", flakyRateThreshold: 30.0, minRuns: 3, windowDays: 30 });
-    const q = await store.queryQuarantined();
-    expect(q.length).toBeGreaterThanOrEqual(1);
-    expect(q.map((x) => x.suite)).toContain("tests/module_0/test.spec.ts");
-  });
 
   it("bisect finds transition for flaky test", async () => {
     const result = await runBisect({ store, suite: "tests/module_0/test.spec.ts", testName: "test_0" });

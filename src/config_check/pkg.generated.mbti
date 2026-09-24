@@ -15,4 +15,3 @@ pub fn run_config_check(Array[@contracts.ConfigCheckListedTestInput], Array[Stri
 // Type aliases
 
 // Traits
-

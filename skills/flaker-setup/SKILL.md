@@ -1,11 +1,17 @@
 ---
 name: flaker-setup
-description: Set up @mizchi/flaker on a new repository. Use when the user asks to introduce flaker, configure flaker.toml, integrate flaker into GitHub Actions, or "start using flaker on this project". Encodes the declarative apply-based onboarding flow for @mizchi/flaker 0.7.0+ (declarative apply model).
+description: Set up @mizchi/flaker on a new repository, or bring an existing flaker setup up to date. Use when the user asks to introduce flaker, configure flaker.toml, integrate flaker into GitHub Actions, "start using flaker on this project", or upgrade flaker — including when flaker fails after an upgrade with errors like "[profile.ci] was renamed to [gate.merge]", "was removed in 0.13.0", "unknown option '--profile'" or "unknown command 'ops'". Targets @mizchi/flaker 0.13.0+ (gate-based declarative apply model).
 ---
 
 # flaker setup skill
 
-`@mizchi/flaker` (0.7.0+) is a test-intelligence CLI with a declarative apply model: `flaker.toml` describes the desired state, and `flaker apply` reconciles the repo to that state by running `collect` / `calibrate` / `cold-start run` / `quarantine apply` in the right order based on current DB state and repo probe. Callers do not memorize the sequence.
+`@mizchi/flaker` (0.13.0) is a test-intelligence CLI with a declarative apply model: `flaker.toml` describes the desired state, and `flaker apply` reconciles the repo to that state by running its `collect_ci` / `calibrate` / `cold_start_run` / `quarantine_apply` actions in the right order based on current DB state and repo probe. Callers do not memorize the sequence.
+
+## Existing flaker setup? Upgrade first
+
+If the repository already has `flaker.toml`, or its CI already calls `flaker`, this is an upgrade, not a setup. Signs of a pre-0.13.0 setup: `[profile.*]` sections, `run --profile`, `FLAKER_PROFILE`, `apply --target` / `--emit`, `flaker ops|collect|analyze|policy|gate …`, `adaptive = true`, `strategy = "random"|"gbdt"|"coverage-guided"`.
+
+Read `${CLAUDE_PLUGIN_ROOT}/docs/agent-changelog.md` (GitHub: <https://github.com/mizchi/flaker/blob/main/docs/agent-changelog.md>) and follow it: it has a one-shot grep for every old form, the exact error lines with fixes, a rewrite map resolved to the current command, and a verify checklist. Fix config, env vars, workflows and `package.json` scripts together; a config that loads can still leave CI calling removed commands.
 
 **Always read the canonical checklist first.** It lives next to this skill in the plugin:
 
@@ -24,12 +30,12 @@ If both are unreachable, fall back to the procedure below.
 
 ## Mental model: desired state + reconciler
 
-1. User writes `flaker.toml` (gates, profiles, `[promotion]` thresholds, `[quarantine].auto`).
+1. User writes `flaker.toml` (`[gate.iteration|merge|release]`, `[promotion]` thresholds, `[quarantine].auto`).
 2. `flaker plan` shows what `apply` would do right now.
 3. `flaker apply` executes the plan (idempotent; safe to re-run).
 4. `flaker status` shows drift vs `[promotion]` thresholds.
 
-The Day 1 flow is `flaker init → flaker doctor → flaker apply → flaker status`. The deprecated imperative chain (`init → collect → calibrate → run`) still works via compat shims but is a migration-only concern — do not use it in new projects.
+The Day 1 flow is `flaker init → flaker doctor → flaker apply → flaker status`. The old imperative chain (`init → collect → calibrate → run`) no longer exists: `collect` was removed, one-off collection is `flaker import --ci`, and one-off calibration is `flaker calibrate`.
 
 ### Minimal declarative `flaker.toml`
 
@@ -55,19 +61,18 @@ auto = false              # Day 1 recommended: keep false until history accumula
 flaky_rate_threshold_percentage = 30
 min_runs = 10
 
-[profile.local]
+[gate.iteration]
 strategy = "affected"
 max_duration_seconds = 60
 fallback_strategy = "weighted"
 skip_flaky_tagged = true
 
-[profile.ci]
+[gate.merge]
 strategy = "hybrid"
 sample_percentage = 30
-adaptive = true
 skip_flaky_tagged = true
 
-[profile.scheduled]
+[gate.release]
 strategy = "full"
 
 # [promotion] is OPTIONAL — defaults (matched_commits_min=20, FNR<=5%, correlation>=95%,
@@ -78,7 +83,7 @@ strategy = "full"
 # data_confidence_min = "high"
 ```
 
-`flaker init` generates a starter toml including `[profile.*]` defaults; expect to edit `[affected].resolver` before the first `flaker apply`.
+`flaker init` generates a starter toml including `[gate.*]` defaults; expect to edit `[affected].resolver` before the first `flaker apply`. Recommend `flaker calibrate` once enough history has accumulated to write a tuned `[sampling]` block back to `flaker.toml` — it replaces the old manual `adaptive = true` toggle, which no longer exists.
 
 ## Decision points to confirm before touching files
 
@@ -115,7 +120,7 @@ node --version && pnpm --version && git remote -v && gh auth status
 # 1. install
 pnpm add -D @mizchi/flaker
 
-# 2. init (init now writes [profile.*] defaults)
+# 2. init (init now writes [gate.*] defaults)
 pnpm flaker init --adapter <adapter> --runner <runner>
 
 # 3. doctor
@@ -201,7 +206,9 @@ If the user wants to gate sooner, push back: empirically less than 20 matched co
 
 | Symptom | Cause | Fix |
 |---|---|---|
+| `flaker.toml uses removed or renamed keys` (exit 2) | Config from 0.12.x or earlier (`[profile.*]`, `adaptive*`, removed strategies) | Follow `docs/agent-changelog.md` → "Errors you will see"; each error line names the key |
 | `flaker.toml uses deprecated keys` | Config from 0.1.x or earlier | Apply rename table from `docs/how-to-use.md#config-migration` |
+| `unknown option '--profile'` / `unknown command 'ops'` in CI | Workflow written for 0.12.x or earlier | Rewrite with the Commands table in `docs/agent-changelog.md` |
 | `Config file not found` | Wrong cwd | `cd` to repo root containing `flaker.toml` |
 | `flaker apply` aborts with `GITHUB_TOKEN` missing | Planner included `collect_ci` but env var absent | `export GITHUB_TOKEN=$(gh auth token)` and re-run |
 | `actrun runner requires [runner.actrun] workflow` | Missing actrun config | Add `[runner.actrun] workflow = ".github/workflows/<file>.yml"` |
@@ -214,11 +221,11 @@ If the user wants to gate sooner, push back: empirically less than 20 matched co
 ## Anti-patterns
 
 - **Do not** edit config keys to old names ("looks cleaner") — the loader hard-fails on legacy keys.
-- **Do not** enable `[profile.ci] adaptive = true` until at least 30 commits of history exist. Adaptive sampling needs FNR data to converge.
+- **Do not** run `flaker calibrate` until at least 30 commits of history exist. The recommended `[sampling]` needs FNR data to converge; there is no `adaptive = true` toggle to fall back on — that key was removed in 0.13.0.
 - **Do not** set `holdout_ratio > 0.2` — wastes runner time.
-- **Do not** skip `flaker apply` and hand-tune `[sampling]` — the calibrated values outperform manual settings in 90% of cases.
+- **Do not** skip `flaker apply` / `flaker calibrate` and hand-tune `[sampling]` — the calibrated values outperform manual settings in 90% of cases.
 - **Do not** make the PR job required before `flaker status` drift reports `ready`.
-- **Do not** use deprecated aliases in new scripts — `setup init`, `exec run`, `collect ci`, `collect calibrate`, `analyze kpi`, `analyze eval`, `debug doctor`, `quarantine suggest/apply`, `policy quarantine/check/report`, `gate review/history/explain` all print deprecation warnings in 0.7.0 and will be removed in 0.8.0. Use the primary commands: `flaker init`, `flaker run`, `flaker apply`, `flaker status`, `flaker doctor`, `flaker explain`, `flaker query`, etc.
+- **Do not** reach for pre-0.13.0 command forms — `setup init`, `exec run`, `collect ci`, `collect calibrate`, `analyze kpi`, `analyze eval`, `debug doctor`, `quarantine suggest/apply`, `policy quarantine/check/report`, `gate review/history/explain`, and `ops <weekly|incident|daily>` no longer exist at all in 0.13.0 (not even as deprecated aliases). Use the primary commands: `flaker init`, `flaker run --gate <iteration|merge|release>`, `flaker apply`, `flaker status`, `flaker calibrate`, `flaker doctor`, `flaker explain <reason|insights|cluster|bundle|context>`, `flaker debug <retry|confirm|bisect|diagnose>`, `flaker query`, etc.
 
 ## Reference docs (in this plugin)
 
@@ -230,4 +237,5 @@ All paths relative to `${CLAUDE_PLUGIN_ROOT}` of the installed plugin, or in the
 - `docs/operations-guide.ja.md` / `docs/operations-guide.md` — maintainer / CI owner entrypoint
 - `docs/how-to-use.md` / `docs/how-to-use.ja.md` — full command reference including the `flaker plan` / `flaker apply` chapter and `#config-migration` table
 - `docs/contributing.md` — sibling dogfood, MoonBit/TS fallback, build internals
+- `docs/agent-changelog.md` — upgrade guide for agents: old form → current form, error → fix, verify checklist
 - `CHANGELOG.md` — version history, breaking changes per release

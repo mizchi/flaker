@@ -27,13 +27,13 @@ command = "pnpm exec vitest run"
 resolver = "workspace"
 
 [sampling]
-strategy = "random"
+strategy = "weighted"
 sample_percentage = 30
 `);
       const cliPath = join(process.cwd(), "dist/cli/main.js");
       // Should succeed and not attempt to run any tests
       const out = execSync(
-        `node ${cliPath} run --dry-run --strategy random --count 0`,
+        `node ${cliPath} run --dry-run --strategy weighted --count 0`,
         { cwd: dir, encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"] },
       );
       expect(typeof out).toBe("string");

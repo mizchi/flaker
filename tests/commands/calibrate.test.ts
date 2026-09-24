@@ -1,19 +1,19 @@
 import { describe, it, expect } from "vitest";
-import { recommendSampling, type ProjectProfile } from "../../src/cli/commands/collect/calibrate.js";
-import { writeSamplingConfig, loadConfig, type SamplingConfig } from "../../src/cli/config.js";
+import { calibrateSampling, recommendSampling, type ProjectProfile } from "../../src/cli/commands/collect/calibrate.js";
+import { writeSamplingConfig, loadConfig, type FlakerConfig, type SamplingConfig } from "../../src/cli/config.js";
+import type { MetricStore } from "../../src/cli/storage/types.js";
 import { writeFileSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 describe("recommendSampling", () => {
-  it("recommends random for small test suites", () => {
+  it("recommends hybrid for small test suites with a resolver", () => {
     const profile: ProjectProfile = {
       testCount: 30,
       flakyRate: 0.05,
       coFailureStrength: 0.5,
       commitCount: 100,
       hasResolver: true,
-      hasGBDTModel: false,
       trueFlakyRate: 0.05,
       hasCoFailureData: false,
       brokenTestCount: 0,
@@ -21,7 +21,24 @@ describe("recommendSampling", () => {
       confidence: "moderate" as const,
     };
     const result = recommendSampling(profile);
-    expect(result.strategy).toBe("random");
+    expect(result.strategy).toBe("hybrid");
+  });
+
+  it("recommends weighted for small test suites without a resolver", () => {
+    const profile: ProjectProfile = {
+      testCount: 30,
+      flakyRate: 0.05,
+      coFailureStrength: 0.5,
+      commitCount: 100,
+      hasResolver: false,
+      trueFlakyRate: 0.05,
+      hasCoFailureData: false,
+      brokenTestCount: 0,
+      intermittentFlakyCount: 0,
+      confidence: "moderate" as const,
+    };
+    const result = recommendSampling(profile);
+    expect(result.strategy).toBe("weighted");
   });
 
   it("recommends hybrid for low flaky rate with resolver", () => {
@@ -31,7 +48,6 @@ describe("recommendSampling", () => {
       coFailureStrength: 0.7,
       commitCount: 100,
       hasResolver: true,
-      hasGBDTModel: false,
       trueFlakyRate: 0.05,
       hasCoFailureData: false,
       brokenTestCount: 0,
@@ -44,7 +60,7 @@ describe("recommendSampling", () => {
     expect(result.holdout_ratio).toBe(0.1);
   });
 
-  it("recommends gbdt for high flaky rate with model and history", () => {
+  it("recommends weighted for high flaky rate without a resolver", () => {
     const profile: ProjectProfile = {
       testCount: 500,
       flakyRate: 0.25,
@@ -53,25 +69,23 @@ describe("recommendSampling", () => {
       hasCoFailureData: true,
       commitCount: 200,
       hasResolver: false,
-      hasGBDTModel: true,
       brokenTestCount: 0,
       intermittentFlakyCount: 125,
       confidence: "high" as const,
     };
     const result = recommendSampling(profile);
-    expect(result.strategy).toBe("gbdt");
+    expect(result.strategy).toBe("weighted");
     expect(result.sample_percentage).toBe(20);
     expect(result.co_failure_window_days).toBe(60); // shorter window for high flaky
   });
 
-  it("recommends weighted when no resolver or model", () => {
+  it("recommends weighted when no resolver", () => {
     const profile: ProjectProfile = {
       testCount: 200,
       flakyRate: 0.1,
       coFailureStrength: 0.5,
       commitCount: 50,
       hasResolver: false,
-      hasGBDTModel: false,
       trueFlakyRate: 0.05,
       hasCoFailureData: false,
       brokenTestCount: 0,
@@ -82,14 +96,13 @@ describe("recommendSampling", () => {
     expect(result.strategy).toBe("weighted");
   });
 
-  it("recommends hybrid for high flaky with resolver but no model", () => {
+  it("recommends hybrid for high flaky with resolver", () => {
     const profile: ProjectProfile = {
       testCount: 300,
       flakyRate: 0.3,
       coFailureStrength: 0.8,
       commitCount: 200,
       hasResolver: true,
-      hasGBDTModel: false,
       trueFlakyRate: 0.05,
       hasCoFailureData: false,
       brokenTestCount: 0,
@@ -107,7 +120,6 @@ describe("recommendSampling", () => {
       coFailureStrength: 0.5,
       commitCount: 50,
       hasResolver: true,
-      hasGBDTModel: false,
       trueFlakyRate: 0.05,
       hasCoFailureData: false,
       brokenTestCount: 0,
@@ -116,6 +128,51 @@ describe("recommendSampling", () => {
     };
     const result = recommendSampling(profile);
     expect(result.calibrated_at).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+function makeFakeStore(): MetricStore {
+  return {
+    raw: async <T>(): Promise<T[]> => [],
+  } as unknown as MetricStore;
+}
+
+function makeConfig(resolver: string): FlakerConfig {
+  return {
+    repo: { owner: "a", name: "b" },
+    storage: { path: ".flaker/data" },
+    adapter: { type: "playwright" },
+    runner: { type: "vitest", command: "pnpm test" },
+    affected: { resolver, config: "" },
+    quarantine: { auto: true, flaky_rate_threshold_percentage: 30, min_runs: 5 },
+    flaky: { window_days: 14, detection_threshold_ratio: 0.02 },
+    promotion: {
+      matched_commits_min: 20,
+      false_negative_rate_max_percentage: 5,
+      pass_correlation_min_percentage: 95,
+      holdout_fnr_max_percentage: 10,
+      data_confidence_min: "moderate",
+    },
+  };
+}
+
+describe("calibrateSampling", () => {
+  it("recommends weighted when [affected].resolver is empty", async () => {
+    const result = await calibrateSampling(makeFakeStore(), makeConfig(""));
+    expect(result.sampling.strategy).toBe("weighted");
+    expect(result.profile.hasResolver).toBe(false);
+  });
+
+  it('recommends weighted when [affected].resolver is "none"', async () => {
+    const result = await calibrateSampling(makeFakeStore(), makeConfig("none"));
+    expect(result.sampling.strategy).toBe("weighted");
+    expect(result.profile.hasResolver).toBe(false);
+  });
+
+  it("recommends hybrid when a resolver is configured", async () => {
+    const result = await calibrateSampling(makeFakeStore(), makeConfig("git"));
+    expect(result.sampling.strategy).toBe("hybrid");
+    expect(result.profile.hasResolver).toBe(true);
   });
 });
 
@@ -135,7 +192,6 @@ describe("writeSamplingConfig", () => {
       strategy: "hybrid",
       sample_percentage: 20,
       holdout_ratio: 0.1,
-      cluster_mode: "spread",
     };
     writeSamplingConfig(d, sampling);
     const content = readFileSync(join(d, "flaker.toml"), "utf-8");
@@ -143,7 +199,6 @@ describe("writeSamplingConfig", () => {
     expect(content).toContain('strategy = "hybrid"');
     expect(content).toContain('sample_percentage = 20');
     expect(content).toContain('holdout_ratio = 0.1');
-    expect(content).toContain('cluster_mode = "spread"');
     // Original content preserved
     expect(content).toContain('[repo]');
     expect(content).toContain('owner = "test"');
@@ -152,17 +207,17 @@ describe("writeSamplingConfig", () => {
 
   it("replaces existing [sampling] section", () => {
     const d = setup(
-      `[repo]\nowner = "test"\nname = "repo"\n\n[sampling]\nstrategy = "random"\npercentage = 50\n\n[runner]\ntype = "direct"\n`,
+      `[repo]\nowner = "test"\nname = "repo"\n\n[sampling]\nstrategy = "affected"\npercentage = 50\n\n[runner]\ntype = "direct"\n`,
     );
     const sampling: SamplingConfig = {
-      strategy: "gbdt",
+      strategy: "weighted",
       sample_percentage: 30,
     };
     writeSamplingConfig(d, sampling);
     const content = readFileSync(join(d, "flaker.toml"), "utf-8");
-    expect(content).toContain('strategy = "gbdt"');
+    expect(content).toContain('strategy = "weighted"');
     expect(content).toContain('sample_percentage = 30');
-    expect(content).not.toContain('strategy = "random"');
+    expect(content).not.toContain('strategy = "affected"');
     expect(content).not.toContain('sample_percentage = 50');
     // Other sections preserved
     expect(content).toContain('[repo]');
@@ -177,7 +232,7 @@ describe("resolveSamplingOpts integration", () => {
     mkdirSync(dir, { recursive: true });
     writeFileSync(
       join(dir, "flaker.toml"),
-      `[repo]\nowner = "test"\nname = "repo"\n\n[sampling]\nstrategy = "hybrid"\nsample_percentage = 25\nholdout_ratio = 0.05\nco_failure_window_days = 60\ncluster_mode = "pack"\n`,
+      `[repo]\nowner = "test"\nname = "repo"\n\n[sampling]\nstrategy = "hybrid"\nsample_percentage = 25\nholdout_ratio = 0.05\nco_failure_window_days = 60\n`,
       "utf-8",
     );
     const config = loadConfig(dir);
@@ -186,7 +241,6 @@ describe("resolveSamplingOpts integration", () => {
     expect(config.sampling!.sample_percentage).toBe(25);
     expect(config.sampling!.holdout_ratio).toBe(0.05);
     expect(config.sampling!.co_failure_window_days).toBe(60);
-    expect(config.sampling!.cluster_mode).toBe("pack");
     rmSync(dir, { recursive: true, force: true });
   });
 });

@@ -15,4 +15,3 @@ pub fn summarize_report(Array[@contracts.ReportSummaryTestInput]) -> @contracts.
 // Type aliases
 
 // Traits
-

@@ -14,6 +14,8 @@
 
 まだ導入していない場合は [new-project-checklist.ja.md](new-project-checklist.ja.md) から始める。
 
+`0.12.x` 以前で運用していた場合は先に [migration-0.12-to-0.13.ja.md](migration-0.12-to-0.13.ja.md) を見る — `ops` コマンド群は廃止され、gate が profile を置き換えた。
+
 ## 対象読者
 
 - repo maintainer
@@ -34,46 +36,42 @@
 
 ほとんどのチームは 3 つで足りる。
 
-| Gate | Backing profile | 役割 |
+| Gate | Config section | 役割 |
 |---|---|---|
-| `iteration` | `local` | 開発者の高速フィードバック |
-| `merge` | `ci` | PR / mainline の gate |
-| `release` | `scheduled` | full あるいはそれに近い厳密確認 |
+| `iteration` | `[gate.iteration]` | 開発者の高速フィードバック |
+| `merge` | `[gate.merge]` | PR / mainline の gate |
+| `release` | `[gate.release]` | full あるいはそれに近い厳密確認 |
 
 ## 運用 loop
 
 ### Observation loop
 
-- `flaker apply` (history collect + calibrate を内包)
-- `flaker apply --emit daily --output .artifacts/flaker-daily.md` (release gate の日次 snapshot、`ops daily` の canonical 置換)
+- `flaker apply` (`GITHUB_TOKEN` があれば history import + calibrate を内包)
 - `flaker status`
-
-> 0.9.0 で `flaker ops daily` は deprecated。`flaker apply --emit daily` が同じ artifact を生成する。`ops weekly` / `ops incident` は operator narrative を含むため first-class 継続。
 
 役割:
 
 - history を増やす
-- release gate の日次 snapshot を残す
+- `flaker.toml` に repo を収束させる
 - gate の信頼度を測る
 
 ### Triage loop
 
-- `flaker status --gate merge --detail` (primary signal; drift を読む)
-- `flaker ops weekly`
-- `flaker apply` (`[quarantine].auto=true` なら suggest + apply を内包)
+- `flaker status --gate merge --detail --json` (primary signal; drift を読む)
+- `flaker status --markdown` + `flaker explain insights`
+- `flaker apply` (`[quarantine].auto=true` なら自動で隔離)
 - 週次の promote / keep / demote review
 
 役割:
 
 - flaky を gate から隔離する
 - promote / keep / demote の判断を artifact に残す
-- review 済みの quarantine plan だけを適用する
+- `flaker.toml` から宣言的に quarantine を適用する
 - required check の信頼を保つ
 
 ### Incident loop
 
-- `flaker ops incident`
-- 必要なら `flaker debug retry / confirm / diagnose`
+- `flaker debug retry` / `flaker debug confirm` / `flaker debug diagnose`
 
 役割:
 
@@ -82,18 +80,18 @@
 
 ## 推奨 cadence
 
+`ops` コマンド群と `apply --emit` は 0.13.0 で削除された。以下は `apply` + `status` + `explain` を直接使う ([migration-0.12-to-0.13.ja.md](migration-0.12-to-0.13.ja.md) 参照)。
+
 ### 毎日
 
 ```bash
 mkdir -p .artifacts
 export GITHUB_TOKEN=$(gh auth token)
-pnpm flaker apply --emit daily --output .artifacts/flaker-daily.md
-pnpm flaker status
+pnpm flaker apply --json --output .artifacts/flaker-daily.json
+pnpm flaker status --markdown > .artifacts/flaker-daily.md
 ```
 
-`flaker apply` が `flaker.toml` を desired state として現状を収束させ (collect / calibrate / quarantine apply を idempotent に内包)、`flaker status` で drift と health を 1 画面で確認する。何が走るか事前に見たい場合は `flaker plan`。
-
-`--emit daily` は従来の `flaker ops daily` と同じ内容の cadence artifact を出力する (0.9.0 で統合)。`--output <file>` は `PlanArtifact` / `ApplyArtifact` を JSON で保存し、agent や CI の下流コンシューマから機械的に読める。
+`flaker apply` が `flaker.toml` を desired state として現状を収束させ (import --ci / calibrate / quarantine apply を idempotent に内包)、`flaker status` で drift と health を 1 画面で確認する。何が走るか事前に見たい場合は `flaker plan`。
 
 ### 毎週
 
@@ -101,7 +99,7 @@ pnpm flaker status
 mkdir -p .artifacts
 pnpm flaker status --markdown > .artifacts/flaker-status.md
 pnpm flaker status --gate merge --detail --json > .artifacts/merge-gate.json
-pnpm flaker ops weekly --output .artifacts/flaker-weekly.md
+pnpm flaker explain insights --json > .artifacts/flaker-insights.json
 ```
 
 次を見て `promote / keep / demote` を決める。
@@ -111,28 +109,29 @@ pnpm flaker ops weekly --output .artifacts/flaker-weekly.md
 - `pass correlation`
 - `holdout FNR`
 - `data confidence`
-- `flaky` / `quarantined` test 数
+- `flaky` / `quarantined` test 数 (`flaker status --list flaky` / `--list quarantined`)
 
-primary signal は `flaker status` の drift セクション (`ready` / `not ready`)。詳細数値が必要なら `flaker status --gate merge --detail --json` を authoritative metric として使う。従来の `flaker gate review merge --json` は 0.7.0 で deprecated (0.8.0 で削除予定)、同じ情報が `--gate merge --detail --json` で取れる。
+primary signal は `flaker status` の drift セクション (`ready` / `not ready`)。詳細数値が必要なら `flaker status --gate merge --detail --json` を authoritative metric として使う。
 
 ### 失敗時
 
 ```bash
-pnpm flaker ops incident --run <workflow-run-id> --output .artifacts/flaker-incident.md
-pnpm flaker ops incident --suite path/to/spec.ts --test "test name" --output .artifacts/flaker-incident.md
+pnpm flaker debug retry --run <workflow-run-id>
+pnpm flaker debug confirm "path/to/spec.ts:test name" --repeat 10
+pnpm flaker debug diagnose --suite path/to/spec.ts --test "test name"
 ```
 
 より細かい切り分けが必要なときだけ `flaker debug retry / confirm / diagnose` に降りる。
 
 ## 昇格・降格の目安
 
-`merge` gate を required に上げる前に、**次の 5 項目を全て満たす**。値は `flaker gate review merge --json` で確認する (昇格判断の一次ソース。`flaker status` は summary 専用で昇格判断には使わない)。
+`merge` gate を required に上げる前に、**次の 5 項目を全て満たす**。値は `flaker status --gate merge --detail --json` で確認する (昇格判断の一次ソース。`flaker status` は summary 専用で昇格判断には使わない)。
 
 - `matched commits >= 20` — `merge` gate 実行と release/full 実行の両方が揃ったコミット数。nightly `--gate release` の積み上げで増える。
 - `false negative rate <= 5%` — matched commit のうち「`merge` gate は pass、full 実行は fail」の割合。つまり sampling が regression を見落とした比率。
 - `pass correlation >= 95%` — `P(full run passes | merge gate passes)`。README 他所で `P(CI pass | local pass)` と呼んでいるものと同じ。
 - `holdout FNR <= 10%` — `[sampling] holdout_ratio` で取り分けた holdout 集合に対する FNR。holdout は sampling 対象から除外しておき、その結果で「sampler が見ていない領域でも判断が再現するか」を監査する。sampler の overfit 検知用。
-- `data confidence` が `moderate` 以上 — matched commit 数 / 履歴 window / flaky ノイズ水準から算出される合成シグナル。大まかな目安は `low` = 10 matched commit 未満、`moderate` = 20–40 で FNR / correlation 緑、`high` = 40 超でノイズ安定。厳密な境界は `gate review merge` 出力側に従う。
+- `data confidence` が `moderate` 以上 — matched commit 数 / 履歴 window / flaky ノイズ水準から算出される合成シグナル。大まかな目安は `low` = 10 matched commit 未満、`moderate` = 20–40 で FNR / correlation 緑、`high` = 40 超でノイズ安定。厳密な境界は `flaker status --gate merge --detail --json` 出力側に従う。
 
 逆に次のどれかなら advisory または quarantine に戻す。
 

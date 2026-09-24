@@ -154,56 +154,56 @@ strategy = "hybrid"
 sample_percentage = 30
 holdout_ratio = 0.1
 
-[profile.scheduled]
+[gate.release]
 strategy = "full"
 
-[profile.ci]
+[gate.merge]
 strategy = "hybrid"
 sample_percentage = 30
-adaptive = true
 
-[profile.local]
+[gate.iteration]
 strategy = "affected"
 max_duration_seconds = 60
 ```
 
-## 実行プロファイル
+## 実行 gate
 
-flaker は実行環境に応じて自動的にテスト戦略を切り替えます。
+flaker は実行環境に応じて自動的にテスト戦略を切り替えます（0.13.0 以降、`profile` は `gate` に置き換わりました。`adaptive` キーは削除され、代わりに `flaker calibrate` を定期実行します）。
 
-| プロファイル | 用途 | 戦略 | 自動検出 |
+| gate | 用途 | 戦略 | 自動検出 |
 |------------|------|------|---------|
-| `scheduled` | 全テスト実行、データ蓄積 | `full` | `--profile scheduled` で明示指定 |
-| `ci` | PR の選択的テスト | `hybrid` + adaptive | `CI=true` で自動 |
-| `local` | 開発中の高速フィードバック | `affected` + 時間制約 | デフォルト |
+| `release` | 全テスト実行、データ蓄積 | `full` | `--gate release` で明示指定 |
+| `merge` | PR の選択的テスト | `hybrid` | `CI=true` で自動 |
+| `iteration` | 開発中の高速フィードバック | `affected` + 時間制約 | デフォルト |
 
-データの流れ: scheduled でデータ蓄積 → CI がその履歴で精度の高いサンプリング → ローカルは依存グラフで高速フィードバック
+データの流れ: release でデータ蓄積 → merge がその履歴で精度の高いサンプリング → iteration は依存グラフで高速フィードバック
 
 ```bash
-# 自動検出（CI なら ci、それ以外は local）
+# 自動検出（CI なら merge、それ以外は iteration）
 flaker run
 
 # 明示指定
-flaker run --profile scheduled
-flaker run --profile ci
-flaker run --profile local
+flaker run --gate release
+flaker run --gate merge
+flaker run --gate iteration
 ```
 
 設定例:
 
 ```toml
-[profile.scheduled]
+[gate.release]
 strategy = "full"
 
-[profile.ci]
+[gate.merge]
 strategy = "hybrid"
 sample_percentage = 30
-adaptive = true          # KPI に基づいて sample_percentage を動的に調整
 
-[profile.local]
+[gate.iteration]
 strategy = "affected"
 max_duration_seconds = 60  # 時間制約内で優先度の高いテストを選択
 ```
+
+`adaptive = true` のような adaptive sampling のキーは 0.13.0 で削除されました。代わりにプロジェクト特性が変わるたびに `flaker calibrate` を実行してください。詳細は [migration-0.12-to-0.13.ja.md](migration-0.12-to-0.13.ja.md) を参照。
 
 ## もっと深く使うには
 

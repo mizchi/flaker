@@ -1,10 +1,34 @@
 # Changelog
 
-## Unreleased
+## 0.13.0
+
+### Breaking
+
+- `run --profile`, `[profile.*]` and `FLAKER_PROFILE` are replaced by `run --gate`, `[gate.iteration|merge|release]` and `FLAKER_GATE`.
+- Removed the `random`, `gbdt` and `coverage-guided` strategies, `cluster_mode`, `model_path`, `[coverage]` and `dev train`.
+- Removed adaptive sampling (`adaptive*` keys).
+- `apply` only reconciles: `--emit`, `--target` and `--incident-*` are gone, and so is the `ops` group.
+- `dev` is hidden from the help.
+- `flaker calibrate` now recommends `hybrid` when `[affected].resolver` is configured and `weighted` otherwise; it no longer recommends `random` for small suites or `gbdt` for large ones.
+- `flaker explain context --json` no longer lists the `random` / `coverage-guided` / `gbdt` strategies in its `strategies` map and drops `environment.gbdtModelAvailable`.
+- `ApplyArtifact` JSON no longer has a top-level `emitted` field.
+
+### Fixed
+
+- `affected` and `hybrid` no longer throw `requires resolver and changedFiles` when there are no changed files (a clean checkout, a scheduled run). `affected` selects nothing and uses `fallback_strategy`; `hybrid` samples by weight. This broke `flaker apply`'s cold-start run and `run --gate iteration` on clean trees, and `run --gate merge --changed ""` on empty-diff PRs (#90).
+- `flaker doctor` suggested `flaker init` for every config failure; it now suggests it only when `flaker.toml` is missing and points at the migration guide for removed or renamed keys.
+- Config migration errors (removed keys, `FLAKER_PROFILE`, unknown gate or strategy) print once, without a stack trace, and exit 2.
+- The `parquet_export` MoonBit tests compile again on current moon toolchains, so `pnpm test` no longer fails in its global setup.
+- `run` warns when the runner cannot list tests (the vitest runner now reports `vitest list`'s exit code and stderr) instead of silently planning from stored history, and `import --ci` warns when it imports nothing. Both failures had left the self-host nightly empty for months (#75).
 
 ### Added
 
-- `flaker explain cluster --workflow <name> | --lane <name> | --tag k=v` (#74). Co-failure clustering can now be narrowed to a specific GitHub Actions workflow, lane, or arbitrary tag, reducing the same-batch / same-workflow bias that inflates clusters when tests are always observed together in fixed cohorts. Three new optional columns on `workflow_runs` (`workflow_name`, `lane`, `tags JSON`) are populated automatically from the GitHub API at `flaker apply --target collect_ci` time. A new optional `[workflow_lanes]` map in `flaker.toml` resolves `workflow_name → lane`. `flaker import` gains symmetric `--workflow-name <name>`, `--lane <name>`, and repeatable `--tag k=v` flags so locally-imported reports can also be tagged. Filters are AND-combined; backwards compatible (no filter = previous behaviour).
+- `flaker calibrate` (was `apply --target calibrate`).
+- `flaker import --ci [--days <n>]` (was `apply --target collect_ci`).
+- `docs/agent-changelog.md`: an upgrade guide for coding agents (old form → current form, error line → fix, one-shot grep, verify checklist). The `flaker-setup` and `flaker-management` skills (plugin 0.4.0) now trigger on upgrade errors and route there.
+- `flaker explain cluster --workflow <name> | --lane <name> | --tag k=v` (#74). Co-failure clustering can now be narrowed to a specific GitHub Actions workflow, lane, or arbitrary tag, reducing the same-batch / same-workflow bias that inflates clusters when tests are always observed together in fixed cohorts. Three new optional columns on `workflow_runs` (`workflow_name`, `lane`, `tags JSON`) are populated automatically from the GitHub API at `flaker import --ci` time. A new optional `[workflow_lanes]` map in `flaker.toml` resolves `workflow_name → lane`. `flaker import` gains symmetric `--workflow-name <name>`, `--lane <name>`, and repeatable `--tag k=v` flags so locally-imported reports can also be tagged. Filters are AND-combined; backwards compatible (no filter = previous behaviour).
+
+See docs/migration-0.12-to-0.13.md.
 
 ## 0.12.0
 

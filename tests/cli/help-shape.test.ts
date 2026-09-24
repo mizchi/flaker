@@ -17,8 +17,8 @@ describe("flaker --help", () => {
     expect(top).toContain("Primary commands:");
   });
 
-  it("contains Advanced section", () => {
-    expect(top).toContain("Advanced:");
+  it("no longer contains an Advanced section (dev folded into hidden dev in 0.13.0)", () => {
+    expect(top).not.toContain("Advanced:");
   });
 
   it("no longer contains Deprecated section (removed in 0.8.0)", () => {
@@ -26,7 +26,8 @@ describe("flaker --help", () => {
   });
 
   // setup, exec, collect, policy categories removed in 0.8.0 — checks dropped.
-  for (const category of ["import", "report", "analyze", "debug", "dev"]) {
+  // analyze was never a top-level category; dev is hidden in 0.13.0 — both dropped from this loop.
+  for (const category of ["import", "report", "debug"]) {
     it(`lists ${category} category`, () => {
       expect(top).toContain(category);
     });

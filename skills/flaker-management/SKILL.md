@@ -1,6 +1,6 @@
 ---
 name: flaker-management
-description: Operate @mizchi/flaker after setup. Use when the user asks how to run flaker day-to-day, review sampling and flaky metrics, design advisory vs required CI gates, promote or demote Playwright E2E or VRT checks, tune PR time budgets, run nightly triage, or manage quarantine and `@flaky` tags in an OSS repository. Targets @mizchi/flaker 0.7.0+ (declarative apply model).
+description: Operate @mizchi/flaker after setup. Use when the user asks how to run flaker day-to-day, review sampling and flaky metrics, design advisory vs required CI gates, promote or demote Playwright E2E or VRT checks, tune PR time budgets, run nightly review, or manage quarantine and `@flaky` tags in an OSS repository. Also use when existing flaker CI or scripts break after upgrading flaker (e.g. `unknown command 'ops'`, `unknown option '--target'`, `[profile.ci] was renamed to [gate.merge]`). Targets @mizchi/flaker 0.13.0+ (gate-based declarative apply model).
 ---
 
 # flaker management skill
@@ -14,6 +14,12 @@ description: Operate @mizchi/flaker after setup. Use when the user asks how to r
 
 If the repository does not have `flaker.toml` and no CI lane yet, use `flaker-setup` first.
 
+## Upgrading an existing setup comes first
+
+If the existing setup predates 0.13.0, migrate it before giving any operating advice. Signs: `[profile.*]` sections, `run --profile`, `FLAKER_PROFILE`, `apply --target|--emit`, `flaker ops …`, `analyze`/`collect`/`policy`/`gate` subcommands, `adaptive = true`, or an error such as `flaker.toml uses removed or renamed keys`, `unknown option '--profile'`, `unknown command 'ops'`.
+
+Read `../../docs/agent-changelog.md` (GitHub: <https://github.com/mizchi/flaker/blob/main/docs/agent-changelog.md>). It has a one-shot grep for every old form, the exact error lines with fixes, a rewrite map resolved to the current command, and a verify checklist. Apply it to `flaker.toml`, workflows and scripts together, then run the checklist.
+
 ## When this skill applies
 
 - "flaker の運用方法を決めたい"
@@ -25,8 +31,8 @@ If the repository does not have `flaker.toml` and no CI lane yet, use `flaker-se
 
 ## Mental model: apply + drift
 
-- `flaker.toml` is the **desired state** (gates, profiles, `[promotion]` thresholds, `[quarantine].auto`).
-- `flaker apply` is the **reconciler** — idempotent; safe to run hourly/daily/on-demand. It auto-runs `collect` / `calibrate` / `quarantine apply` as needed based on current DB state.
+- `flaker.toml` is the **desired state** (`[gate.iteration|merge|release]`, `[promotion]` thresholds, `[quarantine].auto`).
+- `flaker apply` is the **reconciler** — idempotent; safe to run hourly/daily/on-demand. It auto-runs `collect_ci` / `calibrate` / `cold_start_run` / `quarantine_apply` as needed based on current DB state. It is reconcile-only: there is no `--emit`, `--target`, or `--incident-*` flag anymore, so ad-hoc one-off actions go through `import`, `run`, `debug`, or `status` instead.
 - `flaker status` is the **drift detector** — reports which `[promotion]` thresholds are unmet, so promotion readiness is a boolean (`ready` / `not ready`), not a judgement call.
 
 The canonical daily loop is:
@@ -50,7 +56,7 @@ flaker apply && flaker status
 - current GitHub Actions topology: `pull_request`, `push`, `schedule`
 - latest `flaker status` output (drift + activity + health in one page)
 - `flaker status --gate merge --detail --json` when you need exact promotion metrics
-- `flaker ops weekly` for quarantine / flaky trend bundles
+- `flaker status --markdown` plus `flaker explain insights` for quarantine / flaky trend review (the old `flaker ops weekly` bundle was removed; these two commands replace it)
 - whether `@flaky` tagging or quarantine manifest is already in use
 - current PR runtime budget
 - whether the focus is generic CI health, or specifically Playwright E2E / VRT
@@ -73,7 +79,7 @@ When applying this skill, return:
 - Keep a full scheduled lane even after PR gating starts.
 - For AI-generated code, require a short per-test contract so visual checks encode intent, not just pixels.
 - Do not promote `--gate merge` to required until `flaker status` drift reports `ready`.
-- Do not use deprecated aliases in new scripts — `analyze kpi`, `analyze eval`, `collect ci`, `debug doctor`, `quarantine suggest/apply`, `gate review/history/explain` all print deprecation warnings in 0.7.0 and will be removed in 0.8.0. Use the primary commands instead.
+- Do not reach for pre-0.13.0 command forms in new scripts — `analyze kpi`, `analyze eval`, `collect ci`, `debug doctor`, `quarantine suggest/apply`, `gate review/history/explain`, and the whole `ops` group (`ops weekly`, `ops incident`, `ops daily`) no longer exist at all in 0.13.0, not even as deprecated aliases. Use the primary commands instead.
 
 ## flaker commands to prefer
 
@@ -82,21 +88,19 @@ When applying this skill, return:
 flaker apply
 flaker status
 
-# Weekly operator review
+# Weekly operator review (replaces the removed `flaker ops weekly` bundle)
 flaker status --markdown > .artifacts/status-weekly.md
-flaker ops weekly --output .artifacts/flaker-weekly.md
+flaker explain insights > .artifacts/flaker-weekly-insights.md
 flaker status --gate merge --detail --json > .artifacts/merge-gate.json
 
-# Promotion snapshot (authoritative metrics)
-flaker gate review merge --json > .artifacts/gate-review-merge.json  # DEPRECATED in 0.7.0; use status --gate merge --detail --json
-
-# Incident
+# Incident (replaces the removed `flaker ops incident` bundle)
 flaker debug retry
 flaker debug confirm "<suite>:<test>" --repeat 10
 flaker debug bisect --test "<name>"
+flaker debug diagnose --suite "<suite>" --test "<name>"
 ```
 
-Note: `ops daily / weekly / incident` are still first-class primary commands — apply does NOT emit the daily artifact yet. Use them directly.
+Note: the `ops` group (daily / weekly / incident) was removed entirely in 0.13.0. `flaker apply && flaker status` is the daily bundle, `flaker status --markdown` + `flaker explain insights` is the weekly bundle, and `flaker debug retry|confirm|diagnose` is the incident bundle — call these directly instead of looking for an `ops` wrapper.
 
 ## Promotion / demotion decision rule
 
@@ -117,7 +121,8 @@ Demote back to advisory when ANY of the following holds for 1+ week:
 
 ## Anti-patterns
 
-- Using raw `flaker collect ci` / `flaker collect calibrate` (deprecated in 0.7.0) in daily cron when `flaker apply` already handles the ordering and idempotency.
-- Using `flaker analyze kpi` (deprecated) instead of `flaker status`, or `flaker analyze eval --markdown` (deprecated) instead of `flaker status --markdown`.
-- Basing promotion on `flaker status` numbers alone when they look close — `flaker status --gate merge --detail --json` is the authoritative source for exact values (the deprecated `flaker gate review merge --json` form also still works with a stderr warning).
+- Calling `flaker import --ci` by hand in daily cron instead of `flaker apply` — `apply` already handles the ordering (`collect_ci` → `calibrate` → `cold_start_run` → `quarantine_apply`) and idempotency; only reach for `import --ci --days <n>` directly when you need a one-off backfill outside the reconcile loop.
+- Looking for `flaker analyze kpi` or `flaker analyze eval` — both are gone; use `flaker status` and `flaker status --markdown` instead.
+- Looking for `flaker ops weekly` / `flaker ops incident` — the `ops` group is gone; use `flaker status --markdown` + `flaker explain insights` for the weekly bundle, and `flaker debug retry|confirm|diagnose` for incidents.
+- Basing promotion on `flaker status` numbers alone when they look close — `flaker status --gate merge --detail --json` is the authoritative source for exact values.
 - Ignoring `flaker status` drift `holdout_fnr` when `holdout_ratio = 0`; if holdout isn't configured, the threshold cannot be evaluated and drift treats it as unmet. Either configure `[sampling].holdout_ratio` or accept that holdout FNR will gate promotion.

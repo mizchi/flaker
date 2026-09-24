@@ -3,7 +3,7 @@ import {
   planSample,
   type SamplingSummary,
 } from "./plan.js";
-import type { ClusterSamplingMode, SamplingMode } from "./sampling-options.js";
+import type { SamplingMode } from "./sampling-options.js";
 import type { QuarantineManifestEntry } from "../../quarantine-manifest.js";
 import type { DependencyResolver } from "../../resolvers/types.js";
 import {
@@ -37,7 +37,6 @@ export interface RunOpts {
   holdoutRatio?: number;
   dryRun?: boolean;
   explain?: boolean;
-  clusterMode?: ClusterSamplingMode;
 }
 
 export interface RunCommandResult extends ExecuteResult {
@@ -80,7 +79,11 @@ async function loadListedTests(
 ): Promise<TestId[]> {
   try {
     return await runner.listTests({ cwd });
-  } catch {
+  } catch (error) {
+    // Planning can still proceed from stored history, but a silent empty list
+    // hid a broken runner for weeks (issue #75), so say so.
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`warning: runner could not list tests; planning from stored history only (${message})\n`);
     return [];
   }
 }
@@ -171,7 +174,6 @@ export async function runTests(opts: RunOpts): Promise<RunCommandResult> {
     listedTests,
     coFailureDays: opts.coFailureDays,
     holdoutRatio: opts.holdoutRatio,
-    clusterMode: opts.clusterMode,
   });
   const tests = enrichSampledTests(plan.sampled, listedTests);
   const holdoutTests = enrichSampledTests(plan.holdout, listedTests);

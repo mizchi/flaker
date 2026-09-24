@@ -1,5 +1,7 @@
 # サンプリング戦略評価レポート
 
+> **過去の記録として保持しているドキュメント。** 以下で評価している `random` / `gbdt` / `coverage-guided` 戦略は flaker 0.13.0 で削除された（[migration-0.12-to-0.13.ja.md](migration-0.12-to-0.13.ja.md) 参照）。本レポートは歴史的資料として残しており、現行の戦略は `weighted` / `affected` / `hybrid` / `full` である。
+
 ## 概要
 
 flaker が提供する6つのサンプリング戦略を合成フィクスチャデータで定量評価した。

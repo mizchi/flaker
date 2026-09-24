@@ -14,7 +14,7 @@
 
 - PR budget: `10分`
 - local budget: `120秒`
-- `profile.ci.sample_percentage = 50`
+- `[gate.merge].sample_percentage = 50`
 - promotion: `20 matched commits` と `false negative rate <= 5%`
 - demotion: rolling `14日` で incident `2件` 以上
 
@@ -36,7 +36,7 @@ assets:
 
 - PR budget: `5分`
 - local budget: `90秒`
-- `profile.ci.sample_percentage = 30`
+- `[gate.merge].sample_percentage = 30`
 - promotion: `matched commits >= 20`, `FNR <= 5%`, `pass correlation >= 95%`
 - demotion: rolling `30日` で false failure rate `> 2%` または incident `2件`
 
@@ -48,8 +48,9 @@ assets:
 
 注意:
 
-- `adaptive = true` は matched commits や FNR history が十分に溜まってから有効にする
-- 導入直後なら `bootstrap` を使い、`adaptive` はまだ入れない
+- 0.13.0 で `adaptive = true` トグルは廃止された。代わりに `flaker calibrate` を実行して `[sampling]` を history から再計算し、`flaker.toml` に書き戻す
+- `flaker calibrate` は matched commits や FNR history が十分に溜まってから実行する（目安は 30 commits 以上）
+- 導入直後なら `bootstrap` を使い、history が薄いうちは `calibrate` を回さない
 
 ## 3. strict
 
@@ -63,7 +64,7 @@ assets:
 
 - PR budget: `10分`
 - local budget: `120秒`
-- `profile.ci.sample_percentage = 20`
+- `[gate.merge].sample_percentage = 20`
 - promotion: 直近 `100 run` で unexplained false failure `0`
 - demotion: unexplained false failure `1件` で advisory へ戻す
 

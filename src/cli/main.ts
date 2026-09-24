@@ -8,10 +8,11 @@ import { registerImportCommands } from "./categories/import.js";
 import { registerReportCommands } from "./categories/report.js";
 import { statusAction, analyzeQueryAction } from "./categories/analyze.js";
 import { registerExplainCommands } from "./categories/explain.js";
-import { registerOpsCommands } from "./categories/ops.js";
 import { registerDebugCommands, debugDoctorAction } from "./categories/debug.js";
 import { registerDevCommands } from "./categories/dev.js";
 import { registerApplyCommands } from "./categories/apply.js";
+import { registerCalibrateCommand } from "./categories/calibrate.js";
+import { FlakerUsageError } from "./errors.js";
 
 function isDirectCliExecution(): boolean {
   if (process.argv[1] == null) return false;
@@ -30,10 +31,9 @@ function isDirectCliExecution(): boolean {
 export function createProgram(): Command {
   const program = new Command();
   registerApplyCommands(program);
+  registerCalibrateCommand(program);
   registerImportCommands(program);
   registerReportCommands(program);
-  registerOpsCommands(program);
-  // registerAnalyzeCommands: all analyze subcommands removed in 0.8.0; parent dropped.
   registerExplainCommands(program);
   registerDebugCommands(program);
   registerDevCommands(program);
@@ -41,14 +41,14 @@ export function createProgram(): Command {
   program
     .name("flaker")
     .description("Intelligent test selection — run fewer tests, catch more failures")
-    .version("0.12.6")
+    .version("0.13.0")
     .showHelpAfterError()
     .showSuggestionAfterError();
 
   // Top-level aliases
   program
     .command("init")
-    .description("Alias for `flaker setup init`")
+    .description("Create flaker.toml (auto-detects the repository)")
     .option("--owner <owner>", "Repository owner (auto-detected from git remote)")
     .option("--name <name>", "Repository name (auto-detected from git remote)")
     .option("--adapter <type>", "Test result adapter: playwright|vitest|jest|junit")
@@ -57,19 +57,16 @@ export function createProgram(): Command {
 
   program
     .command("run")
-    .description("Run the selected gate or profile")
+    .description("Run the selected gate")
     .option("--gate <name>", "Gate name: iteration, merge, release")
-    .option("--profile <name>", "Advanced: execution profile name such as scheduled, ci, local")
-    .option("--strategy <s>", "Sampling strategy: random, weighted, affected, hybrid, gbdt, full")
+    .option("--strategy <s>", "Sampling strategy: weighted, affected, hybrid, full")
     .option("--count <n>", "Number of tests to sample")
     .option("--percentage <n>", "Percentage of tests to sample")
     .option("--skip-quarantined", "Exclude quarantined tests")
     .option("--skip-flaky-tagged", "Exclude tests tagged with the configured flaky tag")
     .option("--changed <files>", "Comma-separated list of changed files (for affected/hybrid)")
     .option("--co-failure-days <days>", "Co-failure analysis window in days")
-    .option("--cluster-mode <mode>", "Failure-cluster sampling mode: off, spread, pack")
     .option("--holdout-ratio <ratio>", "Fraction of skipped tests to run as holdout (0-1)")
-    .option("--model-path <path>", "Path to GBDT model JSON")
     .option("--runner <runner>", "Runner type: direct or actrun", "direct")
     .option("--retry", "Retry failed tests (actrun only)")
     .option("--dry-run", "Select tests but do not execute them")
@@ -115,21 +112,16 @@ Primary commands:
   apply                                         Reconcile repo to flaker.toml (idempotent)
   status                                        Dashboard + promotion drift
   run --gate <iteration|merge|release>          Execute the selected gate
+  calibrate                                     Recommend and write [sampling]
   doctor                                        Verify local environment
   debug <retry|confirm|bisect|diagnose>         Incident investigation
   query <sql>                                   SQL escape hatch
   explain <topic>                               AI-assisted analysis
-  import <file>                                 Ingest reports (adapter auto-detected)
+  import <file> | import --ci                   Ingest reports or CI artifacts
   report <file> --summary|--diff|--aggregate    Local report shaping
 
-Advanced:
-  ops weekly|incident               Cadence artifact bundles
-  (ops daily is deprecated in 0.9.0 — use \`flaker apply --emit daily\`)
-  dev <train|tune|self-eval|...>    Maintainer tools
-
 Run \`flaker <command> --help\` for details.
-If you used legacy forms (collect*, analyze*, gate*, etc.) removed in
-0.8.0, see docs/migration-0.6-to-0.7.md for the canonical replacements.
+Upgrading from 0.12.x? See docs/migration-0.12-to-0.13.md.
 `;
     return base + extras;
   };
@@ -146,8 +138,12 @@ if (isDirectCliExecution()) {
   }
 
   program.parseAsync(process.argv).catch((err) => {
+    if (err instanceof FlakerUsageError) {
+      console.error(`Error: ${err.message}`);
+      process.exit(2);
+    }
     if (err instanceof Error) {
-      if (err.message.includes("Config file not found") || err.message.includes("flaker.toml")) {
+      if (err.message.includes("Config file not found")) {
         console.error(`Error: ${err.message}`);
         console.error(`Run 'flaker init' to create one.`);
         process.exit(1);

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
 import { runTests } from "../../src/cli/commands/exec/run.js";
 import type { RunnerAdapter, TestId } from "../../src/cli/runners/types.js";
@@ -92,7 +92,7 @@ describe("run command", () => {
     const result = await runTests({
       store,
       runner,
-      mode: "random",
+      mode: "weighted",
       count: 1,
       quarantineManifestEntries: manifestEntries,
     });
@@ -233,7 +233,7 @@ describe("run command", () => {
     const result = await runTests({
       store,
       runner,
-      mode: "random",
+      mode: "weighted",
       count: 1,
     });
 
@@ -515,5 +515,31 @@ describe("run command", () => {
       }),
     ]);
     expect(grepInvertArgs).toEqual(["@flaky"]);
+  });
+
+  it("warns instead of silently planning from nothing when the runner cannot list tests", async () => {
+    const writes: string[] = [];
+    const spy = vi.spyOn(process.stderr, "write").mockImplementation((chunk: string | Uint8Array) => {
+      writes.push(String(chunk));
+      return true;
+    });
+    const runner: RunnerAdapter = {
+      name: "mock",
+      capabilities: { nativeParallel: false },
+      async listTests() {
+        throw new Error("vitest list exited with code 1: Error: globalSetup failed");
+      },
+      async execute(tests) {
+        return { exitCode: 0, results: [], durationMs: 1, stdout: "", stderr: "", tests } as never;
+      },
+    };
+    try {
+      await runTests({ store, runner, mode: "weighted", count: 1 });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(writes.join("")).toContain(
+      "warning: runner could not list tests; planning from stored history only (vitest list exited with code 1: Error: globalSetup failed)",
+    );
   });
 });

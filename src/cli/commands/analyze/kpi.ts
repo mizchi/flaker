@@ -309,7 +309,7 @@ export function formatKpi(kpi: FlakerKpi): string {
   } else if (s.sampleRatio != null) {
     lines.push("## Sampling");
     lines.push(`  Sample ratio:     ${s.sampleRatio}%`);
-    lines.push(`  (No CI overlap yet — run \`flaker collect\` after \`flaker run\` to validate)`);
+    lines.push(`  (No CI overlap yet — run \`flaker import --ci\` after \`flaker run\` to validate)`);
     lines.push("");
   }
 
@@ -330,7 +330,7 @@ export function formatKpi(kpi: FlakerKpi): string {
   if (kpi.data.lastDataAt) {
     const stale = kpi.data.staleDays ?? 0;
     if (stale > 7) {
-      lines.push(`  Last data:        ${kpi.data.lastDataAt.slice(0, 10)} (${stale} days ago — stale, run \`flaker collect\`)`);
+      lines.push(`  Last data:        ${kpi.data.lastDataAt.slice(0, 10)} (${stale} days ago — stale, run \`flaker import --ci\`)`);
     } else {
       lines.push(`  Last data:        ${kpi.data.lastDataAt.slice(0, 10)} (${stale}d ago)`);
     }
@@ -342,7 +342,7 @@ export function formatKpi(kpi: FlakerKpi): string {
   const steps: string[] = [];
   if (kpi.flaky.brokenTests > 0) {
     issues.push(`${kpi.flaky.brokenTests} broken test(s)`);
-    steps.push(`Fix or quarantine: \`flaker analyze flaky --top 20\``);
+    steps.push(`Fix or quarantine: \`flaker status --list flaky\``);
   }
   if (s.matchedCommits > 0 && s.falseNegativeRate != null && s.falseNegativeRate > 5) {
     issues.push(`high false negative rate (${s.falseNegativeRate}%)`);
@@ -350,15 +350,15 @@ export function formatKpi(kpi: FlakerKpi): string {
   }
   if (kpi.data.confidence === "insufficient" || kpi.data.confidence === "low") {
     issues.push(`${kpi.data.confidence} data (${kpi.data.commitCount} commits)`);
-    steps.push(`Collect more: \`flaker collect --days 30\``);
+    steps.push(`Collect more: \`flaker import --ci --days 30\``);
   }
   if (!kpi.data.coFailureReady) {
     issues.push("co-failure data incomplete");
-    steps.push("Ensure `flaker collect` runs with GITHUB_TOKEN");
+    steps.push("Ensure `flaker import --ci` runs with GITHUB_TOKEN");
   }
   if (kpi.data.staleDays != null && kpi.data.staleDays > 7) {
     issues.push(`data is ${kpi.data.staleDays} days old`);
-    steps.push(`Refresh: \`flaker collect --days 7\``);
+    steps.push(`Refresh: \`flaker import --ci --days 7\``);
   }
   if (s.matchedCommits === 0 && s.sampleRatio == null) {
     steps.push(`Start sampling: \`flaker run\``);

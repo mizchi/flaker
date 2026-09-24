@@ -15,7 +15,7 @@
 それらは [operations-guide.ja.md](operations-guide.ja.md) を参照。
 
 まだ導入していない場合は [new-project-checklist.ja.md](new-project-checklist.ja.md) から始める。
-`0.4.x` から上げる場合は [migration-0.4-to-0.5.ja.md](migration-0.4-to-0.5.ja.md) を先に見る。
+`0.4.x` から上げる場合は [migration-0.4-to-0.5.ja.md](migration-0.4-to-0.5.ja.md) を先に見る。`0.12.x` から上げる場合は [migration-0.12-to-0.13.ja.md](migration-0.12-to-0.13.ja.md) を見る — `--profile` / `[profile.*]` / `FLAKER_PROFILE` は廃止された。
 
 ## 対象読者
 
@@ -81,6 +81,6 @@ pnpm flaker status
 
 - 詳細なコマンドリファレンス: [how-to-use.ja.md](how-to-use.ja.md)
 - runner / adapter の詳細: [runner-adapters.md](runner-adapters.md), [test-result-adapters.md](test-result-adapters.md)
-- 失敗の調査: [diagnose.md](diagnose.md), `flaker ops incident`, `flaker debug confirm`, `flaker debug retry`
+- 失敗の調査: [diagnose.md](diagnose.md), `flaker debug diagnose`, `flaker debug confirm`, `flaker debug retry`
 - 導入手順: [new-project-checklist.ja.md](new-project-checklist.ja.md)
 - 運用設計: [operations-guide.ja.md](operations-guide.ja.md)

@@ -14,9 +14,9 @@ const sampleSummary: any = {
     flakyTrend: -1,
   },
   gates: {
-    iteration: { profile: "local", strategy: "affected", samplePercentage: null, maxDurationSeconds: 60, adaptive: false },
-    merge:     { profile: "ci",    strategy: "hybrid",   samplePercentage: 30,   maxDurationSeconds: null, adaptive: true },
-    release:   { profile: "scheduled", strategy: "full", samplePercentage: null, maxDurationSeconds: null, adaptive: false },
+    iteration: { strategy: "affected", samplePercentage: null, maxDurationSeconds: 60 },
+    merge:     { strategy: "hybrid",   samplePercentage: 30,   maxDurationSeconds: null },
+    release:   { strategy: "full", samplePercentage: null, maxDurationSeconds: null },
   },
   quarantine: { currentCount: 2, pendingAddCount: 1, pendingRemoveCount: 0 },
   drift: { ok: true, unmet: [] },

@@ -62,7 +62,6 @@ interface CoreAffectedReportOutput {
 }
 
 interface AffectedExplainCoreExports {
-  dedupe_affected_targets_json: (targetsJson: string) => string;
   build_affected_report_json: (
     targetsJson: string,
     directSelectionsJson: string,
@@ -75,8 +74,7 @@ function isAffectedExplainCoreExports(
   mod: Partial<AffectedExplainCoreExports>,
 ): mod is AffectedExplainCoreExports {
   return (
-    typeof mod.dedupe_affected_targets_json === "function"
-    && typeof mod.build_affected_report_json === "function"
+    typeof mod.build_affected_report_json === "function"
   );
 }
 
@@ -94,7 +92,7 @@ function addUnique(values: string[], value: string): void {
   }
 }
 
-export function sortAffectedSelections(
+function sortAffectedSelections(
   entries: AffectedSelection[],
 ): AffectedSelection[] {
   return [...entries].sort((a, b) => {
@@ -106,7 +104,7 @@ export function sortAffectedSelections(
   });
 }
 
-export function createAffectedSelection(
+function createAffectedSelection(
   target: AffectedTarget,
   opts: {
     direct: boolean;
@@ -126,7 +124,7 @@ export function createAffectedSelection(
   };
 }
 
-export function buildAffectedReport(
+function buildAffectedReport(
   resolver: string,
   changedFiles: string[],
   selected: AffectedSelection[],
@@ -334,24 +332,6 @@ async function getAffectedExplainCore(): Promise<AffectedExplainCoreExports | nu
   );
   cachedAffectedExplainCore = core ?? null;
   return cachedAffectedExplainCore;
-}
-
-export async function dedupeAffectedTargets(
-  targets: AffectedTarget[],
-): Promise<AffectedTarget[]> {
-  const affectedExplainCore = await getAffectedExplainCore();
-  if (!affectedExplainCore) {
-    return dedupeAffectedTargetsFallback(targets);
-  }
-  return JSON.parse(
-    affectedExplainCore.dedupe_affected_targets_json(
-      JSON.stringify(targets.map(toCoreTarget)),
-    ),
-  ).map((target: CoreAffectedTargetInput) => ({
-    spec: target.spec,
-    taskId: target.task_id,
-    filter: target.filter ?? null,
-  }));
 }
 
 export async function buildAffectedReportFromInputs(opts: {

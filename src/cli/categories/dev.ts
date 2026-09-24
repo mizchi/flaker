@@ -10,38 +10,8 @@ import { formatEvalFixtureReport, formatSweepReport, formatMultiSweepReport } fr
 
 export function registerDevCommands(program: Command): void {
   const dev = program
-    .command("dev")
-    .description("Model training and benchmarks");
-
-  dev
-    .command("train")
-    .description("Train a GBDT model from historical test results")
-    .option("--num-trees <n>", "Number of trees (default: 15)")
-    .option("--learning-rate <rate>", "Learning rate (default: 0.2)")
-    .option("--window-days <days>", "Training data window in days (default: 90)")
-    .option("--output <path>", "Output model path (default: .flaker/models/gbdt.json)")
-    .action(
-      async (opts: { numTrees?: string; learningRate?: string; windowDays?: string; output?: string }) => {
-        const config = loadConfig(process.cwd());
-        const store = new DuckDBStore(resolve(config.storage.path));
-        await store.initialize();
-
-        try {
-          const { trainModel, formatTrainResult } = await import("../commands/dev/train.js");
-          const result = await trainModel({
-            store,
-            storagePath: config.storage.path,
-            numTrees: opts.numTrees ? parseInt(opts.numTrees, 10) : undefined,
-            learningRate: opts.learningRate ? parseFloat(opts.learningRate) : undefined,
-            windowDays: opts.windowDays ? parseInt(opts.windowDays, 10) : undefined,
-            outputPath: opts.output,
-          });
-          console.log(formatTrainResult(result));
-        } finally {
-          await store.close();
-        }
-      },
-    );
+    .command("dev", { hidden: true })
+    .description("Maintainer tools (not part of the public surface)");
 
   dev
     .command("tune")

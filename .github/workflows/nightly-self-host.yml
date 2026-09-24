@@ -30,6 +30,12 @@ jobs:
 
       - name: Setup MoonBit
         uses: hustcer/setup-moonbit@v1
+        with:
+          # Pinned: "latest" picked up a toolchain on 2026-07-14 that broke the
+          # parquet test package and, through the vitest global setup, silently
+          # emptied the self-host nightly (#75). Bump deliberately.
+          version: 0.10.14+7d59c7ec9
+          core-version: 0.10.14+7d59c7ec9
 
       - name: MoonBit deps
         run: moon update
@@ -46,7 +52,7 @@ jobs:
       - name: Collect CI history
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node dist/cli/main.js apply --target collect_ci 2>&1 | tee .artifacts/collect.txt
+        run: node dist/cli/main.js import --ci --days 30 2>&1 | tee .artifacts/collect.txt
 
       - name: Download historical self-host metrics
         env:
@@ -65,12 +71,12 @@ jobs:
           rm -rf .flaker/artifacts
           mkdir -p .flaker/artifacts
 
-      - name: Run flaker scheduled profile
+      - name: Run flaker release gate
         id: flaker_run
         shell: bash
         run: |
           set +e
-          node dist/cli/main.js run --profile scheduled > .artifacts/run.txt 2>&1
+          node dist/cli/main.js run --gate release > .artifacts/run.txt 2>&1
           exit_code=$?
           echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
           if [ "$exit_code" -eq 0 ]; then

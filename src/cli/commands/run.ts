@@ -26,12 +26,11 @@ type SamplingCliOpts = RunCliOpts;
 
 export const RUN_COMMAND_HELP = `
 Gate names:
-  iteration  -> profile.local      Fast local feedback for the author
-  merge      -> profile.ci         PR / mainline gate
-  release    -> profile.scheduled  Full or near-full verification
+  iteration  [gate.iteration]  Fast local feedback for the author
+  merge      [gate.merge]      PR / mainline gate
+  release    [gate.release]    Full or near-full verification
 
-Use --gate for the normal workflow.
-Use --profile only when you need an advanced or custom profile name.
+Without --gate, FLAKER_GATE is used; otherwise merge on CI, iteration elsewhere.
 `;
 
 export async function execRunAction(rawOpts: SamplingCliOpts & { runner: string; retry?: boolean; dryRun?: boolean; explain?: boolean; json?: boolean }): Promise<void> {
@@ -44,7 +43,6 @@ export async function execRunAction(rawOpts: SamplingCliOpts & { runner: string;
     const prepared = await prepareRunRequest({
       cwd,
       config,
-      store,
       opts: rawOpts,
       deps: {
         detectChangedFiles,
@@ -53,14 +51,7 @@ export async function execRunAction(rawOpts: SamplingCliOpts & { runner: string;
       },
     });
 
-    if (prepared.gateName) {
-      console.log(`# Gate: ${prepared.gateName} (profile: ${prepared.resolvedProfile.name})`);
-    } else {
-      console.log(`# Profile: ${prepared.resolvedProfile.name}`);
-    }
-    if (prepared.adaptiveReason) {
-      console.log(`# Adaptive: ${prepared.adaptiveReason}`);
-    }
+    console.log(`# Gate: ${prepared.gateName}`);
     if (prepared.timeBudgetSeconds != null) {
       console.log(`# Time budget: ${prepared.timeBudgetSeconds}s`);
     }

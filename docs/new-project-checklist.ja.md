@@ -53,7 +53,7 @@ pnpm flaker init --adapter playwright --runner actrun
 
 owner / name は git remote から自動検出される。`--owner` / `--name` で上書き可。
 
-0.7.0 以降、`flaker init` は `[profile.scheduled]` / `[profile.ci]` / `[profile.local]` の既定値も同時に書き込む。
+`flaker init` は `[gate.release]` / `[gate.merge]` / `[gate.iteration]` の既定値も同時に書き込む。
 
 ### 3. doctor で環境チェック
 
@@ -105,7 +105,7 @@ resolver = "moon"
 config = ""
 ```
 
-resolver を設定しないと `hybrid` は `weighted` / `random` フォールバックで動くだけ。選択の目安:
+resolver を設定しないと `hybrid` は `weighted` フォールバックで動くだけ。選択の目安:
 
 - 単一 package なら `simple` のまま
 - monorepo なら `workspace` (最も楽)
@@ -153,19 +153,19 @@ pnpm flaker status --detail        # KPI ビュー (旧 analyze kpi)
 
 <details><summary>内部で何が走っているか知りたい・個別コマンドで掘りたい場合</summary>
 
-`flaker apply` は内部的に以下を現状に応じて実行する。単体で叩きたい場合は直接呼んでもよい (0.7.0 以降はすべて deprecated / hidden、`flaker apply` が canonical)。
+`flaker apply` は内部的に以下を現状に応じて実行する。単体で叩きたい場合は直接呼んでもよいが、`flaker apply` が canonical。
 
 **CI 履歴取り込み:**
 
 ```bash
 export GITHUB_TOKEN=$(gh auth token)
-pnpm flaker collect ci --days 30
+pnpm flaker import --ci --days 30
 ```
 
 **キャリブレーション:**
 
 ```bash
-pnpm flaker collect calibrate
+pnpm flaker calibrate
 ```
 
 `flaker.toml` の `[sampling]` セクションに最適な戦略・サンプル率が書き込まれる。`--dry-run` を付ければ書き込まずに推奨だけ見られる。
@@ -227,7 +227,7 @@ pnpm flaker collect calibrate
   if: github.event_name == 'pull_request'
   run: |
     pnpm flaker status --markdown > .artifacts/status.md
-    pnpm flaker report summary --adapter vitest --input report.json --pr-comment \
+    pnpm flaker report report.json --summary --adapter vitest --pr-comment \
       | gh pr comment ${{ github.event.pull_request.number }} --body-file -
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -353,5 +353,6 @@ git diff flaker.toml   # 推奨値の変化を確認
 - [docs/operations-guide.ja.md](operations-guide.ja.md) — 運用側の入口
 - [docs/how-to-use.ja.md](how-to-use.ja.md) — コマンドと設定の詳細
 - [docs/migration-0.6-to-0.7.md](migration-0.6-to-0.7.md) — 0.6.x からの移行ガイド
+- [docs/migration-0.12-to-0.13.ja.md](migration-0.12-to-0.13.ja.md) — 0.12.x からの移行ガイド
 - [docs/contributing.md](contributing.md) — 開発・dogfood
 - [CHANGELOG.md](../CHANGELOG.md) — バージョン履歴と breaking changes

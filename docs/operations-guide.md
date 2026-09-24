@@ -14,6 +14,8 @@ For those, see [usage-guide.md](usage-guide.md) and [how-to-use.md](how-to-use.m
 
 If flaker is not installed or initialized yet, start with [new-project-checklist.md](new-project-checklist.md).
 
+If you operated flaker `0.12.x` before, read [migration-0.12-to-0.13.md](migration-0.12-to-0.13.md) first: the `ops` command group is gone, and gates replace profiles.
+
 ## Audience
 
 - repository maintainers
@@ -34,45 +36,42 @@ The model is easier to hold if you use four layers.
 
 Most teams only need three.
 
-| Gate | Backing profile | Role |
+| Gate | Config section | Role |
 |---|---|---|
-| `iteration` | `local` | fast author feedback |
-| `merge` | `ci` | PR / mainline gate |
-| `release` | `scheduled` | full or near-full verification |
+| `iteration` | `[gate.iteration]` | fast author feedback |
+| `merge` | `[gate.merge]` | PR / mainline gate |
+| `release` | `[gate.release]` | full or near-full verification |
 
 ## The operating loops
 
 ### Observation loop
 
-- `flaker collect`
-- `flaker ops daily`
+- `flaker apply` (imports CI history and calibrates when `GITHUB_TOKEN` is set)
 - `flaker status`
 
 Purpose:
 
 - grow history
-- leave a daily release-gate snapshot
+- reconcile the repo to `flaker.toml`
 - measure whether gates are still trustworthy
 
 ### Triage loop
 
-- `flaker gate review merge`
-- `flaker ops weekly`
-- `flaker quarantine suggest`
-- `flaker quarantine apply`
+- `flaker status --gate merge --detail --json`
+- `flaker status --markdown` + `flaker explain insights`
+- `flaker apply` (auto-quarantines via `[quarantine].auto`)
 - weekly promote / keep / demote review
 
 Purpose:
 
 - keep flaky tests out of the gate path
 - preserve a stable artifact for promote / keep / demote review
-- apply only reviewed quarantine plans
+- apply quarantine changes declaratively from `flaker.toml`
 - preserve trust in required checks
 
 ### Incident loop
 
-- `flaker ops incident`
-- drop to `flaker debug retry / confirm / diagnose` only when needed
+- `flaker debug retry` / `flaker debug confirm` / `flaker debug diagnose`
 
 Purpose:
 
@@ -81,22 +80,24 @@ Purpose:
 
 ## Recommended cadence
 
+The `ops` command group and `apply --emit` were removed in 0.13.0; the cadence below uses `apply` + `status` + `explain` directly (see [migration-0.12-to-0.13.md](migration-0.12-to-0.13.md)).
+
 ### Daily
 
 ```bash
 mkdir -p .artifacts
 export GITHUB_TOKEN=$(gh auth token)
-pnpm flaker collect ci --days 1
-pnpm flaker ops daily --output .artifacts/flaker-daily.md
-pnpm flaker quarantine suggest --json --output .artifacts/quarantine-plan.json
+pnpm flaker apply --json --output .artifacts/flaker-daily.json
+pnpm flaker status --markdown > .artifacts/flaker-daily.md
 ```
 
 ### Weekly
 
 ```bash
 mkdir -p .artifacts
-pnpm flaker gate review merge --json --output .artifacts/gate-review-merge.json
-pnpm flaker ops weekly --output .artifacts/flaker-weekly.md
+pnpm flaker status --gate merge --detail --json > .artifacts/gate-review-merge.json
+pnpm flaker status --markdown > .artifacts/flaker-weekly.md
+pnpm flaker explain insights --json > .artifacts/flaker-insights.json
 ```
 
 Review:
@@ -106,20 +107,19 @@ Review:
 - `pass correlation`
 - `sample ratio`
 - `saved test minutes`
-- count of `flaky` / `quarantined` tests
+- count of `flaky` / `quarantined` tests (`flaker status --list flaky` / `--list quarantined`)
 
 and decide `promote / keep / demote`.
 
-`status` is summary-only. Use `gate review merge` for the actual promotion decision.
+`status` (without `--gate`) is summary-only. Use `status --gate merge --detail --json` for the actual promotion decision.
 
 ### During an incident
 
 ```bash
-pnpm flaker ops incident --run <workflow-run-id> --output .artifacts/flaker-incident.md
-pnpm flaker ops incident --suite path/to/spec.ts --test "test name" --output .artifacts/flaker-incident.md
+pnpm flaker debug retry --run <workflow-run-id>
+pnpm flaker debug confirm "path/to/spec.ts:test name" --repeat 10
+pnpm flaker debug diagnose --suite path/to/spec.ts --test "test name"
 ```
-
-Drop to raw `debug retry / confirm / diagnose` only if you need finer investigation control.
 
 ## Promotion and demotion
 

@@ -105,7 +105,7 @@ describe("dev-cli helpers", () => {
       .mockReturnValueOnce({ status: 0 });
 
     main(
-      ["node", "scripts/dev-cli.mjs", "--rebuild", "run", "--profile", "local"],
+      ["node", "scripts/dev-cli.mjs", "--rebuild", "run", "--gate", "iteration"],
       {
         repoRoot: "/workspace/flaker",
         invocationCwd: "/workspace/sample-webapp-2026",
@@ -127,7 +127,7 @@ describe("dev-cli helpers", () => {
     expect(spawnSync).toHaveBeenNthCalledWith(
       2,
       "/usr/local/bin/node",
-      ["/workspace/flaker/dist/cli/main.js", "run", "--profile", "local"],
+      ["/workspace/flaker/dist/cli/main.js", "run", "--gate", "iteration"],
       expect.objectContaining({
         cwd: "/workspace/sample-webapp-2026",
       }),

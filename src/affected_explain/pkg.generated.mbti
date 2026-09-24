@@ -19,4 +19,3 @@ pub fn dedupe_affected_targets(Array[@contracts.AffectedTargetInput]) -> Array[@
 // Type aliases
 
 // Traits
-

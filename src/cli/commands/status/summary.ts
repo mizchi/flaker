@@ -1,6 +1,6 @@
 import type { FlakerConfig, PromotionThresholds } from "../../config.js";
-import { type GateName, profileNameFromGateName } from "../../gate.js";
-import { resolveProfile } from "../../profile-compat.js";
+import type { GateName } from "../../gate.js";
+import { resolveGate } from "../../gate-config.js";
 import { workflowRunSourceSql } from "../../run-source.js";
 import type { MetricStore, FlakyScore, QuarantinedTest } from "../../storage/types.js";
 import { computeKpi, type FlakerKpi } from "../analyze/kpi.js";
@@ -56,11 +56,9 @@ export function computeDrift(input: DriftInput, thresholds: PromotionThresholds)
 }
 
 export interface StatusGateSummary {
-  profile: string;
   strategy: string;
   samplePercentage: number | null;
   maxDurationSeconds: number | null;
-  adaptive: boolean;
 }
 
 export interface StatusSummary {
@@ -91,13 +89,11 @@ export interface StatusSummary {
 }
 
 function buildGateSummary(config: FlakerConfig, gate: GateName): StatusGateSummary {
-  const profile = resolveProfile(profileNameFromGateName(gate), config.profile, config.sampling);
+  const resolved = resolveGate(gate, config.gate, config.sampling);
   return {
-    profile: profile.name,
-    strategy: profile.strategy,
-    samplePercentage: profile.sample_percentage ?? null,
-    maxDurationSeconds: profile.max_duration_seconds ?? null,
-    adaptive: profile.adaptive,
+    strategy: resolved.strategy,
+    samplePercentage: resolved.sample_percentage ?? null,
+    maxDurationSeconds: resolved.max_duration_seconds ?? null,
   };
 }
 
@@ -237,10 +233,9 @@ export function formatStatusSummary(summary: StatusSummary): string {
   for (const gate of Object.keys(summary.gates) as GateName[]) {
     const info = summary.gates[gate];
     lines.push(
-      `  ${gate}: ${info.strategy} via ${info.profile}`
+      `  ${gate}: ${info.strategy}`
       + `, budget=${info.maxDurationSeconds ?? "N/A"}s`
-      + `, sample=${info.samplePercentage ?? "N/A"}%`
-      + `, adaptive=${info.adaptive ? "on" : "off"}`,
+      + `, sample=${info.samplePercentage ?? "N/A"}%`,
     );
   }
 
@@ -311,14 +306,14 @@ export function formatStatusMarkdown(summary: StatusSummary): string {
     "",
     "## Gates",
     "",
-    "| Gate | Profile | Strategy | Sample | Budget (s) | Adaptive |",
-    "| --- | --- | --- | --- | --- | --- |",
+    "| Gate | Strategy | Sample | Budget (s) |",
+    "| --- | --- | --- | --- |",
   ];
 
   for (const gate of Object.keys(summary.gates) as GateName[]) {
     const info = summary.gates[gate];
     lines.push(
-      `| ${gate} | ${info.profile} | ${info.strategy} | ${info.samplePercentage != null ? `${info.samplePercentage}%` : "N/A"} | ${info.maxDurationSeconds ?? "N/A"} | ${info.adaptive ? "on" : "off"} |`,
+      `| ${gate} | ${info.strategy} | ${info.samplePercentage != null ? `${info.samplePercentage}%` : "N/A"} | ${info.maxDurationSeconds ?? "N/A"} |`,
     );
   }
 

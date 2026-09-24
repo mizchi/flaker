@@ -14,7 +14,7 @@ describe("CLI help", () => {
     expect(help).toContain("flaker run --gate merge");
     expect(help).toContain("gate");
     expect(help).toContain("Primary commands");
-    expect(help).toContain("Advanced:");
+    expect(help).not.toContain("Advanced:");
   });
 
   it("shows run help with --dry-run and --explain flags", () => {
@@ -23,26 +23,18 @@ describe("CLI help", () => {
     const runCmd = program.commands.find((command) => command.name() === "run");
     const runHelp = runCmd?.helpInformation();
     // gate/quarantine commands removed in 0.8.0 — lookups deleted.
-    const opsCmd = program.commands.find((command) => command.name() === "ops");
-    // ops daily removed in 0.10.0 — lookup deleted.
-    const opsIncidentHelp = opsCmd?.commands.find((command) => command.name() === "incident")?.helpInformation();
-    const opsWeeklyHelp = opsCmd?.commands.find((command) => command.name() === "weekly")?.helpInformation();
+    // ops group removed in 0.13.0 — lookups deleted.
     // analyze subcommands (eval, bundle, flaky-tag) removed in 0.8.0 — lookups deleted.
     // import report subcommand removed in 0.8.0 — use top-level import <file>.
 
     expect(runHelp).toContain("--dry-run");
     expect(runHelp).toContain("--explain");
     expect(runHelp).toContain("--gate");
-    expect(runHelp).toContain("--cluster-mode");
     expect(runHelp).toContain("--skip-flaky-tagged");
     // gateReviewHelp, gateExplainHelp, gateHistoryHelp assertions removed — gate dropped in 0.8.0.
     // quarantineSuggestHelp, quarantineApplyHelp assertions removed — quarantine dropped in 0.8.0.
     // opsDailyHelp assertions removed — ops daily dropped in 0.10.0.
-    expect(opsIncidentHelp).toContain("--suite");
-    expect(opsIncidentHelp).toContain("--test");
-    expect(opsIncidentHelp).toContain("--run");
-    expect(opsWeeklyHelp).toContain("--window-days");
-    expect(opsWeeklyHelp).toContain("--json");
+    // opsIncidentHelp, opsWeeklyHelp assertions removed — ops dropped in 0.13.0.
     // evalHelp, bundleHelp, flakyTagHelp assertions removed — commands dropped in 0.8.0.
     // importReportHelp assertion removed — import report subcommand dropped in 0.8.0.
   });

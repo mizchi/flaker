@@ -15,4 +15,3 @@ pub fn build_sampling_kpi(Array[@contracts.EvalCommitSignalInput]) -> @contracts
 // Type aliases
 
 // Traits
-

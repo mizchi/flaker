@@ -21,4 +21,3 @@ pub fn summarize_quarantine(Array[@contracts.QuarantineEntryInput], Array[@contr
 // Type aliases
 
 // Traits
-

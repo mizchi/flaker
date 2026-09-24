@@ -53,7 +53,7 @@ pnpm flaker init --adapter playwright --runner actrun
 
 `owner` and `name` are auto-detected from the git remote. Override with `--owner` / `--name` if needed.
 
-As of 0.7.0, `flaker init` also writes default `[profile.scheduled]` / `[profile.ci]` / `[profile.local]` blocks so that gates resolve immediately.
+`flaker init` also writes default `[gate.release]` / `[gate.merge]` / `[gate.iteration]` blocks so that gates resolve immediately.
 
 ### 3. Check the environment with doctor
 
@@ -95,7 +95,7 @@ resolver = "bitflow"
 config = ""
 ```
 
-If you do not configure a resolver, `hybrid` still works through `weighted` / `random` fallback, but you lose the best change-aware behavior. Start with `workspace` if possible.
+If you do not configure a resolver, `hybrid` still works through `weighted` fallback, but you lose the best change-aware behavior. Start with `workspace` if possible.
 
 ### 5. Preview with `flaker plan`
 
@@ -137,19 +137,19 @@ pnpm flaker status --detail        # KPI view (formerly analyze kpi)
 
 <details><summary>Drilling down into the individual steps</summary>
 
-`flaker apply` internally invokes the commands below on demand. They remain callable directly if you want to inspect one stage in isolation, but in 0.7.0+ all of them are deprecated or hidden — `flaker apply` is canonical.
+`flaker apply` internally invokes the commands below on demand. They remain callable directly if you want to inspect one stage in isolation, but `flaker apply` is canonical.
 
 **Collect CI history:**
 
 ```bash
 export GITHUB_TOKEN=$(gh auth token)
-pnpm flaker collect ci --days 30
+pnpm flaker import --ci --days 30
 ```
 
 **Calibrate:**
 
 ```bash
-pnpm flaker collect calibrate
+pnpm flaker calibrate
 ```
 
 This writes the recommended strategy and sampling percentage into `[sampling]` in `flaker.toml`. Add `--dry-run` if you want to preview without writing.
@@ -211,7 +211,7 @@ Add this to `.github/workflows/ci.yml`:
   if: github.event_name == 'pull_request'
   run: |
     pnpm flaker status --markdown > .artifacts/status.md
-    pnpm flaker report summary --adapter vitest --input report.json --pr-comment \
+    pnpm flaker report report.json --summary --adapter vitest --pr-comment \
       | gh pr comment ${{ github.event.pull_request.number }} --body-file -
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -337,5 +337,6 @@ At that point, many repositories can cut CI time by 30-70% while keeping missed 
 - [operations-guide.md](operations-guide.md) — operator-facing entrypoint
 - [how-to-use.md](how-to-use.md) — detailed commands and configuration
 - [migration-0.6-to-0.7.md](migration-0.6-to-0.7.md) — upgrading from 0.6.x
+- [migration-0.12-to-0.13.md](migration-0.12-to-0.13.md) — upgrading from 0.12.x
 - [contributing.md](contributing.md) — development and dogfood workflow
 - [CHANGELOG.md](../CHANGELOG.md) — release history and breaking changes

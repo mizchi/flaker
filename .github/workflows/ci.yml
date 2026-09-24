@@ -6,6 +6,10 @@ on:
       - main
       - "codex/**"
   pull_request:
+  # Weekly run so the self-host collect (30-day window) always has a ci.yml
+  # run with a vitest-report artifact, even when nothing is pushed (#75).
+  schedule:
+    - cron: "0 3 * * 1"
 
 jobs:
   test:
@@ -31,6 +35,12 @@ jobs:
 
       - name: Setup MoonBit
         uses: hustcer/setup-moonbit@v1
+        with:
+          # Pinned: "latest" picked up a toolchain on 2026-07-14 that broke the
+          # parquet test package and, through the vitest global setup, silently
+          # emptied the self-host nightly (#75). Bump deliberately.
+          version: 0.10.14+7d59c7ec9
+          core-version: 0.10.14+7d59c7ec9
 
       - name: MoonBit deps
         run: moon update
@@ -51,8 +61,6 @@ jobs:
           tests/reporting/*.test.ts
           tests/commands/collect.test.ts
           tests/storage/duckdb.test.ts
-          tests/commands/ops-*.test.ts
-          tests/commands/flaky-tag-triage.test.ts
 
       - name: Install DuckDB C library
         run: |
@@ -62,10 +70,14 @@ jobs:
           sudo cp /tmp/duckdb/libduckdb.so /usr/local/lib/
           sudo ldconfig
 
+      # The experimental native CLI does not build on current MoonBit
+      # toolchains until mizchi/github and f4ah6o/duckdb catch up (#92).
+      # Non-blocking so the JS path and the test suite stay required.
       - name: Native CLI build
+        continue-on-error: true
         run: |
           C_INCLUDE_PATH=/usr/local/include LIBRARY_PATH=/usr/local/lib \
-          moon build --target native src/cmd/flaker_native 2>/dev/null || true
+          moon build --target native src/cmd/flaker_native || true
           # Manual link (moon doesn't pass cc-link-flags for deps)
           cc -O2 -o dist/flaker \
             -I"$HOME/.moon/include" \
@@ -86,6 +98,7 @@ jobs:
             -Wl,-rpath,/usr/local/lib
 
       - name: Native CLI smoke
+        continue-on-error: true
         run: |
           LD_LIBRARY_PATH=/usr/local/lib dist/flaker --help
           LD_LIBRARY_PATH=/usr/local/lib dist/flaker collect calibrate || echo "No data yet (expected)"
@@ -129,6 +142,12 @@ jobs:
 
       - name: Setup MoonBit
         uses: hustcer/setup-moonbit@v1
+        with:
+          # Pinned: "latest" picked up a toolchain on 2026-07-14 that broke the
+          # parquet test package and, through the vitest global setup, silently
+          # emptied the self-host nightly (#75). Bump deliberately.
+          version: 0.10.14+7d59c7ec9
+          core-version: 0.10.14+7d59c7ec9
 
       - name: MoonBit deps
         run: moon update
@@ -145,7 +164,7 @@ jobs:
       - name: Collect CI history
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node dist/cli/main.js apply --target collect_ci 2>&1 | tee .artifacts/collect.txt
+        run: node dist/cli/main.js import --ci --days 30 2>&1 | tee .artifacts/collect.txt
 
       - name: Download historical self-host metrics
         env:
@@ -169,7 +188,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          node dist/cli/main.js run --profile ci > .artifacts/run.txt 2>&1
+          node dist/cli/main.js run --gate merge > .artifacts/run.txt 2>&1
           exit_code=$?
           echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
           if [ "$exit_code" -eq 0 ]; then

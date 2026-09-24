@@ -7,28 +7,21 @@ import {
   loadQuarantineManifestIfExists as loadQuarantineManifestIfExistsDefault,
   type QuarantineManifestEntry,
 } from "../../quarantine-manifest.js";
-import { gateNameFromProfileName, type GateName } from "../../gate.js";
+import type { GateName } from "../../gate.js";
 import {
-  resolveProfile,
+  resolveGate,
+  resolveGateName,
   resolveFallbackSamplingMode,
-  resolveRequestedProfileName,
-  type ResolvedProfile,
-} from "../../profile-compat.js";
-import { computeAdaptivePercentage } from "../../adaptive.js";
-import { computeKpi as computeKpiDefault } from "../analyze/kpi.js";
-import { runInsights as runInsightsDefault } from "../analyze/insights.js";
-import type { MetricStore } from "../../storage/types.js";
+  type ResolvedGate,
+} from "../../gate-config.js";
 import {
   parseSampleCount,
   parseSamplePercentage,
-  parseClusterSamplingMode,
   parseSamplingMode,
-  type ClusterSamplingMode,
   type SamplingMode,
 } from "./sampling-options.js";
 
 export interface RunCliOpts {
-  profile?: string;
   gate?: string;
   strategy?: string;
   count?: string;
@@ -38,13 +31,11 @@ export interface RunCliOpts {
   changed?: string;
   coFailureDays?: string;
   holdoutRatio?: string;
-  modelPath?: string;
-  clusterMode?: string;
 }
 
 export interface PreparedRunRequest {
-  gateName?: GateName;
-  resolvedProfile: ResolvedProfile;
+  gateName: GateName;
+  resolvedGate: ResolvedGate;
   mode: SamplingMode;
   fallbackMode?: SamplingMode;
   count?: number;
@@ -54,11 +45,8 @@ export interface PreparedRunRequest {
   changedFiles?: string[];
   coFailureDays?: number;
   holdoutRatio?: number;
-  modelPath?: string;
-  clusterMode?: ClusterSamplingMode;
   resolver?: DependencyResolver;
   quarantineManifestEntries?: QuarantineManifestEntry[];
-  adaptiveReason?: string;
   timeBudgetSeconds?: number;
 }
 
@@ -66,14 +54,11 @@ export interface PrepareRunRequestDeps {
   detectChangedFiles?: typeof detectChangedFilesDefault;
   loadQuarantineManifestIfExists?: typeof loadQuarantineManifestIfExistsDefault;
   createResolver?: typeof createResolverDefault;
-  computeKpi?: typeof computeKpiDefault;
-  runInsights?: typeof runInsightsDefault;
 }
 
 interface PrepareRunRequestOpts {
   cwd: string;
   config: FlakerConfig;
-  store: MetricStore;
   opts: RunCliOpts;
   deps?: PrepareRunRequestDeps;
 }
@@ -105,24 +90,17 @@ export async function prepareRunRequest(
   const loadQuarantineManifestIfExists =
     deps.loadQuarantineManifestIfExists ?? loadQuarantineManifestIfExistsDefault;
   const createResolver = deps.createResolver ?? createResolverDefault;
-  const computeKpi = deps.computeKpi ?? computeKpiDefault;
-  const runInsights = deps.runInsights ?? runInsightsDefault;
 
-  const profileName = resolveRequestedProfileName(input.opts.profile, input.opts.gate);
-  const resolvedProfile = resolveProfile(
-    profileName,
-    input.config.profile,
-    input.config.sampling,
-  );
-  const gateName = gateNameFromProfileName(resolvedProfile.name);
+  const gateName = resolveGateName(input.opts.gate);
+  const resolvedGate = resolveGate(gateName, input.config.gate, input.config.sampling);
   const requestedStrategy = input.opts.strategy?.trim();
   const mode = parseSamplingMode(
     requestedStrategy && requestedStrategy.length > 0
       ? requestedStrategy
-      : resolvedProfile.strategy,
+      : resolvedGate.strategy,
   );
   const changedFiles = resolveChangedFiles(input.cwd, input.opts.changed, detectChangedFiles);
-  const skipQuarantined = input.opts.skipQuarantined ?? resolvedProfile.skip_quarantined;
+  const skipQuarantined = input.opts.skipQuarantined ?? resolvedGate.skip_quarantined;
   const shouldLoadQuarantineManifest = Boolean(
     skipQuarantined || input.config.quarantine.runtime_apply,
   );
@@ -145,56 +123,27 @@ export async function prepareRunRequest(
       )
       : undefined;
 
-  let percentage =
-    parseSamplePercentage(input.opts.percentage) ?? resolvedProfile.sample_percentage;
-  let adaptiveReason: string | undefined;
-  if (resolvedProfile.adaptive && percentage != null) {
-    const kpiData = await computeKpi(input.store);
-    const insightsData = await runInsights({ store: input.store });
-    const divergenceRate = insightsData.summary.totalTests > 0
-      ? insightsData.summary.ciOnlyCount / insightsData.summary.totalTests
-      : null;
-    const adaptive = computeAdaptivePercentage(
-      {
-        falseNegativeRate: kpiData.sampling.falseNegativeRate,
-        divergenceRate,
-      },
-      {
-        basePercentage: percentage,
-        fnrLow: resolvedProfile.adaptive_fnr_low_ratio,
-        fnrHigh: resolvedProfile.adaptive_fnr_high_ratio,
-        minPercentage: resolvedProfile.adaptive_min_percentage,
-        step: resolvedProfile.adaptive_step,
-      },
-    );
-    percentage = adaptive.percentage;
-    adaptiveReason = adaptive.reason;
-  }
+  const percentage =
+    parseSamplePercentage(input.opts.percentage) ?? resolvedGate.sample_percentage;
 
   return {
     gateName,
-    resolvedProfile,
+    resolvedGate,
     mode,
-    fallbackMode: resolveFallbackSamplingMode(resolvedProfile),
+    fallbackMode: resolveFallbackSamplingMode(resolvedGate),
     count: parseSampleCount(input.opts.count),
     percentage,
     skipQuarantined,
-    skipFlakyTagged: input.opts.skipFlakyTagged ?? resolvedProfile.skip_flaky_tagged,
+    skipFlakyTagged: input.opts.skipFlakyTagged ?? resolvedGate.skip_flaky_tagged,
     changedFiles,
     coFailureDays: input.opts.coFailureDays
       ? parseInt(input.opts.coFailureDays, 10)
-      : resolvedProfile.co_failure_window_days,
+      : resolvedGate.co_failure_window_days,
     holdoutRatio: input.opts.holdoutRatio
       ? parseFloat(input.opts.holdoutRatio)
-      : resolvedProfile.holdout_ratio,
-    modelPath: input.opts.modelPath ?? resolvedProfile.model_path,
-    clusterMode:
-      parseClusterSamplingMode(input.opts.clusterMode)
-      ?? resolvedProfile.cluster_mode
-      ?? "off",
+      : resolvedGate.holdout_ratio,
     resolver,
     quarantineManifestEntries,
-    adaptiveReason,
-    timeBudgetSeconds: resolvedProfile.max_duration_seconds,
+    timeBudgetSeconds: resolvedGate.max_duration_seconds,
   };
 }

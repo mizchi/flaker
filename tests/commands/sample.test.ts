@@ -95,16 +95,6 @@ describe("sample command", () => {
     await store.close();
   });
 
-  it("random returns correct count", async () => {
-    const sampled = await runSample({
-      store,
-      count: 5,
-      mode: "random",
-      seed: 42,
-    });
-    expect(sampled).toHaveLength(5);
-  });
-
   it("weighted returns correct count", async () => {
     const sampled = await runSample({
       store,
@@ -119,7 +109,7 @@ describe("sample command", () => {
     const sampled = await runSample({
       store,
       percentage: 50,
-      mode: "random",
+      mode: "weighted",
       seed: 42,
     });
     expect(sampled).toHaveLength(10);
@@ -158,7 +148,7 @@ describe("sample command without history", () => {
   it("falls back to listedTests when the store has no test history", async () => {
     const sampled = await runSample({
       store,
-      mode: "random",
+      mode: "weighted",
       count: 2,
       seed: 42,
       listedTests: [
@@ -242,7 +232,7 @@ describe("sample command without history", () => {
   it("marks listedTests cold start as a fallback reason", async () => {
     const plan = await planSample({
       store,
-      mode: "random",
+      mode: "weighted",
       count: 2,
       seed: 42,
       listedTests: [
@@ -296,7 +286,7 @@ describe("sample command without history", () => {
     expect(output).toContain("CI pass when local pass:  97.2%");
     expect(output).toContain("Fallback reason:          cold-start-listed-tests");
     expect(output).toContain("Fallback details:         No historical test results were found");
-    expect(output).toContain("Next action:              Run `flaker collect` or `flaker import`");
+    expect(output).toContain("Next action:              Run `flaker import --ci` or `flaker import <file>`");
     expect(output).toContain("History target:           Aim for >= 5 runs/test");
   });
 
@@ -453,7 +443,7 @@ describe("sample command with stable identity history", () => {
     const sampled = await runSample({
       store,
       count: 10,
-      mode: "random",
+      mode: "weighted",
       seed: 42,
     });
 
@@ -498,7 +488,7 @@ describe("sample command with stable identity history", () => {
     const sampled = await runSample({
       store,
       count: 10,
-      mode: "random",
+      mode: "weighted",
       seed: 42,
     });
 
@@ -508,5 +498,74 @@ describe("sample command with stable identity history", () => {
       flaky_rate: 50,
       previously_failed: true,
     });
+  });
+});
+
+describe("sample command with no changed files", () => {
+  let store: DuckDBStore;
+  const listedTests = ["a", "b", "c", "d"].map((name) => ({
+    suite: `tests/${name}.test.ts`,
+    testName: `${name} works`,
+  }));
+
+  beforeEach(async () => {
+    store = new DuckDBStore(":memory:");
+    await store.initialize();
+  });
+
+  afterEach(async () => {
+    await store.close();
+  });
+
+  it("falls back from affected to the configured strategy instead of throwing", async () => {
+    const plan = await planSample({
+      store,
+      mode: "affected",
+      fallbackMode: "weighted",
+      count: 2,
+      seed: 42,
+      listedTests,
+    });
+
+    expect(plan.sampled).toHaveLength(2);
+    expect(plan.summary.strategy).toBe("weighted");
+  });
+
+  it("selects nothing for affected without a fallback", async () => {
+    const plan = await planSample({
+      store,
+      mode: "affected",
+      count: 2,
+      seed: 42,
+      listedTests,
+    });
+
+    expect(plan.sampled).toHaveLength(0);
+    expect(plan.summary.strategy).toBe("affected");
+  });
+
+  it("fills hybrid from weighted sampling", async () => {
+    const plan = await planSample({
+      store,
+      mode: "hybrid",
+      count: 3,
+      seed: 42,
+      listedTests,
+    });
+
+    expect(plan.sampled).toHaveLength(3);
+  });
+
+  it("still rejects changed files without a resolver", async () => {
+    await expect(
+      planSample({
+        store,
+        mode: "affected",
+        count: 2,
+        seed: 42,
+        changedFiles: ["src/a.ts"],
+        listedTests,
+      }),
+    ).rejects.toThrow("affected mode requires a resolver when changed files are given");
   });
 });

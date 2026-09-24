@@ -3,7 +3,6 @@ import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
 import { loadCore } from "../../src/cli/core/loader.js";
 import { loadFixtureIntoStore } from "../../src/cli/eval/fixture-loader.js";
 import { analyzeProject, recommendSampling } from "../../src/cli/commands/collect/calibrate.js";
-import { trainModel } from "../../src/cli/commands/dev/train.js";
 import { planSample } from "../../src/cli/commands/exec/plan.js";
 import { runInsights } from "../../src/cli/commands/analyze/insights.js";
 import { mkdirSync, rmSync } from "node:fs";
@@ -42,7 +41,6 @@ describe("data accumulation pipeline", () => {
 
     const profile = await analyzeProject(store, {
       hasResolver: true,
-      hasGBDTModel: false,
     });
 
     expect(profile.testCount).toBe(100);
@@ -53,36 +51,6 @@ describe("data accumulation pipeline", () => {
     const sampling = recommendSampling(profile);
     expect(sampling.strategy).toBe("hybrid");
     expect(sampling.sample_percentage).toBe(30);
-  });
-
-  it("train produces model from accumulated fixture data", { timeout: 30_000 }, async () => {
-    const core = await loadCore();
-    const fixture = core.generateFixture({
-      test_count: 50,
-      commit_count: 30,
-      flaky_rate: 0.15,
-      co_failure_strength: 0.7,
-      files_per_commit: 2,
-      tests_per_file: 5,
-      sample_percentage: 20,
-      seed: 123,
-    });
-    await loadFixtureIntoStore(store, fixture);
-
-    const modelPath = join(tmpDir, "gbdt.json");
-    const result = await trainModel({
-      store,
-      storagePath: join(tmpDir, "data.duckdb"),
-      outputPath: modelPath,
-      numTrees: 5,
-      learningRate: 0.2,
-    });
-
-    expect(result.trainingRows).toBeGreaterThan(0);
-    expect(result.positiveCount).toBeGreaterThan(0);
-    expect(result.negativeCount).toBeGreaterThan(0);
-    expect(result.ciRows).toBeGreaterThan(0);
-    expect(result.localRows).toBe(0);
   });
 
   it("planSample uses accumulated data for weighted strategy", { timeout: 60000 }, async () => {
@@ -130,7 +98,6 @@ describe("data accumulation pipeline", () => {
 
     const profile1 = await analyzeProject(store, {
       hasResolver: true,
-      hasGBDTModel: false,
     });
     expect(profile1.commitCount).toBe(10);
 
@@ -186,7 +153,6 @@ describe("data accumulation pipeline", () => {
 
     const profile2 = await analyzeProject(store, {
       hasResolver: true,
-      hasGBDTModel: false,
     });
     expect(profile2.commitCount).toBe(30);
   });
@@ -227,7 +193,7 @@ describe("data accumulation pipeline", () => {
       { name: "flaky-local", status: "passed" },
     ]);
 
-    const profile = await analyzeProject(store, { hasResolver: false, hasGBDTModel: false });
+    const profile = await analyzeProject(store, { hasResolver: false });
     expect(profile.flakyRate).toBe(0);
 
     const insights = await runInsights({ store });
@@ -235,7 +201,7 @@ describe("data accumulation pipeline", () => {
     expect(insights.summary.localOnlyCount).toBe(1);
   });
 
-  it("full pipeline: accumulate → calibrate → train → sample", { timeout: 30000 }, async () => {
+  it("full pipeline: accumulate → calibrate → sample", { timeout: 30000 }, async () => {
     const core = await loadCore();
     const fixture = core.generateFixture({
       test_count: 50,
@@ -251,32 +217,12 @@ describe("data accumulation pipeline", () => {
 
     const profile = await analyzeProject(store, {
       hasResolver: true,
-      hasGBDTModel: false,
     });
     expect(profile.testCount).toBe(50);
     expect(profile.commitCount).toBe(30);
     const sampling = recommendSampling(profile);
     expect(sampling.strategy).toBe("hybrid");
     expect(sampling.sample_percentage).toBe(50);
-
-    const modelPath = join(tmpDir, "gbdt.json");
-    const trainResult = await trainModel({
-      store,
-      storagePath: join(tmpDir, "data.duckdb"),
-      outputPath: modelPath,
-      numTrees: 10,
-      learningRate: 0.2,
-    });
-    expect(trainResult.trainingRows).toBeGreaterThan(50);
-
-    const gbdtPlan = await planSample({
-      store,
-      count: 20,
-      mode: "gbdt",
-      seed: 42,
-      modelPath,
-    });
-    expect(gbdtPlan.sampled).toHaveLength(20);
 
     const lastCommitFiles = fixture.commits[fixture.commits.length - 1].changed_files.map((f) => f.file_path);
     const hybridPlan = await planSample({

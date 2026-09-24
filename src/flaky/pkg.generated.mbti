@@ -16,4 +16,3 @@ type TestKey derive(Eq, Hash, Show)
 // Type aliases
 
 // Traits
-

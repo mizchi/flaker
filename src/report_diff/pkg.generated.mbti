@@ -15,4 +15,3 @@ pub fn classify_report_diff(Array[@contracts.ReportDiffStatusInput]) -> @contrac
 // Type aliases
 
 // Traits
-

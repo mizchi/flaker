@@ -120,19 +120,15 @@ describe("flaker dogfood affected rules", () => {
     ]);
   });
 
-  it("maps training changes to train command tests without pulling eval command tests", () => {
+  it("has no rule for the train command removed in 0.13.0", () => {
     const selected = resolver.resolve(
       ["src/cli/commands/train.ts"],
       [
         "tests/commands/train.test.ts",
         "tests/eval/gbdt.test.ts",
-        "tests/commands/eval.test.ts",
       ],
     );
 
-    expect(selected).toEqual([
-      "tests/commands/train.test.ts",
-      "tests/eval/gbdt.test.ts",
-    ]);
+    expect(selected).toEqual([]);
   });
 });

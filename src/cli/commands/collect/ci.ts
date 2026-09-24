@@ -92,6 +92,22 @@ export function formatCollectSummary(
   return `${base}${pendingSuffix}, ${result.failedRuns} failed runs${suffix}`;
 }
 
+/**
+ * A collect that imports nothing still exits 0, which hid an empty
+ * self-host history for months (issue #75). Say why when nothing arrived.
+ */
+export function describeEmptyCollect(
+  result: CollectResult,
+  opts: { days: number; workflowPaths: string[] },
+): string | null {
+  if (result.testsCollected > 0) return null;
+  if (result.runsCollected === 0) {
+    const scope = opts.workflowPaths.length > 0 ? opts.workflowPaths.join(", ") : "any workflow";
+    return `warning: no completed runs of ${scope} in the last ${opts.days} days; nothing was imported. Run that workflow (or widen --days) so flaker has CI history.`;
+  }
+  return `warning: ${result.runsCollected} runs were collected but they contained no test results; check [adapter].artifact_name matches the uploaded artifact.`;
+}
+
 export function resolveCollectExitCode(
   result: CollectResult,
   opts: { failOnErrors?: boolean } = {},

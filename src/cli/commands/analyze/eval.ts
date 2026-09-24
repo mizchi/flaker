@@ -209,26 +209,26 @@ function buildEvalRecommendations(report: EvalReport): string[] {
   const kpi = report.samplingKpi;
 
   if (d.avgRunsPerTest < 5) {
-    recommendations.push("Collect more data: run `flaker collect` regularly to build history");
+    recommendations.push("Collect more data: run `flaker import --ci` regularly to build history");
   }
   const brokenInEval = det.flakyTestDetails?.filter(
     (t) => t.flakyRate >= 100 && t.totalRuns >= 5,
   ).length ?? 0;
   if (brokenInEval > 0) {
-    recommendations.push(`Fix or quarantine ${brokenInEval} broken test(s) (100% fail rate): run \`flaker analyze flaky\``);
+    recommendations.push(`Fix or quarantine ${brokenInEval} broken test(s) (100% fail rate): run \`flaker status --list flaky\``);
   }
   const intermittentInEval = det.flakyTests - brokenInEval;
   if (intermittentInEval > 0 && det.quarantinedTests === 0) {
-    recommendations.push(`Quarantine ${intermittentInEval} flaky test(s): run \`flaker policy quarantine --auto\``);
+    recommendations.push(`Quarantine ${intermittentInEval} flaky test(s): run \`flaker apply\` with \`[quarantine].auto = true\``);
   }
   if (res.newFlaky > 0) {
-    recommendations.push(`Investigate ${res.newFlaky} newly flaky test(s): run \`flaker analyze flaky\``);
+    recommendations.push(`Investigate ${res.newFlaky} newly flaky test(s): run \`flaker status --list flaky\``);
   }
   if (det.flakyTests === 0 && d.totalResults > 0) {
     recommendations.push("No flaky tests detected. Suite is healthy!");
   }
   if (d.totalResults === 0) {
-    recommendations.push("No data yet. Run `flaker collect` or `flaker import` to get started");
+    recommendations.push("No data yet. Run `flaker import --ci` or `flaker import <file>` to get started");
   }
   if (kpi.matchedCommits === 0 && d.totalResults > 0) {
     recommendations.push("No matched local/CI commit history yet. Import local runs with the same commit SHA to measure sampling quality");

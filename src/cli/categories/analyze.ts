@@ -1,5 +1,4 @@
 import { resolve } from "node:path";
-import type { Command } from "commander";
 import { loadConfig } from "../config.js";
 import { DuckDBStore } from "../storage/duckdb.js";
 import { runReason, formatReasoningReport } from "../commands/analyze/reason.js";
@@ -273,9 +272,4 @@ export async function analyzeQueryAction(sql: string): Promise<void> {
   } finally {
     await store.close();
   }
-}
-
-export function registerAnalyzeCommands(_program: Command): void {
-  // All analyze subcommands were deprecated in 0.7.0 and removed in 0.8.0.
-  // Action function exports are retained for use by main.ts and explain.ts.
 }

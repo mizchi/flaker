@@ -164,4 +164,3 @@ pub using @contracts {type TestMeta}
 pub using @contracts {type TestRunEntry}
 
 // Traits
-

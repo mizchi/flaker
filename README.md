@@ -23,6 +23,8 @@ It is designed for repositories where:
 > **Upgrading from 0.0.x / 0.1.x?** See [docs/how-to-use.md#config-migration](docs/how-to-use.md#config-migration) for the full key rename map. Starting with `0.2.0`, the CLI refuses to start on legacy configs and points to the migration guide.
 >
 > **Upgrading from 0.4.x?** See [docs/migration-0.4-to-0.5.md](docs/migration-0.4-to-0.5.md) or [docs/migration-0.4-to-0.5.ja.md](docs/migration-0.4-to-0.5.ja.md). `0.5.x` keeps existing profiles working, but the recommended user-facing commands are now gate-oriented.
+>
+> **Upgrading from 0.12.x?** `0.13.0` is a breaking release: `--profile` / `[profile.*]` / `FLAKER_PROFILE` are gone, replaced by `--gate` / `[gate.iteration|merge|release]` / `FLAKER_GATE`; the `random`, `gbdt`, and `coverage-guided` strategies, `cluster_mode`, `model_path`, `[coverage]`, `adaptive*` keys, `dev train`, and the `ops` command group are removed. See [docs/migration-0.12-to-0.13.md](docs/migration-0.12-to-0.13.md) / [docs/migration-0.12-to-0.13.ja.md](docs/migration-0.12-to-0.13.ja.md).
 
 ## Install as a CLI
 
@@ -224,14 +226,14 @@ Retries can help classify failures, but they are not proof of stability.
 
 The current CLI and config already fit this model:
 
-| Mental model | Current flaker shape (0.9.0) |
+| Mental model | Current flaker shape (0.13.0) |
 |-------------|----------------------|
-| Iteration Gate | `profile.local` |
-| Merge Gate | `profile.ci` |
-| Release Gate | usually a full run, often backed by `profile.scheduled` or a dedicated release workflow |
-| Observation loop | `flaker apply` + `flaker apply --emit daily` (`flaker ops daily` deprecated in 0.9.0) |
-| Triage loop | `flaker status --gate merge --detail` + `flaker ops weekly` (apply with `[quarantine].auto=true` also handles suggest/apply) |
-| Incident loop | `flaker ops incident` (or `flaker debug retry / confirm / diagnose`) |
+| Iteration Gate | `[gate.iteration]` |
+| Merge Gate | `[gate.merge]` |
+| Release Gate | usually a full run, backed by `[gate.release]` or a dedicated release workflow |
+| Observation loop | `flaker apply` (runs `import --ci` when `GITHUB_TOKEN` is set) + `flaker status` |
+| Triage loop | `flaker status --gate merge --detail` + `flaker status --list flaky` (apply with `[quarantine].auto=true` also handles suggest/apply) |
+| Incident loop | `flaker debug retry` / `debug confirm` / `debug diagnose` |
 
 If you describe flaker this way, the surface area becomes smaller:
 
@@ -239,7 +241,7 @@ If you describe flaker this way, the surface area becomes smaller:
 - operators run loops and maintain policies
 - flaker chooses strategies such as `affected`, `hybrid`, or `full`
 
-The older primitives such as `analyze eval`, `analyze flaky-tag`, and `policy quarantine` still exist, but they are now advanced/internal surfaces rather than the primary operator entrypoints.
+The `ops` command group, `apply --emit`/`apply --target`, and the old analysis primitives (`analyze eval`, `analyze flaky-tag`, `policy quarantine`) have all been removed; `apply`, `status`, and `explain` now cover the same ground. See [docs/migration-0.12-to-0.13.md](docs/migration-0.12-to-0.13.md) for the full mapping.
 
 ## Quick Start
 
@@ -255,27 +257,26 @@ pnpm flaker apply         # converge (safe to re-run)
 pnpm flaker status        # dashboard + promotion drift
 ```
 
-`flaker init` generates `[profile.local]` / `[profile.ci]` / `[profile.scheduled]` defaults out of the box. `flaker apply` detects missing CI history, runs a cold-start iteration gate, collects CI runs when `GITHUB_TOKEN` is set, and tunes sampling via calibrate when there are enough matched commits — in that order, skipping whatever isn't applicable.
+`flaker init` generates `[gate.iteration]` / `[gate.merge]` / `[gate.release]` defaults out of the box. `flaker apply` detects missing CI history, runs a cold-start iteration gate, collects CI runs when `GITHUB_TOKEN` is set, and tunes sampling via calibrate when there are enough matched commits — in that order, skipping whatever isn't applicable.
 
 The full Day 0 → Week 4 onboarding checklist lives at [docs/new-project-checklist.ja.md](docs/new-project-checklist.ja.md) / [.md](docs/new-project-checklist.md).
 
-> **Canonical command forms (0.9.0)**
+> **Canonical command forms (0.13.0)**
 >
-> The primary surface is 11 commands: `init`, `plan`, `apply`, `status`, `run`, `doctor`, `debug`, `query`, `explain`, `import`, `report`. The 0.7.0 legacy aliases were removed in 0.8.0. 0.9.0 re-deprecates `flaker ops daily` (removed in 1.0.0). `ops weekly` / `ops incident` remain Advanced first-class.
+> The primary surface is: `init`, `plan`, `apply`, `status`, `run`, `calibrate`, `doctor`, `debug`, `query`, `explain`, `import`, `report`. `dev` is a hidden maintainer-only group.
 >
-> | Canonical (0.9.0) | Deprecated (since → removed) |
+> | Canonical (0.13.0) | Notes |
 > |---|---|
-> | `flaker apply` | (replaces `collect ci / local / coverage / calibrate`, `quarantine suggest / apply`, `policy quarantine`, `analyze flaky-tag` — all removed in 0.8.0) |
-> | `flaker apply --emit daily [--output <file>]` | `flaker ops daily` (deprecated 0.9.0, remove 1.0.0) |
-> | `flaker apply --emit weekly` | `ops weekly` remains first-class (operator narrative) |
-> | `flaker apply --output <file>` | new in 0.9.0 — saves `ApplyArtifact` JSON |
-> | `flaker plan --output <file>` | new in 0.9.0 — saves `PlanArtifact` JSON |
-> | `flaker status` | (replaces `analyze kpi`, `kpi` — removed in 0.8.0) |
-> | `flaker status --markdown` | (replaces `analyze eval --markdown` — removed in 0.8.0) |
-> | `flaker status --list flaky` | (replaces `analyze flaky` — removed in 0.8.0) |
-> | `flaker status --gate <name> --detail --json` | (replaces `gate review / history / explain` — removed in 0.8.0) |
+> | `flaker apply` | reconciles the repo to `flaker.toml`; runs CI import + calibrate internally when needed |
+> | `flaker calibrate [--window-days <n>] [--dry-run] [--json]` | recommend and write `[sampling]` |
+> | `flaker import --ci [--days <n>] [--branch-filter <branch>]` | pull recent GitHub Actions results (needs `GITHUB_TOKEN`) |
+> | `flaker status --markdown` / `flaker explain insights` | weekly review artifacts |
+> | `flaker debug retry` / `debug confirm` / `debug diagnose` | incident investigation |
+> | `flaker apply --output <file>` | saves `ApplyArtifact` JSON |
+> | `flaker plan --output <file>` | saves `PlanArtifact` JSON |
 >
-> **Breaking JSON shape changes in 0.9.0**: `apply --json` uses `executed[*].status: "ok"|"failed"|"skipped"` (was `.ok: boolean` + `aborted`). `status --json` uses `drift.unmet[*].kind` / `.desired` (was `.field` / `.threshold`). See CHANGELOG for full notes.
+> The full list of 0.12.x forms these replace (and why) is in [docs/migration-0.12-to-0.13.md](docs/migration-0.12-to-0.13.md).
+> See [docs/migration-0.12-to-0.13.md](docs/migration-0.12-to-0.13.md) for the full breaking-change list and error messages.
 
 ### Initialize
 
@@ -287,29 +288,23 @@ This creates `flaker.toml`.
 
 ### Collect test history
 
-From GitHub Actions:
+From GitHub Actions (needs `GITHUB_TOKEN`):
 
 ```bash
 export GITHUB_TOKEN=$(gh auth token)
-flaker collect --days 30
+flaker import --ci --days 30
 ```
 
 From a local report file:
 
 ```bash
-flaker import report <file> --adapter playwright --commit "$(git rev-parse HEAD)"
+flaker import <file> --adapter playwright --commit "$(git rev-parse HEAD)"
 ```
 
 If the imported artifact came from CI rather than a local run, mark it explicitly:
 
 ```bash
-flaker import report <file> --adapter playwright --source ci --commit <sha>
-```
-
-From actrun local history:
-
-```bash
-flaker collect local --last 20
+flaker import <file> --adapter playwright --source ci --commit <sha>
 ```
 
 To execute through `actrun`, configure the workflow path explicitly:
@@ -330,20 +325,19 @@ trust = true
 
 ```bash
 flaker status
-flaker gate review merge
-flaker gate history merge --json
-flaker quarantine suggest --json
-flaker ops weekly --json
+flaker status --gate merge --detail --json
+flaker status --list flaky
+flaker status --list quarantined
 ```
 
-Advanced/internal analysis primitives still exist when you need lower-level detail:
+AI-assisted analysis primitives exist for lower-level detail:
 
 ```bash
-flaker analyze flaky
-flaker analyze reason
-flaker analyze eval --json
-flaker analyze eval --markdown --window 7
-flaker analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
+flaker explain reason
+flaker explain insights
+flaker explain cluster
+flaker status --markdown
+flaker status --markdown > .artifacts/flaker-review.md
 ```
 
 The markdown mode is meant for weekly review notes. It summarizes:
@@ -384,28 +378,22 @@ The first `flaker run` can still sample from the runner's listed tests, record t
 
 ## Execution Gates
 
-User-facing CLI usage should prefer gates. Profiles remain available as the
-advanced internal mechanism.
+User-facing CLI usage always goes through gates. The old profile-based flags and config sections were removed in 0.13.0 — see [docs/migration-0.12-to-0.13.md](docs/migration-0.12-to-0.13.md).
 
-| Gate | Backing profile | Purpose |
+| Gate | Config section | Purpose |
 |------|-----------------|---------|
-| `iteration` | `local` | Fast local feedback for the author |
-| `merge` | `ci` | PR / mainline gate |
-| `release` | `scheduled` | Full or near-full verification |
+| `iteration` | `[gate.iteration]` | Fast local feedback for the author |
+| `merge` | `[gate.merge]` | PR / mainline gate |
+| `release` | `[gate.release]` | Full or near-full verification |
 
 ```bash
-# Auto-detects the backing profile
+# Auto-detects the gate: merge on CI, iteration otherwise
 flaker run
 
 # Explicit gate selection
 flaker run --gate iteration
 flaker run --gate merge
 flaker run --gate release
-
-# Advanced: explicit profile names still work
-flaker run --profile local
-flaker run --profile ci
-flaker run --profile scheduled
 ```
 
 Configure in `flaker.toml`:
@@ -416,73 +404,48 @@ type = "playwright"
 command = "pnpm exec playwright test -c playwright.config.ts"
 flaky_tag_pattern = "@flaky"
 
-[profile.scheduled]
+[gate.release]
 strategy = "full"
 
-[profile.ci]
+[gate.merge]
 strategy = "hybrid"
 sample_percentage = 30
-adaptive = true        # auto-adjust based on false negative rate
 skip_flaky_tagged = true
 
-[profile.local]
+[gate.iteration]
 strategy = "affected"
 max_duration_seconds = 60
 fallback_strategy = "weighted"
 skip_flaky_tagged = true
 ```
 
+`adaptive` and the other `adaptive_*` sampling keys were removed in 0.13.0. Run `flaker calibrate` periodically instead of tuning `sample_percentage` automatically.
+
 This supports a simple Playwright workflow:
 
-- `release` / `scheduled` runs all E2E tests and accumulates history
+- `release` runs all E2E tests and accumulates history
 - `merge` / `iteration` exclude tests tagged with `@flaky`
-- `flaker ops weekly --json` carries both quarantine and flaky-tag suggestions for operator review
+- `flaker status --list flaky` surfaces quarantine and flaky-tag candidates for operator review
 
 Recommended `@flaky` loop:
 
 1. Start with full E2E execution so flaker can accumulate baseline history.
 2. When a Playwright test is known to be flaky, tag it with `@flaky`.
    `flaker` detects both Playwright tags and `@flaky` embedded in the test title.
-3. Keep `release` / `scheduled` as full execution, and use `merge` / `iteration` with `skip_flaky_tagged = true`.
+3. Keep `release` as full execution, and use `merge` / `iteration` with `skip_flaky_tagged = true`.
    For Playwright, flaker passes `--grep-invert @flaky` to normal runs.
-4. Run weekly triage and let an AI agent update test sources based on the artifact:
+4. Run `flaker apply` regularly (it auto-quarantines when `[quarantine].auto = true`), then review:
 
 ```bash
-flaker ops weekly --json > .artifacts/flaker-weekly.json
+flaker status --list flaky
+flaker status --markdown > .artifacts/flaker-weekly.md
 ```
 
-The weekly artifact contains flaky-tag suggestions:
-
-- `suggestions.add`: untagged tests that are unstable enough to move into `@flaky`
-- `suggestions.remove`: currently tagged tests that have enough consecutive clean passes to return to normal execution
-- `suggestions.keep`: currently tagged tests that should remain excluded from normal execution
-
-If you want the raw primitive instead of the bundled operator artifact:
-
-```bash
-flaker analyze flaky-tag --json > .artifacts/flaky-tag-triage.json
-```
-
-By default, add-thresholds come from `[quarantine]`:
-
-- `quarantine.flaky_rate_threshold_percentage`
-- `quarantine.min_runs`
-
-Remove suggestions default to `5` consecutive clean passes, and can be tuned:
-
-```bash
-flaker analyze flaky-tag --json \
-  --add-threshold 30 \
-  --min-runs 10 \
-  --remove-after-passes 5
-```
-
-Data flows downstream: release observation accumulates history → merge uses it for smarter sampling → iteration uses dependency graph for fast feedback. The `adaptive` flag automatically reduces CI percentage when data quality is high.
+Data flows downstream: release observation accumulates history → merge uses it for smarter sampling → iteration uses dependency graph for fast feedback. Run `flaker calibrate` periodically to re-tune `sample_percentage` from recent history (the `adaptive` auto-tuning flag was removed in 0.13.0).
 
 For local dogfooding, the practical loop is:
 
 ```bash
-flaker exec affected --changed src/foo.ts
 flaker run --dry-run --gate iteration --changed src/foo.ts
 flaker run --gate iteration --changed src/foo.ts
 ```
@@ -522,7 +485,7 @@ This creates a reviewed plan first, then applies it and optionally opens GitHub 
 The repo now ships two GitHub-native self-host lanes:
 
 - [ci.yml](https://github.com/mizchi/flaker/blob/main/.github/workflows/ci.yml): a `self-host-advisory` job runs on pull requests, executes `flaker run --gate merge`, snapshots `kpi` / `eval`, and updates a sticky PR comment.
-- [nightly-self-host.yml](https://github.com/mizchi/flaker/blob/main/.github/workflows/nightly-self-host.yml): a scheduled job rebuilds recent CI history with `flaker collect`, runs `flaker run --gate release`, and updates a rolling issue labeled `flaker-self-host`.
+- [nightly-self-host.yml](https://github.com/mizchi/flaker/blob/main/.github/workflows/nightly-self-host.yml): a scheduled job rebuilds recent CI history with `flaker import --ci`, runs `flaker run --gate release`, and updates a rolling issue labeled `flaker-self-host`.
 
 Both lanes render the same promotion-readiness summary from `scripts/self-host-review.mjs`. The current default is still advisory: the PR job is non-blocking, and the nightly workflow carries the long-form trend.
 
@@ -543,7 +506,7 @@ The most practical rollout looks like this:
 1. `flaker run --gate release` in a nightly scheduled workflow (full test + data accumulation)
 2. `flaker run --gate merge` on PR push (selective execution, posts PR comment)
 3. `flaker run --gate iteration` during development (fast feedback)
-4. Review `flaker status`, `flaker gate review merge`, and `flaker ops weekly` weekly
+4. Review `flaker status` and `flaker status --gate merge --detail --json` weekly
 5. Only tighten the workflow after local-to-CI correlation looks strong
 
 This works best in repositories with:
@@ -557,16 +520,15 @@ This works best in repositories with:
 ### Collection and import
 
 ```bash
-flaker collect
-flaker collect local
-flaker import report <file> --adapter playwright
-flaker collect coverage --format istanbul --input coverage/coverage-final.json
+flaker import --ci --days 30
+flaker import <file> --adapter playwright
 ```
+
+`[coverage]` and the `coverage-guided` strategy were removed in 0.13.0; see [docs/coverage-guided-sampling.md](docs/coverage-guided-sampling.md).
 
 ### Sampling and execution
 
 ```bash
-flaker run --dry-run --strategy random --count 20
 flaker run --dry-run --strategy weighted --count 20
 flaker run --dry-run --strategy affected
 flaker run --dry-run --strategy hybrid --count 50
@@ -575,12 +537,14 @@ flaker run --strategy hybrid --count 50
 flaker run --strategy affected --changed src/foo.ts
 ```
 
+The `random`, `gbdt`, and `coverage-guided` strategies were removed in 0.13.0; use `weighted`, `affected`, `hybrid`, or `full`.
+
 ### Flag precedence
 
 ```
 Resolution order (highest to lowest):
   1. Explicit CLI flag          (--strategy, --percentage, --count)
-  2. [profile.<name>] in flaker.toml   (via --profile or auto-detection)
+  2. [gate.<name>] in flaker.toml      (via --gate or auto-detection)
   3. [sampling] in flaker.toml         (project default)
   4. Built-in defaults
 
@@ -594,12 +558,14 @@ Notes:
 ### Analysis
 
 ```bash
-flaker analyze flaky
-flaker analyze reason
-flaker analyze eval
-flaker dev train
-flaker analyze query "SELECT * FROM test_results LIMIT 20"
+flaker status --list flaky
+flaker explain reason
+flaker status --markdown
+flaker calibrate
+flaker query "SELECT * FROM test_results LIMIT 20"
 ```
+
+`dev train` (GBDT model training) was removed in 0.13.0 along with the `gbdt` strategy.
 
 ### Confirm suspected failures
 
@@ -687,16 +653,15 @@ sample_percentage = 30
 holdout_ratio = 0.1
 co_failure_window_days = 90
 
-[profile.scheduled]
+[gate.release]
 strategy = "full"
 
-[profile.ci]
+[gate.merge]
 strategy = "hybrid"
 sample_percentage = 30
-adaptive = true
 skip_flaky_tagged = true
 
-[profile.local]
+[gate.iteration]
 strategy = "affected"
 max_duration_seconds = 60
 fallback_strategy = "weighted"
@@ -712,6 +677,8 @@ skip_flaky_tagged = true
 - [Operations Guide (ja)](https://github.com/mizchi/flaker/blob/main/docs/operations-guide.ja.md)
 - [Operations Guide](https://github.com/mizchi/flaker/blob/main/docs/operations-guide.md)
 - [Detailed Command Reference](https://github.com/mizchi/flaker/blob/main/docs/how-to-use.md)
+- [Migrating from 0.12.x to 0.13.0 (ja)](https://github.com/mizchi/flaker/blob/main/docs/migration-0.12-to-0.13.ja.md)
+- [Migrating from 0.12.x to 0.13.0](https://github.com/mizchi/flaker/blob/main/docs/migration-0.12-to-0.13.md)
 - [Why flaker](https://github.com/mizchi/flaker/blob/main/docs/why-flaker.md)
 - [Design Partner Rollout](https://github.com/mizchi/flaker/blob/main/docs/design-partner-rollout.ja.md)
 

@@ -113,7 +113,6 @@ describe("KPI scenarios", () => {
 
     const profile = await analyzeProject(store, {
       hasResolver: false,
-      hasGBDTModel: false,
     });
     expect(profile.brokenTestCount).toBe(3);
     expect(profile.intermittentFlakyCount).toBe(0);
@@ -165,7 +164,6 @@ describe("KPI scenarios", () => {
 
     const profile = await analyzeProject(store, {
       hasResolver: false,
-      hasGBDTModel: false,
     });
     // co-failure strength should be > 0 because there's a real correlation
     expect(profile.hasCoFailureData).toBe(true);
@@ -189,7 +187,6 @@ describe("KPI scenarios", () => {
 
     const profile = await analyzeProject(store, {
       hasResolver: false,
-      hasGBDTModel: false,
     });
     expect(profile.hasCoFailureData).toBe(false);
   });
@@ -227,7 +224,6 @@ describe("KPI scenarios", () => {
 
     const profile = await analyzeProject(store, {
       hasResolver: true,
-      hasGBDTModel: false,
     });
     expect(profile.brokenTestCount).toBe(2);
     expect(profile.intermittentFlakyCount).toBeGreaterThanOrEqual(1);

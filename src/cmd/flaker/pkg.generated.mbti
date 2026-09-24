@@ -4,6 +4,8 @@ package "mizchi/flaker/cmd/flaker"
 // Values
 pub fn aggregate_report_json(String) -> String
 
+pub fn bucketize_rate_json(Double) -> Int
+
 pub fn build_affected_report_json(String, String, String, String) -> String
 
 pub fn build_reverse_deps_json(String) -> String
@@ -28,9 +30,15 @@ pub fn find_affected_nodes_json(String, String) -> String
 
 pub fn find_matching_quarantine_json(String, String, String, String) -> String
 
+pub fn generate_fixture_json(String) -> String
+
 pub fn get_affected_test_patterns_json(String, String) -> String
 
 pub fn is_blocking_failure_json(String) -> String
+
+pub fn predict_batch_gbdt_json(String, String) -> String
+
+pub fn predict_gbdt_json(String, String) -> Double
 
 pub fn resolve_affected_json(String, String) -> String
 
@@ -46,11 +54,15 @@ pub fn sample_random_json(String, Int, Int) -> String
 
 pub fn sample_weighted_json(String, Int, Int) -> String
 
+pub fn select_by_coverage_json(String, String, Int) -> String
+
 pub fn summarize_quarantine_json(String, String, String, String, Int) -> String
 
 pub fn summarize_report_json(String) -> String
 
 pub fn topological_sort_json(String) -> String
+
+pub fn train_gbdt_json(String, Int, Double) -> String
 
 // Errors
 
@@ -63,4 +75,3 @@ pub(all) struct CliResult {
 // Type aliases
 
 // Traits
-

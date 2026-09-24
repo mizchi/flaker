@@ -90,6 +90,16 @@ test "round-trip: write and read test_results" {
   let file = @parquet.read_bytes(bytes)
   assert_eq(file.row_count(), 1)
   let row = file.rows()[0]
-  assert_eq(row[3], @parquet.Value::String("tests/a.spec.ts"))
-  assert_eq(row[5], @parquet.Value::String("passed"))
+  // @parquet.Value has no Debug impl, which assert_eq requires on current
+  // toolchains, so compare the unwrapped strings instead.
+  assert_eq(string_value(row[3]), "tests/a.spec.ts")
+  assert_eq(string_value(row[5]), "passed")
+}
+
+///|
+fn string_value(value : @parquet.Value) -> String raise {
+  match value {
+    @parquet.Value::String(s) => s
+    _ => fail("expected a String parquet value")
+  }
 }

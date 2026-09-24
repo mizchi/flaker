@@ -32,14 +32,14 @@ describe("--skip-quarantined", () => {
   afterEach(async () => { await store.close(); });
 
   it("excludes quarantined tests when skipQuarantined=true", async () => {
-    const result = await runSample({ store, mode: "random", count: 10, skipQuarantined: true });
+    const result = await runSample({ store, mode: "weighted", count: 10, skipQuarantined: true });
     const suites = result.map((r) => r.suite);
     expect(suites).not.toContain("tests/test_0.spec.ts");
     expect(result.length).toBe(4);
   });
 
   it("includes quarantined tests by default", async () => {
-    const result = await runSample({ store, mode: "random", count: 10 });
+    const result = await runSample({ store, mode: "weighted", count: 10 });
     const suites = result.map((r) => r.suite);
     expect(suites).toContain("tests/test_0.spec.ts");
     expect(result.length).toBe(5);
@@ -77,7 +77,7 @@ describe("--skip-quarantined", () => {
 
     const result = await runSample({
       store,
-      mode: "random",
+      mode: "weighted",
       count: 10,
       skipQuarantined: true,
       quarantineManifestEntries: manifestEntries,
@@ -108,7 +108,7 @@ describe("--skip-quarantined", () => {
 
     const result = await runSample({
       store,
-      mode: "random",
+      mode: "weighted",
       count: 10,
       skipQuarantined: true,
       quarantineManifestEntries: manifestEntries,

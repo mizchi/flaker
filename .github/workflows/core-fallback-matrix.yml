@@ -37,6 +37,12 @@ jobs:
       - name: Setup MoonBit (with build mode only)
         if: matrix.moonbit_mode == 'with_moonbit_build'
         uses: hustcer/setup-moonbit@v1
+        with:
+          # Pinned: "latest" picked up a toolchain on 2026-07-14 that broke the
+          # parquet test package and, through the vitest global setup, silently
+          # emptied the self-host nightly (#75). Bump deliberately.
+          version: 0.10.14+7d59c7ec9
+          core-version: 0.10.14+7d59c7ec9
 
       - name: Verify MoonBit toolchain
         if: matrix.moonbit_mode == 'with_moonbit_build'

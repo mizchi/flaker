@@ -1,0 +1,39 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/flaker/gbdt"
+
+import {
+  "moonbitlang/core/json",
+}
+
+// Values
+pub fn predict(GBDTModel, Array[Double]) -> Double
+
+pub fn predict_batch(GBDTModel, Array[Array[Double]]) -> Array[Double]
+
+pub fn train(Array[TrainingRow], num_trees? : Int, learning_rate? : Double, feature_names? : Array[String]) -> GBDTModel
+
+// Errors
+
+// Types and methods
+pub(all) struct DecisionStump {
+  feature_idx : Int
+  threshold : Double
+  left_value : Double
+  right_value : Double
+} derive(Eq, Show, ToJson, @json.FromJson)
+
+pub(all) struct GBDTModel {
+  trees : Array[DecisionStump]
+  learning_rate : Double
+  feature_names : Array[String]
+  base_score : Double
+} derive(Eq, Show, ToJson, @json.FromJson)
+
+pub(all) struct TrainingRow {
+  features : Array[Double]
+  label : Double
+} derive(Eq, Show, ToJson, @json.FromJson)
+
+// Type aliases
+
+// Traits

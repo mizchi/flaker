@@ -29,7 +29,7 @@ When you want to test flaker against another project on your machine without pub
 pnpm install
 
 # from the sibling project root (e.g. ../sample-webapp-2026)
-node ../flaker/scripts/dev-cli.mjs run --dry-run --profile local --changed src/foo.ts
+node ../flaker/scripts/dev-cli.mjs run --dry-run --gate iteration --changed src/foo.ts
 node ../flaker/scripts/dev-cli.mjs analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
 ```
 

@@ -10,6 +10,8 @@
 
 まだ導入していない場合は先に [new-project-checklist.ja.md](new-project-checklist.ja.md) を使う。
 
+`0.12.x` 以前で運用していた場合は先に [migration-0.12-to-0.13.ja.md](migration-0.12-to-0.13.ja.md) を見る — `ops` / profile / adaptive sampling は廃止された。
+
 この quick start の目的は 3 つ。
 
 - 毎日何を回すかを固定する
@@ -21,9 +23,9 @@
 少なくとも次があること。
 
 - `flaker.toml`
-- `profile.scheduled`
-- `profile.ci`
-- `profile.local`
+- `[gate.release]`
+- `[gate.merge]`
+- `[gate.iteration]`
 - GitHub Actions の `pull_request` または `push` / `schedule`
 
 最低限の Playwright 向け設定例:
@@ -39,15 +41,15 @@ auto = true
 flaky_rate_threshold_percentage = 30
 min_runs = 10
 
-[profile.scheduled]
+[gate.release]
 strategy = "full"
 
-[profile.ci]
+[gate.merge]
 strategy = "hybrid"
 sample_percentage = 30
 skip_flaky_tagged = true
 
-[profile.local]
+[gate.iteration]
 strategy = "affected"
 max_duration_seconds = 90
 fallback_strategy = "weighted"
@@ -61,8 +63,8 @@ repo root で次を実行する。
 ```bash
 mkdir -p .artifacts
 pnpm flaker status
-pnpm flaker gate review merge --json --output .artifacts/gate-review-merge.json
-pnpm flaker ops weekly --output .artifacts/flaker-weekly.md
+pnpm flaker status --gate merge --detail --json > .artifacts/gate-review-merge.json
+pnpm flaker status --markdown > .artifacts/flaker-weekly.md
 ```
 
 ここで見るもの:
@@ -83,22 +85,17 @@ nightly または 1 日 1 回、次を回す。
 ```bash
 mkdir -p .artifacts
 export GITHUB_TOKEN=$(gh auth token)
-pnpm flaker collect ci --days 1
-pnpm flaker ops daily --output .artifacts/flaker-daily.md
-pnpm flaker quarantine suggest --json --output .artifacts/quarantine-plan.json
-```
-
-必要なら quarantine も更新する。
-
-```bash
-pnpm flaker quarantine apply --from .artifacts/quarantine-plan.json --create-issues
+pnpm flaker apply --json --output .artifacts/flaker-daily.json
+pnpm flaker status --markdown > .artifacts/flaker-daily.md
 ```
 
 この loop の役割:
 
-- full run で history を増やす
-- quarantine の add / remove 候補を plan として残す
-- 日次の release snapshot を残す
+- `import --ci` (apply が内包) で history を増やす
+- `[quarantine].auto` に従って flaky テストを宣言的に隔離する
+- 日次の reconciliation artifact を残す
+
+手動で quarantine を上書きしたい場合は `.flaker/quarantine-manifest.toml` を直接編集してコミットする (apply は既存 manifest を尊重する)。
 
 ## 3. 毎週のレビュー
 
@@ -106,8 +103,9 @@ pnpm flaker quarantine apply --from .artifacts/quarantine-plan.json --create-iss
 
 ```bash
 mkdir -p .artifacts
-pnpm flaker gate review merge --json --output .artifacts/gate-review-merge.json
-pnpm flaker ops weekly --output .artifacts/flaker-weekly.md
+pnpm flaker status --gate merge --detail --json > .artifacts/gate-review-merge.json
+pnpm flaker status --markdown > .artifacts/flaker-weekly.md
+pnpm flaker explain insights --json > .artifacts/flaker-insights.json
 ```
 
 その上で次の表を埋める。
@@ -169,19 +167,7 @@ test ごとの契約テンプレートは [skills/flaker-management/assets/test-
 
 ## 7. 事故ったとき
 
-CI failure の再確認:
-
-```bash
-pnpm flaker ops incident --run <workflow-run-id> --output .artifacts/flaker-incident.md
-```
-
-特定 test の confirm:
-
-```bash
-pnpm flaker ops incident --suite path/to/spec.ts --test "test name" --output .artifacts/flaker-incident.md
-```
-
-より細かくやるなら raw debug primitives を使う。
+CI failure の再確認と特定 test の confirm は debug primitives を直接使う (`ops incident` wrapper は 0.13.0 で削除された)。
 
 ```bash
 pnpm flaker debug retry --run <workflow-run-id>

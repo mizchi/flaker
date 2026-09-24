@@ -24,7 +24,7 @@ describe("flaker context", () => {
     expect(ctx.environment.commitHistory).toBe(0);
     expect(ctx.environment.coFailureDataPoints).toBe(0);
     expect(ctx.environment.resolverConfigured).toBe(false);
-    expect(ctx.environment.gbdtModelAvailable).toBe(false);
+    expect(ctx.environment).not.toHaveProperty("gbdtModelAvailable");
   });
 
   it("reflects data after insertion", async () => {
@@ -61,16 +61,20 @@ describe("flaker context", () => {
     expect(ctx.environment.resolverConfigured).toBe(true);
   });
 
-  it("lists all 6 strategies with characteristics", async () => {
+  it("lists only the supported strategies with characteristics", async () => {
     const ctx = await buildContext(store, {
       storagePath: "/tmp/nonexistent/flaker.db",
       resolverConfigured: false,
     });
 
-    expect(Object.keys(ctx.strategies)).toHaveLength(6);
-    expect(ctx.strategies.random).toBeDefined();
-    expect(ctx.strategies.hybrid).toBeDefined();
-    expect(ctx.strategies.gbdt).toBeDefined();
+    expect(Object.keys(ctx.strategies)).toEqual([
+      "weighted",
+      "weighted+co-failure",
+      "hybrid",
+    ]);
+    for (const removed of ["random", "coverage-guided", "gbdt"]) {
+      expect(ctx.strategies).not.toHaveProperty(removed);
+    }
 
     // Each strategy has characteristics
     for (const [, info] of Object.entries(ctx.strategies)) {
@@ -88,8 +92,11 @@ describe("flaker context", () => {
     expect(output).toContain("Flaker Context");
     expect(output).toContain("Environment");
     expect(output).toContain("Available Strategies");
-    expect(output).toContain("random");
+    expect(output).toContain("weighted");
     expect(output).toContain("hybrid");
+    expect(output).not.toContain("GBDT");
+    expect(output).not.toMatch(/\brandom\b/);
+    expect(output).not.toContain("coverage-guided");
   });
 
   it("JSON output is serializable", async () => {
@@ -101,6 +108,6 @@ describe("flaker context", () => {
     const json = JSON.stringify(ctx);
     const parsed = JSON.parse(json);
     expect(parsed.environment.testCount).toBe(0);
-    expect(parsed.strategies.random.characteristics).toBeInstanceOf(Array);
+    expect(parsed.strategies.weighted.characteristics).toBeInstanceOf(Array);
   });
 });
