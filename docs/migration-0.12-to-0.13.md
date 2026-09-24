@@ -2,7 +2,7 @@
 
 [日本語版](migration-0.12-to-0.13.ja.md)
 
-`0.13.0` is a **breaking** release. It removes the profile-based execution surface, the `ops` command group, `apply --emit` / `apply --target`, adaptive sampling, and the `random` / `gbdt` / `coverage-guided` strategies. Every removed key or flag fails fast with an error that names its replacement (or tells you to delete it) and points back to this page.
+`0.13.0` is a **breaking** release. It removes the profile-based execution surface, the `ops` command group, `apply --emit` / `apply --target`, adaptive sampling, and the `random` / `gbdt` / `coverage-guided` strategies. Removed config keys, sections and env vars are hard errors that name their replacement (or tell you to delete them) and point back to this page. Removed CLI flags and commands fail with commander's `unknown option` / `unknown command` error, which does not name a replacement — use the tables in this guide.
 
 There is no compatibility shim. If your `flaker.toml`, scripts, or CI workflows use any of the old forms below, `flaker` will refuse to start until you update them.
 
@@ -128,7 +128,7 @@ Note that `ops weekly` used to also carry flaky-tag add/remove triage narrative;
 
 `flaker dev <subcommand>` no longer appears in `flaker --help` or `flaker dev --help`'s parent listing context, but every subcommand still runs when invoked directly (e.g. `flaker dev tune`, `flaker dev eval-co-failure`). The only subcommand actually **removed** is `dev train` (see §2) — it depended on the deleted GBDT strategy.
 
-## 7. Every removed key is a hard error that names its replacement
+## 7. Removed config keys and env vars are hard errors that name their replacement
 
 `flaker.toml` is validated before anything else runs. A config using a removed or renamed key fails immediately, in the terminal, with the offending key and (when there is one) its replacement. For example, running `flaker run` against a `flaker.toml` containing:
 
@@ -175,6 +175,10 @@ And setting a non-blank `FLAKER_PROFILE` (even alongside a valid `--gate` flag):
 ```
 Error: FLAKER_PROFILE was replaced by FLAKER_GATE in 0.13.0 (ci → merge). See docs/migration-0.12-to-0.13.md.
 ```
+
+Each of these prints the message once to stderr, with no stack trace, and exits with code 2.
+
+Removed CLI flags and commands are different: they are rejected by the argument parser before flaker's own validation runs, so the error does not name a replacement. For example, `flaker run --profile ci` prints `error: unknown option '--profile'` and `flaker ops weekly` prints `error: unknown command 'ops'` (each followed by the command's help, exit code 1). Use the tables in §1–§5 to find the replacement.
 
 `fallback_strategy` and `holdout_ratio` are both kept as-is; only the removed strategy *values* (`random` / `gbdt` / `coverage-guided`) are rejected when used as `fallback_strategy`.
 

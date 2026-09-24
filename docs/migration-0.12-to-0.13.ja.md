@@ -2,7 +2,7 @@
 
 [English](migration-0.12-to-0.13.md)
 
-`0.13.0` は **breaking** release。profile ベースの実行 surface、`ops` コマンド群、`apply --emit` / `apply --target`、adaptive sampling、`random` / `gbdt` / `coverage-guided` 戦略を削除した。削除されたキーや flag は、置き換え先 (または削除指示) を明示したエラーで即座に起動を拒否し、このページへ誘導する。
+`0.13.0` は **breaking** release。profile ベースの実行 surface、`ops` コマンド群、`apply --emit` / `apply --target`、adaptive sampling、`random` / `gbdt` / `coverage-guided` 戦略を削除した。削除された config キー・セクション・環境変数は、置き換え先 (または削除指示) を明示したエラーで即座に起動を拒否し、このページへ誘導する。削除された CLI flag やコマンドは commander の `unknown option` / `unknown command` エラーになり、置き換え先は表示されない — このガイドの表を参照すること。
 
 互換シムは無い。`flaker.toml` / script / CI workflow が以下の旧形式を使っている場合、修正するまで `flaker` は起動を拒否する。
 
@@ -128,7 +128,7 @@ flaker calibrate --window-days 30 --json
 
 `flaker dev <subcommand>` は `flaker --help` の一覧やその親カテゴリの help から見えなくなったが、直接呼び出せば各 subcommand は引き続き動く (例: `flaker dev tune`, `flaker dev eval-co-failure`)。実際に**削除**されたのは `dev train` のみ (§2 参照) — 削除済みの GBDT 戦略に依存していたため。
 
-## 7. 削除されたキーは全て置き換え先を明示するエラーになる
+## 7. 削除された config キーと環境変数は置き換え先を明示するエラーになる
 
 `flaker.toml` は他の何より先に検証される。削除・リネームされたキーを使う config は即座に、該当キー名と (あれば) 置き換え先を示すエラーで起動を拒否する。例えば次の `flaker.toml` に対して `flaker run` を実行すると:
 
@@ -175,6 +175,10 @@ Error: flaker.toml uses removed or renamed keys (see docs/migration-0.12-to-0.13
 ```
 Error: FLAKER_PROFILE was replaced by FLAKER_GATE in 0.13.0 (ci → merge). See docs/migration-0.12-to-0.13.md.
 ```
+
+いずれもメッセージを stderr に 1 回だけ出力し、stack trace は出さず、exit code 2 で終了する。
+
+削除された CLI flag とコマンドは扱いが異なる。flaker 自身の検証より前に引数パーサが拒否するため、エラーに置き換え先は含まれない。例えば `flaker run --profile ci` は `error: unknown option '--profile'`、`flaker ops weekly` は `error: unknown command 'ops'` を出力する (いずれも続けてコマンドの help を表示し、exit code 1)。置き換え先は §1–§5 の表で確認すること。
 
 `fallback_strategy` と `holdout_ratio` はそのまま残る。削除されたのは `fallback_strategy` に指定する戦略の**値** (`random` / `gbdt` / `coverage-guided`) のみ。
 
