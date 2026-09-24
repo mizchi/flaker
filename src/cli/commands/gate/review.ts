@@ -1,6 +1,6 @@
 import type { FlakerKpi } from "../analyze/kpi.js";
 import type { GateName } from "../../gate.js";
-import type { ResolvedProfile } from "../../profile-compat.js";
+import type { ResolvedGate } from "../../gate-config.js";
 
 export type GateReviewCheckStatus = "pass" | "fail";
 export type GateReviewStatus = "ready" | "insufficient_data" | "investigate" | "demote";
@@ -16,7 +16,6 @@ export interface GateReviewCheck {
 
 export interface GateReviewReport {
   gate: GateName;
-  backingProfile: string;
   strategy: string;
   budget: {
     timeSeconds: number | null;
@@ -80,7 +79,7 @@ function confidenceAtLeast(
 
 export function buildGateReview(input: {
   gate: GateName;
-  profile: ResolvedProfile;
+  resolvedGate: ResolvedGate;
   kpi: FlakerKpi;
   thresholds?: Partial<GateReviewThresholds>;
 }): GateReviewReport {
@@ -166,12 +165,11 @@ export function buildGateReview(input: {
 
   return {
     gate: input.gate,
-    backingProfile: input.profile.name,
-    strategy: input.profile.strategy,
+    strategy: input.resolvedGate.strategy,
     budget: {
-      timeSeconds: input.profile.max_duration_seconds ?? null,
-      samplePercentage: input.profile.sample_percentage ?? null,
-      holdoutRatio: input.profile.holdout_ratio ?? null,
+      timeSeconds: input.resolvedGate.max_duration_seconds ?? null,
+      samplePercentage: input.resolvedGate.sample_percentage ?? null,
+      holdoutRatio: input.resolvedGate.holdout_ratio ?? null,
     },
     kpi: {
       matchedCommits,
@@ -194,7 +192,6 @@ export function buildGateReview(input: {
 export function formatGateReview(report: GateReviewReport): string {
   const lines = [
     `Gate Review: ${report.gate}`,
-    `Backing profile: ${report.backingProfile}`,
     `Strategy: ${report.strategy}`,
     `Promotion readiness: ${report.promotionReadiness.status}`,
     `Recommended action: ${report.recommendedAction}`,

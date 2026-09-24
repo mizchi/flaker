@@ -56,9 +56,8 @@ export function createProgram(): Command {
 
   program
     .command("run")
-    .description("Run the selected gate or profile")
+    .description("Run the selected gate")
     .option("--gate <name>", "Gate name: iteration, merge, release")
-    .option("--profile <name>", "Advanced: execution profile name such as scheduled, ci, local")
     .option("--strategy <s>", "Sampling strategy: random, weighted, affected, hybrid, gbdt, full")
     .option("--count <n>", "Number of tests to sample")
     .option("--percentage <n>", "Percentage of tests to sample")

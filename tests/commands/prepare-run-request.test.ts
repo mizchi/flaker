@@ -21,14 +21,14 @@ const baseConfig: FlakerConfig = {
     holdout_ratio: 0.1,
     co_failure_window_days: 90,
   },
-  profile: {
-    ci: {
+  gate: {
+    merge: {
       strategy: "hybrid",
       sample_percentage: 25,
       adaptive: true,
       max_duration_seconds: 300,
     },
-    local: {
+    iteration: {
       strategy: "affected",
       fallback_strategy: "weighted",
     },
@@ -36,7 +36,7 @@ const baseConfig: FlakerConfig = {
 };
 
 describe("prepareRunRequest", () => {
-  it("resolves gate/profile options and prepares resolver + manifest for hybrid runs", async () => {
+  it("resolves gate options and prepares resolver + manifest for hybrid runs", async () => {
     const resolver = { resolveAffectedTests: vi.fn() };
     const detectChangedFiles = vi.fn(() => ["src/ignored.ts"]);
     const loadManifest = vi.fn(() => ({
@@ -64,7 +64,7 @@ describe("prepareRunRequest", () => {
     });
 
     expect(prepared.gateName).toBe("merge");
-    expect(prepared.resolvedProfile.name).toBe("ci");
+    expect(prepared.resolvedGate.name).toBe("merge");
     expect(prepared.mode).toBe("hybrid");
     expect(prepared.changedFiles).toEqual(["src/app.ts", "src/lib.ts"]);
     expect(prepared.quarantineManifestEntries).toEqual([{ id: "q1" }]);
@@ -151,9 +151,9 @@ describe("prepareRunRequest", () => {
       cwd: "/repo",
       config: {
         ...baseConfig,
-        profile: {
-          ...baseConfig.profile,
-          local: {
+        gate: {
+          ...baseConfig.gate,
+          iteration: {
             strategy: "random",
           },
         },

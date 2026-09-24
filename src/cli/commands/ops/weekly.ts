@@ -1,5 +1,5 @@
 import type { FlakerConfig } from "../../config.js";
-import { resolveProfile } from "../../profile-compat.js";
+import { resolveGate } from "../../gate-config.js";
 import type { RunnerAdapter } from "../../runners/types.js";
 import type { MetricStore } from "../../storage/types.js";
 import { runFlakyTagTriage, type FlakyTagTriageReport } from "../analyze/flaky-tag-triage.js";
@@ -73,11 +73,11 @@ export async function runOpsWeekly(input: {
 }): Promise<OpsWeeklyReport> {
   const now = input.now ?? new Date();
   const windowDays = input.windowDays ?? 7;
-  const mergeProfile = resolveProfile("ci", input.config.profile, input.config.sampling);
+  const mergeConfig = resolveGate("merge", input.config.gate, input.config.sampling);
   const kpi = await computeKpi(input.store, { windowDays });
   const mergeGate = buildGateReview({
     gate: "merge",
-    profile: mergeProfile,
+    resolvedGate: mergeConfig,
     kpi,
   });
   const quarantinePlan = await runQuarantineSuggest({

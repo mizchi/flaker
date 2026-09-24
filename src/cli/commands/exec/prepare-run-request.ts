@@ -7,13 +7,13 @@ import {
   loadQuarantineManifestIfExists as loadQuarantineManifestIfExistsDefault,
   type QuarantineManifestEntry,
 } from "../../quarantine-manifest.js";
-import { gateNameFromProfileName, type GateName } from "../../gate.js";
+import type { GateName } from "../../gate.js";
 import {
-  resolveProfile,
+  resolveGate,
+  resolveGateName,
   resolveFallbackSamplingMode,
-  resolveRequestedProfileName,
-  type ResolvedProfile,
-} from "../../profile-compat.js";
+  type ResolvedGate,
+} from "../../gate-config.js";
 import { computeAdaptivePercentage } from "../../adaptive.js";
 import { computeKpi as computeKpiDefault } from "../analyze/kpi.js";
 import { runInsights as runInsightsDefault } from "../analyze/insights.js";
@@ -28,7 +28,6 @@ import {
 } from "./sampling-options.js";
 
 export interface RunCliOpts {
-  profile?: string;
   gate?: string;
   strategy?: string;
   count?: string;
@@ -43,8 +42,8 @@ export interface RunCliOpts {
 }
 
 export interface PreparedRunRequest {
-  gateName?: GateName;
-  resolvedProfile: ResolvedProfile;
+  gateName: GateName;
+  resolvedGate: ResolvedGate;
   mode: SamplingMode;
   fallbackMode?: SamplingMode;
   count?: number;
@@ -108,21 +107,18 @@ export async function prepareRunRequest(
   const computeKpi = deps.computeKpi ?? computeKpiDefault;
   const runInsights = deps.runInsights ?? runInsightsDefault;
 
-  const profileName = resolveRequestedProfileName(input.opts.profile, input.opts.gate);
-  const resolvedProfile = resolveProfile(
-    profileName,
-    input.config.profile,
-    input.config.sampling,
-  );
-  const gateName = gateNameFromProfileName(resolvedProfile.name);
+  const gateName = resolveGateName(input.opts.gate);
+  const resolvedGate = resolveGate(gateName, input.config.gate, input.config.sampling);
+  // Adaptive sampling is read straight from [gate.<name>] until it is removed.
+  const adaptiveConfig = input.config.gate?.[gateName];
   const requestedStrategy = input.opts.strategy?.trim();
   const mode = parseSamplingMode(
     requestedStrategy && requestedStrategy.length > 0
       ? requestedStrategy
-      : resolvedProfile.strategy,
+      : resolvedGate.strategy,
   );
   const changedFiles = resolveChangedFiles(input.cwd, input.opts.changed, detectChangedFiles);
-  const skipQuarantined = input.opts.skipQuarantined ?? resolvedProfile.skip_quarantined;
+  const skipQuarantined = input.opts.skipQuarantined ?? resolvedGate.skip_quarantined;
   const shouldLoadQuarantineManifest = Boolean(
     skipQuarantined || input.config.quarantine.runtime_apply,
   );
@@ -146,9 +142,9 @@ export async function prepareRunRequest(
       : undefined;
 
   let percentage =
-    parseSamplePercentage(input.opts.percentage) ?? resolvedProfile.sample_percentage;
+    parseSamplePercentage(input.opts.percentage) ?? resolvedGate.sample_percentage;
   let adaptiveReason: string | undefined;
-  if (resolvedProfile.adaptive && percentage != null) {
+  if (adaptiveConfig?.adaptive && percentage != null) {
     const kpiData = await computeKpi(input.store);
     const insightsData = await runInsights({ store: input.store });
     const divergenceRate = insightsData.summary.totalTests > 0
@@ -161,10 +157,10 @@ export async function prepareRunRequest(
       },
       {
         basePercentage: percentage,
-        fnrLow: resolvedProfile.adaptive_fnr_low_ratio,
-        fnrHigh: resolvedProfile.adaptive_fnr_high_ratio,
-        minPercentage: resolvedProfile.adaptive_min_percentage,
-        step: resolvedProfile.adaptive_step,
+        fnrLow: adaptiveConfig.adaptive_fnr_low_ratio ?? 0.02,
+        fnrHigh: adaptiveConfig.adaptive_fnr_high_ratio ?? 0.05,
+        minPercentage: adaptiveConfig.adaptive_min_percentage ?? 10,
+        step: adaptiveConfig.adaptive_step ?? 5,
       },
     );
     percentage = adaptive.percentage;
@@ -173,28 +169,28 @@ export async function prepareRunRequest(
 
   return {
     gateName,
-    resolvedProfile,
+    resolvedGate,
     mode,
-    fallbackMode: resolveFallbackSamplingMode(resolvedProfile),
+    fallbackMode: resolveFallbackSamplingMode(resolvedGate),
     count: parseSampleCount(input.opts.count),
     percentage,
     skipQuarantined,
-    skipFlakyTagged: input.opts.skipFlakyTagged ?? resolvedProfile.skip_flaky_tagged,
+    skipFlakyTagged: input.opts.skipFlakyTagged ?? resolvedGate.skip_flaky_tagged,
     changedFiles,
     coFailureDays: input.opts.coFailureDays
       ? parseInt(input.opts.coFailureDays, 10)
-      : resolvedProfile.co_failure_window_days,
+      : resolvedGate.co_failure_window_days,
     holdoutRatio: input.opts.holdoutRatio
       ? parseFloat(input.opts.holdoutRatio)
-      : resolvedProfile.holdout_ratio,
-    modelPath: input.opts.modelPath ?? resolvedProfile.model_path,
+      : resolvedGate.holdout_ratio,
+    modelPath: input.opts.modelPath ?? resolvedGate.model_path,
     clusterMode:
       parseClusterSamplingMode(input.opts.clusterMode)
-      ?? resolvedProfile.cluster_mode
+      ?? resolvedGate.cluster_mode
       ?? "off",
     resolver,
     quarantineManifestEntries,
     adaptiveReason,
-    timeBudgetSeconds: resolvedProfile.max_duration_seconds,
+    timeBudgetSeconds: resolvedGate.max_duration_seconds,
   };
 }

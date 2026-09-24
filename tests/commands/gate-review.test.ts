@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { buildGateReview } from "../../src/cli/commands/gate/review.js";
-import type { ResolvedProfile } from "../../src/cli/profile-compat.js";
+import type { ResolvedGate } from "../../src/cli/gate-config.js";
 import type { FlakerKpi } from "../../src/cli/commands/analyze/kpi.js";
 
-function makeProfile(overrides?: Partial<ResolvedProfile>): ResolvedProfile {
+function makeGate(overrides?: Partial<ResolvedGate>): ResolvedGate {
   return {
-    name: "ci",
+    name: "merge",
     strategy: "hybrid",
     sample_percentage: 25,
     holdout_ratio: 0.1,
@@ -14,11 +14,6 @@ function makeProfile(overrides?: Partial<ResolvedProfile>): ResolvedProfile {
     model_path: undefined,
     skip_quarantined: true,
     skip_flaky_tagged: true,
-    adaptive: true,
-    adaptive_fnr_low_ratio: 0.02,
-    adaptive_fnr_high_ratio: 0.05,
-    adaptive_min_percentage: 10,
-    adaptive_step: 5,
     max_duration_seconds: 600,
     fallback_strategy: "weighted",
     ...overrides,
@@ -68,12 +63,11 @@ describe("gate review", () => {
   it("marks merge gate as ready to promote when signals clear thresholds", () => {
     const report = buildGateReview({
       gate: "merge",
-      profile: makeProfile(),
+      resolvedGate: makeGate(),
       kpi: makeKpi(),
     });
 
     expect(report.gate).toBe("merge");
-    expect(report.backingProfile).toBe("ci");
     expect(report.promotionReadiness.status).toBe("ready");
     expect(report.recommendedAction).toBe("promote");
     expect(report.kpi.falseNegativeRateRatio).toBe(0.03);
@@ -83,7 +77,7 @@ describe("gate review", () => {
   it("returns insufficient_data when matched history is too small", () => {
     const report = buildGateReview({
       gate: "merge",
-      profile: makeProfile(),
+      resolvedGate: makeGate(),
       kpi: makeKpi({
         sampling: {
           ...makeKpi().sampling,
@@ -106,7 +100,7 @@ describe("gate review", () => {
   it("returns demote when false negative rate is above threshold", () => {
     const report = buildGateReview({
       gate: "merge",
-      profile: makeProfile(),
+      resolvedGate: makeGate(),
       kpi: makeKpi({
         sampling: {
           ...makeKpi().sampling,

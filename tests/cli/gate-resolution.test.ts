@@ -3,34 +3,24 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadConfig } from "../../src/cli/config.js";
-import {
-  detectProfileName,
-  resolveProfile,
-  resolveRequestedProfileName,
-} from "../../src/cli/profile-compat.js";
-import {
-  gateNameFromProfileName,
-  profileNameFromGateName,
-} from "../../src/cli/gate.js";
+import { resolveGate, resolveGateName } from "../../src/cli/gate-config.js";
+import { LEGACY_PROFILE_TO_GATE } from "../../src/cli/gate.js";
 import {
   computeAdaptivePercentage,
 } from "../../src/cli/adaptive.js";
-import type { AdaptiveSignals } from "../../src/cli/adaptive.js";
 
-// --- Task 1: ProfileConfig type and TOML parsing ---
-
-describe("loadConfig with profile sections", () => {
+describe("loadConfig with gate sections", () => {
   let dir: string;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "flaker-profile-test-"));
+    dir = mkdtempSync(join(tmpdir(), "flaker-gate-test-"));
   });
 
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("parses [profile.*] sections into config.profile", () => {
+  it("parses [gate.*] sections into config.gate", () => {
     writeFileSync(
       join(dir, "flaker.toml"),
       `
@@ -62,16 +52,16 @@ min_runs = 5
 window_days = 14
 detection_threshold_ratio = 0.02
 
-[profile.scheduled]
+[gate.release]
 strategy = "random"
 sample_percentage = 30
 cluster_mode = "spread"
 
-[profile.ci]
+[gate.merge]
 strategy = "full"
 max_duration_seconds = 300
 
-[profile.local]
+[gate.iteration]
 strategy = "random"
 sample_percentage = 10
 cluster_mode = "pack"
@@ -84,17 +74,17 @@ skip_flaky_tagged = true
 
     const config = loadConfig(dir);
 
-    expect(config.profile).toBeDefined();
-    expect(config.profile?.["scheduled"]).toEqual({
+    expect(config.gate).toBeDefined();
+    expect(config.gate?.release).toEqual({
       strategy: "random",
       sample_percentage: 30,
       cluster_mode: "spread",
     });
-    expect(config.profile?.["ci"]).toEqual({
+    expect(config.gate?.merge).toEqual({
       strategy: "full",
       max_duration_seconds: 300,
     });
-    expect(config.profile?.["local"]).toMatchObject({
+    expect(config.gate?.iteration).toMatchObject({
       strategy: "random",
       sample_percentage: 10,
       cluster_mode: "pack",
@@ -106,7 +96,7 @@ skip_flaky_tagged = true
     expect(config.runner.flaky_tag_pattern).toBe("@flaky");
   });
 
-  it("backward compat: no profile sections → profile is undefined", () => {
+  it("no gate sections → gate is undefined", () => {
     writeFileSync(
       join(dir, "flaker.toml"),
       `
@@ -140,178 +130,128 @@ detection_threshold_ratio = 0.02
     );
 
     const config = loadConfig(dir);
-    expect(config.profile).toBeUndefined();
+    expect(config.gate).toBeUndefined();
   });
 });
 
-// --- Task 2: Profile resolution module ---
-
-describe("detectProfileName", () => {
-  const originalEnv = process.env;
-
-  beforeEach(() => {
-    process.env = { ...originalEnv };
-    // Clear relevant env vars
-    delete process.env["FLAKER_PROFILE"];
-    delete process.env["CI"];
-    delete process.env["GITHUB_ACTIONS"];
+describe("resolveGateName", () => {
+  it("returns the explicit gate when provided", () => {
+    expect(resolveGateName("release", {})).toBe("release");
   });
 
-  afterEach(() => {
-    process.env = originalEnv;
+  it("normalizes case and whitespace", () => {
+    expect(resolveGateName(" Merge ", {})).toBe("merge");
   });
 
-  it("returns explicit name when provided", () => {
-    expect(detectProfileName("scheduled")).toBe("scheduled");
+  it("returns FLAKER_GATE when set", () => {
+    expect(resolveGateName(undefined, { FLAKER_GATE: "release" })).toBe("release");
   });
 
-  it("returns FLAKER_PROFILE env var when set", () => {
-    process.env["FLAKER_PROFILE"] = "nightly";
-    expect(detectProfileName(undefined)).toBe("nightly");
+  it("returns 'merge' when CI=true", () => {
+    expect(resolveGateName(undefined, { CI: "true" })).toBe("merge");
   });
 
-  it("returns 'ci' when CI=true", () => {
-    process.env["CI"] = "true";
-    expect(detectProfileName(undefined)).toBe("ci");
+  it("returns 'merge' when GITHUB_ACTIONS=true", () => {
+    expect(resolveGateName(undefined, { GITHUB_ACTIONS: "true" })).toBe("merge");
   });
 
-  it("returns 'ci' when GITHUB_ACTIONS=true", () => {
-    process.env["GITHUB_ACTIONS"] = "true";
-    expect(detectProfileName(undefined)).toBe("ci");
-  });
-
-  it("explicit overrides FLAKER_PROFILE env var", () => {
-    process.env["FLAKER_PROFILE"] = "nightly";
-    expect(detectProfileName("scheduled")).toBe("scheduled");
+  it("explicit overrides FLAKER_GATE", () => {
+    expect(resolveGateName("release", { FLAKER_GATE: "merge" })).toBe("release");
   });
 
   it("explicit overrides CI env var", () => {
-    process.env["CI"] = "true";
-    expect(detectProfileName("local")).toBe("local");
+    expect(resolveGateName("iteration", { CI: "true" })).toBe("iteration");
   });
 
-  it("returns 'local' as default when nothing is set", () => {
-    expect(detectProfileName(undefined)).toBe("local");
-  });
-});
-
-describe("gate/profile mapping", () => {
-  it("maps iteration gate to local profile", () => {
-    expect(profileNameFromGateName("iteration")).toBe("local");
+  it("returns 'iteration' as default when nothing is set", () => {
+    expect(resolveGateName(undefined, {})).toBe("iteration");
   });
 
-  it("maps merge gate to ci profile", () => {
-    expect(profileNameFromGateName("merge")).toBe("ci");
+  it("rejects an unknown FLAKER_GATE value", () => {
+    expect(() => resolveGateName(undefined, { FLAKER_GATE: "nightly" })).toThrow(/Unknown gate 'nightly'/);
   });
 
-  it("maps release gate to scheduled profile", () => {
-    expect(profileNameFromGateName("release")).toBe("scheduled");
-  });
-
-  it("maps known profiles back to gate names", () => {
-    expect(gateNameFromProfileName("local")).toBe("iteration");
-    expect(gateNameFromProfileName("ci")).toBe("merge");
-    expect(gateNameFromProfileName("scheduled")).toBe("release");
-  });
-
-  it("resolves requested profile from gate", () => {
-    expect(resolveRequestedProfileName(undefined, "merge")).toBe("ci");
-  });
-
-  it("allows matching profile and gate", () => {
-    expect(resolveRequestedProfileName("ci", "merge")).toBe("ci");
-  });
-
-  it("rejects conflicting profile and gate", () => {
-    expect(() => resolveRequestedProfileName("local", "merge")).toThrow(/conflicts with --gate/);
+  it("rejects FLAKER_PROFILE even without a known mapping", () => {
+    expect(() => resolveGateName("merge", { FLAKER_PROFILE: "nightly" })).toThrow(
+      /FLAKER_PROFILE was replaced by FLAKER_GATE/,
+    );
   });
 });
 
-describe("resolveProfile", () => {
-  it("uses strategy from profile config", () => {
-    const result = resolveProfile("ci", { ci: { strategy: "full" } }, undefined);
-    expect(result.name).toBe("ci");
+describe("legacy profile → gate mapping", () => {
+  it("maps each 0.12 profile to its gate", () => {
+    expect(LEGACY_PROFILE_TO_GATE).toEqual({
+      local: "iteration",
+      ci: "merge",
+      scheduled: "release",
+    });
+  });
+});
+
+describe("resolveGate", () => {
+  it("uses strategy from gate config", () => {
+    const result = resolveGate("merge", { merge: { strategy: "full" } }, undefined);
+    expect(result.name).toBe("merge");
     expect(result.strategy).toBe("full");
   });
 
   it("forces sample_percentage=100 and holdout_ratio=0 when strategy is 'full'", () => {
-    const result = resolveProfile("ci", { ci: { strategy: "full" } }, undefined);
+    const result = resolveGate("merge", { merge: { strategy: "full" } }, undefined);
     expect(result.sample_percentage).toBe(100);
     expect(result.holdout_ratio).toBe(0);
   });
 
-  it("merges profile over sampling defaults", () => {
-    const result = resolveProfile(
-      "scheduled",
-      { scheduled: { strategy: "random", sample_percentage: 30, cluster_mode: "spread" } },
+  it("merges gate over sampling defaults", () => {
+    const result = resolveGate(
+      "release",
+      { release: { strategy: "random", sample_percentage: 30, cluster_mode: "spread" } },
       { strategy: "random", sample_percentage: 50, holdout_ratio: 0.1, cluster_mode: "pack", skip_quarantined: true, skip_flaky_tagged: true },
     );
     expect(result.strategy).toBe("random");
-    expect(result.sample_percentage).toBe(30); // profile wins
+    expect(result.sample_percentage).toBe(30); // gate wins
     expect(result.holdout_ratio).toBe(0.1); // from sampling
-    expect(result.cluster_mode).toBe("spread"); // profile wins
+    expect(result.cluster_mode).toBe("spread"); // gate wins
     expect(result.skip_flaky_tagged).toBe(true); // from sampling
   });
 
-  it("allows profile to override skip_flaky_tagged", () => {
-    const result = resolveProfile(
-      "ci",
-      { ci: { strategy: "hybrid", skip_flaky_tagged: false } },
+  it("allows gate to override skip_flaky_tagged", () => {
+    const result = resolveGate(
+      "merge",
+      { merge: { strategy: "hybrid", skip_flaky_tagged: false } },
       { strategy: "hybrid", skip_flaky_tagged: true },
     );
     expect(result.skip_flaky_tagged).toBe(false);
   });
 
-  it("falls back to sampling strategy when profile not found", () => {
-    const result = resolveProfile("unknown", {}, { strategy: "random", sample_percentage: 20, cluster_mode: "pack" });
+  it("falls back to sampling when the gate has no section", () => {
+    const result = resolveGate("release", {}, { strategy: "random", sample_percentage: 20, cluster_mode: "pack" });
     expect(result.strategy).toBe("random");
     expect(result.sample_percentage).toBe(20);
     expect(result.cluster_mode).toBe("pack");
   });
 
-  it("provides adaptive field defaults", () => {
-    const result = resolveProfile("local", { local: { strategy: "random" } }, undefined);
-    expect(result.adaptive).toBe(false);
-    expect(result.adaptive_fnr_low_ratio).toBe(0.02);
-    expect(result.adaptive_fnr_high_ratio).toBe(0.05);
-    expect(result.adaptive_min_percentage).toBe(10);
-    expect(result.adaptive_step).toBe(5);
-  });
-
-  it("uses adaptive values from profile config", () => {
-    const result = resolveProfile(
-      "local",
-      {
-        local: {
-          strategy: "random",
-          adaptive: true,
-          adaptive_fnr_low_ratio: 0.01,
-          adaptive_fnr_high_ratio: 0.04,
-          adaptive_min_percentage: 5,
-          adaptive_step: 2,
-        },
-      },
+  it("does not expose adaptive fields", () => {
+    const result = resolveGate(
+      "iteration",
+      { iteration: { strategy: "random", adaptive: true, adaptive_step: 2 } },
       undefined,
     );
-    expect(result.adaptive).toBe(true);
-    expect(result.adaptive_fnr_low_ratio).toBe(0.01);
-    expect(result.adaptive_fnr_high_ratio).toBe(0.04);
-    expect(result.adaptive_min_percentage).toBe(5);
-    expect(result.adaptive_step).toBe(2);
+    expect(result).not.toHaveProperty("adaptive");
+    expect(result).not.toHaveProperty("adaptive_step");
   });
 
   it("handles max_duration_seconds and fallback_strategy", () => {
-    const result = resolveProfile(
-      "ci",
-      { ci: { strategy: "full", max_duration_seconds: 300, fallback_strategy: "random" } },
+    const result = resolveGate(
+      "merge",
+      { merge: { strategy: "full", max_duration_seconds: 300, fallback_strategy: "random" } },
       undefined,
     );
     expect(result.max_duration_seconds).toBe(300);
     expect(result.fallback_strategy).toBe("random");
   });
 
-  it("uses 'weighted' as default strategy when no profile or sampling", () => {
-    const result = resolveProfile("nonexistent", undefined, undefined);
+  it("uses 'weighted' as default strategy when no gate or sampling", () => {
+    const result = resolveGate("release", undefined, undefined);
     expect(result.strategy).toBe("weighted");
   });
 });

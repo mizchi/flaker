@@ -9,8 +9,8 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const CLI = resolve(__filename, "../../../dist/cli/main.js");
 
-describe("flaker init generates [profile.*] defaults", () => {
-  it("writes [profile.local] / [profile.ci] / [profile.scheduled] with sensible strategies", () => {
+describe("flaker init generates [gate.*] defaults", () => {
+  it("writes [gate.iteration] / [gate.merge] / [gate.release] with sensible strategies", () => {
     const dir = mkdtempSync(join(tmpdir(), "flaker-init-"));
     try {
       const res = spawnSync("node", [CLI, "init", "--owner", "o", "--name", "r", "--adapter", "playwright", "--runner", "playwright"], {
@@ -19,12 +19,13 @@ describe("flaker init generates [profile.*] defaults", () => {
       });
       expect(res.status).toBe(0);
       const toml = readFileSync(join(dir, "flaker.toml"), "utf8");
-      expect(toml).toContain("[profile.local]");
+      expect(toml).toContain("[gate.iteration]");
       expect(toml).toContain('strategy = "affected"');
-      expect(toml).toContain("[profile.ci]");
-      expect(toml).toMatch(/\[profile\.ci\][\s\S]*strategy = "hybrid"/);
-      expect(toml).toContain("[profile.scheduled]");
-      expect(toml).toMatch(/\[profile\.scheduled\][\s\S]*strategy = "full"/);
+      expect(toml).toContain("[gate.merge]");
+      expect(toml).toMatch(/\[gate\.merge\][\s\S]*strategy = "hybrid"/);
+      expect(toml).toContain("[gate.release]");
+      expect(toml).toMatch(/\[gate\.release\][\s\S]*strategy = "full"/);
+      expect(toml).not.toContain("[profile.");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

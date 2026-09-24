@@ -1,5 +1,5 @@
 import type { FlakerConfig } from "../../config.js";
-import { resolveProfile } from "../../profile-compat.js";
+import { resolveGate } from "../../gate-config.js";
 import type { MetricStore } from "../../storage/types.js";
 import { computeKpi } from "../analyze/kpi.js";
 import { buildGateReview, type GateReviewReport } from "../gate/review.js";
@@ -105,10 +105,10 @@ export async function runOpsDaily(input: {
       minRuns: input.config.quarantine.min_runs,
     }),
   ]);
-  const releaseProfile = resolveProfile("scheduled", input.config.profile, input.config.sampling);
+  const releaseConfig = resolveGate("release", input.config.gate, input.config.sampling);
   const releaseGate = buildGateReview({
     gate: "release",
-    profile: releaseProfile,
+    resolvedGate: releaseConfig,
     kpi,
   });
   const releaseRun: OpsDailyReleaseRun = {

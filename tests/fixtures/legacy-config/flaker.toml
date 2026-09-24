@@ -30,7 +30,7 @@ percentage = 30
 holdout_ratio = 0.1
 co_failure_days = 90
 
-[profile.ci]
+[gate.merge]
 strategy = "hybrid"
 percentage = 30
 adaptive = true

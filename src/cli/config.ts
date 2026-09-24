@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "smol-toml";
+import { LEGACY_PROFILE_TO_GATE, normalizeGateName, type GateName } from "./gate.js";
 
 export interface CoverageConfig {
   format: string; // istanbul | v8 | playwright
@@ -23,7 +24,7 @@ export interface SamplingConfig {
   detected_test_count?: number;
 }
 
-export interface ProfileConfig {
+export interface GateConfig {
   strategy: string;
   sample_percentage?: number;           // was `percentage`
   holdout_ratio?: number;
@@ -88,7 +89,7 @@ export interface FlakerConfig {
   flaky: { window_days: number; detection_threshold_ratio: number };
   coverage?: CoverageConfig;
   sampling?: SamplingConfig;
-  profile?: Record<string, ProfileConfig>;
+  gate?: Partial<Record<GateName, GateConfig>>;
   promotion: PromotionThresholds;
 }
 
@@ -168,15 +169,35 @@ const LEGACY_KEYS: LegacyKeyEntry[] = [
   { section: "quarantine", oldKey: "flaky_rate_threshold", newKey: "flaky_rate_threshold_percentage", unitNote: "value range 0-100" },
 ];
 
-const LEGACY_PROFILE_KEYS: LegacyKeyEntry[] = [
-  { section: "profile.*", oldKey: "percentage", newKey: "sample_percentage", unitNote: "value range 0-100" },
-  { section: "profile.*", oldKey: "co_failure_days", newKey: "co_failure_window_days", unitNote: "days (int)" },
-  { section: "profile.*", oldKey: "adaptive_fnr_low", newKey: "adaptive_fnr_low_ratio", unitNote: "0.0-1.0" },
-  { section: "profile.*", oldKey: "adaptive_fnr_high", newKey: "adaptive_fnr_high_ratio", unitNote: "0.0-1.0" },
+const LEGACY_GATE_KEYS: LegacyKeyEntry[] = [
+  { section: "gate.*", oldKey: "percentage", newKey: "sample_percentage", unitNote: "value range 0-100" },
+  { section: "gate.*", oldKey: "co_failure_days", newKey: "co_failure_window_days", unitNote: "days (int)" },
+  { section: "gate.*", oldKey: "adaptive_fnr_low", newKey: "adaptive_fnr_low_ratio", unitNote: "0.0-1.0" },
+  { section: "gate.*", oldKey: "adaptive_fnr_high", newKey: "adaptive_fnr_high_ratio", unitNote: "0.0-1.0" },
 ];
 
 function checkLegacyKeys(parsed: Record<string, unknown>): void {
   const errors: string[] = [];
+
+  const legacyProfiles = parsed.profile as Record<string, unknown> | undefined;
+  if (legacyProfiles && typeof legacyProfiles === "object") {
+    for (const name of Object.keys(legacyProfiles)) {
+      const gate = LEGACY_PROFILE_TO_GATE[name];
+      errors.push(
+        gate
+          ? `[profile.${name}] was renamed to [gate.${gate}]`
+          : `[profile.${name}] has no gate equivalent; use one of [gate.iteration], [gate.merge], [gate.release]`,
+      );
+    }
+  }
+  const gates = parsed.gate as Record<string, unknown> | undefined;
+  if (gates && typeof gates === "object") {
+    for (const name of Object.keys(gates)) {
+      if (!normalizeGateName(name)) {
+        errors.push(`[gate.${name}] is not a gate; use one of iteration, merge, release`);
+      }
+    }
+  }
 
   for (const entry of LEGACY_KEYS) {
     const section = parsed[entry.section];
@@ -187,14 +208,14 @@ function checkLegacyKeys(parsed: Record<string, unknown>): void {
     }
   }
 
-  const profiles = parsed.profile as Record<string, unknown> | undefined;
-  if (profiles && typeof profiles === "object") {
-    for (const [profileName, profileValue] of Object.entries(profiles)) {
-      if (!profileValue || typeof profileValue !== "object") continue;
-      for (const entry of LEGACY_PROFILE_KEYS) {
-        if (entry.oldKey in (profileValue as Record<string, unknown>)) {
+  const gateSections = parsed.gate as Record<string, unknown> | undefined;
+  if (gateSections && typeof gateSections === "object") {
+    for (const [gateName, gateValue] of Object.entries(gateSections)) {
+      if (!gateValue || typeof gateValue !== "object") continue;
+      for (const entry of LEGACY_GATE_KEYS) {
+        if (entry.oldKey in (gateValue as Record<string, unknown>)) {
           errors.push(
-            `deprecated key \`${entry.oldKey}\` in [profile.${profileName}] → rename to \`${entry.newKey}\` (${entry.unitNote})`
+            `deprecated key \`${entry.oldKey}\` in [gate.${gateName}] → rename to \`${entry.newKey}\` (${entry.unitNote})`
           );
         }
       }
@@ -203,7 +224,7 @@ function checkLegacyKeys(parsed: Record<string, unknown>): void {
 
   if (errors.length > 0) {
     throw new Error(
-      `flaker.toml uses deprecated keys (see docs/how-to-use.md#config-migration):\n` +
+      `flaker.toml uses removed or renamed keys (see docs/migration-0.12-to-0.13.md and docs/how-to-use.md#config-migration):\n` +
       errors.map((e) => `  ${e}`).join("\n")
     );
   }
@@ -277,13 +298,14 @@ export function validateConfigRanges(config: FlakerConfig): ConfigRangeError[] {
     check("sampling.detected_co_failure_strength_ratio", config.sampling.detected_co_failure_strength_ratio, 0, 1, "0.0-1.0");
   }
 
-  if (config.profile) {
-    for (const [name, p] of Object.entries(config.profile)) {
-      check(`profile.${name}.sample_percentage`, p.sample_percentage, 0, 100, "0-100");
-      check(`profile.${name}.holdout_ratio`, p.holdout_ratio, 0, 1, "0.0-1.0");
-      check(`profile.${name}.adaptive_fnr_low_ratio`, p.adaptive_fnr_low_ratio, 0, 1, "0.0-1.0");
-      check(`profile.${name}.adaptive_fnr_high_ratio`, p.adaptive_fnr_high_ratio, 0, 1, "0.0-1.0");
-      check(`profile.${name}.adaptive_min_percentage`, p.adaptive_min_percentage, 0, 100, "0-100");
+  if (config.gate) {
+    for (const [name, p] of Object.entries(config.gate)) {
+      if (!p) continue;
+      check(`gate.${name}.sample_percentage`, p.sample_percentage, 0, 100, "0-100");
+      check(`gate.${name}.holdout_ratio`, p.holdout_ratio, 0, 1, "0.0-1.0");
+      check(`gate.${name}.adaptive_fnr_low_ratio`, p.adaptive_fnr_low_ratio, 0, 1, "0.0-1.0");
+      check(`gate.${name}.adaptive_fnr_high_ratio`, p.adaptive_fnr_high_ratio, 0, 1, "0.0-1.0");
+      check(`gate.${name}.adaptive_min_percentage`, p.adaptive_min_percentage, 0, 100, "0-100");
     }
   }
 

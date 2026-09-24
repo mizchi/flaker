@@ -20,10 +20,10 @@ function makeConfig(): FlakerConfig {
       skip_quarantined: true,
       skip_flaky_tagged: true,
     },
-    profile: {
-      local: { strategy: "affected", max_duration_seconds: 20, fallback_strategy: "weighted" },
-      ci: { strategy: "hybrid", sample_percentage: 25, adaptive: true, max_duration_seconds: 600 },
-      scheduled: { strategy: "full", max_duration_seconds: 1800 },
+    gate: {
+      iteration: { strategy: "affected", max_duration_seconds: 20, fallback_strategy: "weighted" },
+      merge: { strategy: "hybrid", sample_percentage: 25, adaptive: true, max_duration_seconds: 600 },
+      release: { strategy: "full", max_duration_seconds: 1800 },
     },
     promotion: DEFAULT_PROMOTION,
   };
@@ -121,14 +121,12 @@ describe("status summary", () => {
     expect(summary.activity.failedResults).toBe(3);
     expect(summary.gates.merge).toEqual(
       expect.objectContaining({
-        profile: "ci",
         strategy: "hybrid",
         maxDurationSeconds: 600,
       }),
     );
     expect(summary.gates.release).toEqual(
       expect.objectContaining({
-        profile: "scheduled",
         strategy: "full",
       }),
     );
