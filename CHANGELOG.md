@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- MoonBit dependencies move to their latest releases: `moonbitlang/async` 0.22.4, `bobzhang/toml` 0.4.3, `mizchi/github` 0.1.5, `mizchi/parquet` 0.2.2, `mizchi/zlib` 0.4.9. `f4ah6o/duckdb` 0.6.0 is replaced by `mizchi/duckdb` 0.6.4, a fork that builds on current MoonBit toolchains, until the fix lands upstream. The native CLI builds again and its CI steps are required once more (#92).
+
 ## 0.13.0
 
 ### Breaking

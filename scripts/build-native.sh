@@ -24,7 +24,7 @@ cc -O2 -o dist/flaker \
   "$HOME/.moon/lib/libmoonbitrun.o" \
   "${BINARY}.c" \
   "${BUILD_DIR}/runtime.o" \
-  "${BUILD_DIR}/.mooncakes/f4ah6o/duckdb/libduckdb.a" \
+  "${BUILD_DIR}/.mooncakes/mizchi/duckdb/libduckdb.a" \
   ${BUILD_DIR}/.mooncakes/moonbitlang/async/internal/*/lib*.a \
   ${BUILD_DIR}/.mooncakes/moonbitlang/async/os_error/lib*.a \
   ${BUILD_DIR}/.mooncakes/moonbitlang/async/socket/lib*.a \

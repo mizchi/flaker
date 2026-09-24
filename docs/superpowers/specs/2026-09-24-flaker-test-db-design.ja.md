@@ -117,7 +117,7 @@ flaker の表面 API は肥大化している。
 
 - `--context <file>`: 上記 projection を読む。
 - 成功したランごとに `.jev-test-filter/records/<head_sha>.json` を保存する。`last.json` も従来どおり残す (`--replay` の既定値の互換のため)。
-- `RunRecord` を `version: 2` に上げ、`head_sha`, `base_sha`, `context_digest` (context なしなら `null`), `gate` (実際に使った値) を追加する。v1 の読み込みは維持する。
+- `RunRecord` を `version: 2` に上げ、`head_sha`, `base_sha`, `context_digest` (context なしなら `null`), `gate` (実際に使った値) を追加する。v1 の読み込みは維持する。 context の `skip` で外したテストの `testId` を `quarantined` として記録し、replay でも quarantine を再現できるようにする。
 - fallback したラン (`fallback !== null`) は従来どおり保存しない。
 - `unsure_below` / `unsure_margin` を CLI からも指定できるようにする。
 

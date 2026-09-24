@@ -70,11 +70,7 @@ jobs:
           sudo cp /tmp/duckdb/libduckdb.so /usr/local/lib/
           sudo ldconfig
 
-      # The experimental native CLI does not build on current MoonBit
-      # toolchains until mizchi/github and f4ah6o/duckdb catch up (#92).
-      # Non-blocking so the JS path and the test suite stay required.
       - name: Native CLI build
-        continue-on-error: true
         run: |
           C_INCLUDE_PATH=/usr/local/include LIBRARY_PATH=/usr/local/lib \
           moon build --target native src/cmd/flaker_native || true
@@ -85,7 +81,7 @@ jobs:
             _build/native/debug/build/cmd/flaker_native/flaker_native.c \
             _build/native/debug/build/cmd/flaker_native/shell_native.o \
             _build/native/debug/build/runtime.o \
-            _build/native/debug/build/.mooncakes/f4ah6o/duckdb/libduckdb.a \
+            _build/native/debug/build/.mooncakes/mizchi/duckdb/libduckdb.a \
             _build/native/debug/build/.mooncakes/moonbitlang/async/internal/*/lib*.a \
             _build/native/debug/build/.mooncakes/moonbitlang/async/os_error/lib*.a \
             _build/native/debug/build/.mooncakes/moonbitlang/async/socket/lib*.a \
@@ -98,7 +94,6 @@ jobs:
             -Wl,-rpath,/usr/local/lib
 
       - name: Native CLI smoke
-        continue-on-error: true
         run: |
           LD_LIBRARY_PATH=/usr/local/lib dist/flaker --help
           LD_LIBRARY_PATH=/usr/local/lib dist/flaker collect calibrate || echo "No data yet (expected)"
