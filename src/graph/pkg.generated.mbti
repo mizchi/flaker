@@ -23,4 +23,3 @@ pub fn topological_sort(@contracts.DependencyGraphInput) -> Array[String]
 // Type aliases
 
 // Traits
-

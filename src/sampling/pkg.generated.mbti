@@ -21,4 +21,3 @@ pub fn sample_weighted(Array[@contracts.TestMeta], count~ : Int, seed~ : UInt64)
 // Type aliases
 
 // Traits
-

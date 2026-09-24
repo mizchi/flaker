@@ -15,4 +15,3 @@ pub fn aggregate_report(Array[@contracts.ReportAggregateShardInput]) -> @contrac
 // Type aliases
 
 // Traits
-

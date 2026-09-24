@@ -2,7 +2,7 @@
 pub(all) struct StableVariantEntryInput {
   key : String
   value : String
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct TestMeta {
@@ -19,7 +19,7 @@ pub(all) struct TestMeta {
   filter : String?
   test_id : String?
   co_failure_boost : Double?
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct SamplingHistoryRowInput {
@@ -33,7 +33,7 @@ pub(all) struct SamplingHistoryRowInput {
   retry_count : Int
   duration_ms : Int
   created_at : String
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct SamplingListedTestInput {
@@ -43,7 +43,7 @@ pub(all) struct SamplingListedTestInput {
   filter : String?
   variant : Array[StableVariantEntryInput]?
   test_id : String?
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct FlakyResult {
@@ -54,7 +54,7 @@ pub(all) struct FlakyResult {
   fail_count : Int
   flaky_retry_count : Int
   is_quarantined : Bool
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct DetectInput {
@@ -74,7 +74,7 @@ pub(all) struct TestRunEntry {
 ///|
 pub(all) struct DetectOutput {
   flaky_tests : Array[FlakyResult]
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct GraphNodeInput {
@@ -83,26 +83,26 @@ pub(all) struct GraphNodeInput {
   dependencies : Array[String]
   source_patterns : Array[String]
   test_patterns : Array[String]
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct DependencyGraphInput {
   root_dir : String
   nodes : Array[GraphNodeInput]
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct ReverseDepEntry {
   id : String
   dependents : Array[String]
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct ReportDiffStatusInput {
   test_id : String
   base_status : String
   head_status : String
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct ReportDiffBuckets {
@@ -111,7 +111,7 @@ pub(all) struct ReportDiffBuckets {
   resolved_failures : Array[String]
   resolved_flaky : Array[String]
   persistent_flaky : Array[String]
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct ReportTotalsInput {
@@ -122,27 +122,27 @@ pub(all) struct ReportTotalsInput {
   skipped : Int
   retries : Int
   duration_ms : Int
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct ReportAggregateUnstableStatusInput {
   test_id : String
   status : String
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct ReportAggregateShardInput {
   shard_id : String
   totals : ReportTotalsInput
   unstable : Array[ReportAggregateUnstableStatusInput]
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct ReportAggregateUnstableBuckets {
   test_id : String
   shard_ids : Array[String]
   statuses : Array[String]
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct ReportAggregateOutput {
@@ -150,7 +150,7 @@ pub(all) struct ReportAggregateOutput {
   unstable_count : Int
   totals : ReportTotalsInput
   unstable : Array[ReportAggregateUnstableBuckets]
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct ReportSummaryTestInput {
@@ -159,26 +159,26 @@ pub(all) struct ReportSummaryTestInput {
   status : String
   duration_ms : Int
   retry_count : Int
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct ReportFileTotalsOutput {
   suite : String
   totals : ReportTotalsInput
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct ReportSummaryOutput {
   totals : ReportTotalsInput
   file_totals : Array[ReportFileTotalsOutput]
   unstable_test_ids : Array[String]
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct QuarantineTaskOwnershipInput {
   id : String
   specs : Array[String]
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct QuarantineEntryInput {
@@ -194,7 +194,7 @@ pub(all) struct QuarantineEntryInput {
   introduced_at : String
   expires_at : String
   tracking_issue : String?
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct QuarantineIssueOutput {
@@ -203,21 +203,21 @@ pub(all) struct QuarantineIssueOutput {
   message : String
   task_id : String?
   spec : String?
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct QuarantineModeCountsOutput {
   skip : Int
   allow_flaky : Int
   allow_failure : Int
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct QuarantineScopeCountsOutput {
   environment : Int
   flaky : Int
   expected_failure : Int
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct ResolvedQuarantineEntryOutput {
@@ -235,7 +235,7 @@ pub(all) struct ResolvedQuarantineEntryOutput {
   tracking_issue : String?
   expiry_status : String
   days_until_expiry : Int?
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct QuarantineSummaryCoreOutput {
@@ -245,20 +245,20 @@ pub(all) struct QuarantineSummaryCoreOutput {
   entries : Array[ResolvedQuarantineEntryOutput]
   errors : Array[QuarantineIssueOutput]
   warnings : Array[QuarantineIssueOutput]
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct QuarantineRuntimeResultInput {
   status : String
   quarantine_mode : String?
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct ConfigCheckListedTestInput {
   suite : String
   task_id : String
   filter : String?
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct ConfigCheckTaskDefinitionInput {
@@ -266,28 +266,28 @@ pub(all) struct ConfigCheckTaskDefinitionInput {
   node : String?
   needs : Array[String]
   srcs : Array[String]
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct ConfigOwnershipClaimOutput {
   task_id : String
   filter : String?
   test_count : Int
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct ConfigOwnershipEntryOutput {
   spec : String
   kind : String
   owners : Array[ConfigOwnershipClaimOutput]
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct ConfigCheckIssueOutput {
   code : String
   spec : String
   detail : String
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct ConfigTaskSummaryOutput {
@@ -298,7 +298,7 @@ pub(all) struct ConfigTaskSummaryOutput {
   filter_count : Int
   needs_count : Int
   src_count : Int
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct ConfigCheckSummaryOutput {
@@ -309,7 +309,7 @@ pub(all) struct ConfigCheckSummaryOutput {
   unmanaged_spec_count : Int
   error_count : Int
   warning_count : Int
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct ConfigCheckCoreOutput {
@@ -318,7 +318,7 @@ pub(all) struct ConfigCheckCoreOutput {
   tasks : Array[ConfigTaskSummaryOutput]
   errors : Array[ConfigCheckIssueOutput]
   warnings : Array[ConfigCheckIssueOutput]
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct EvalCommitSignalInput {
@@ -329,14 +329,14 @@ pub(all) struct EvalCommitSignalInput {
   failure_signals : Int
   duration_ms : Int?
   fallback_used : Bool
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct SamplingKpiSignalOutput {
   local_commits : Int
   ci_when_local : Int
   rate : Double?
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct SamplingKpiMissesOutput {
@@ -344,7 +344,7 @@ pub(all) struct SamplingKpiMissesOutput {
   local_fail_but_ci_pass : Int
   false_negative_rate : Double?
   false_positive_rate : Double?
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct SamplingKpiConfusionMatrixOutput {
@@ -352,7 +352,7 @@ pub(all) struct SamplingKpiConfusionMatrixOutput {
   false_positive : Int
   false_negative : Int
   true_negative : Int
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct SamplingKpiOutput {
@@ -371,14 +371,14 @@ pub(all) struct SamplingKpiOutput {
   fail_signal : SamplingKpiSignalOutput
   misses : SamplingKpiMissesOutput
   confusion_matrix : SamplingKpiConfusionMatrixOutput
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct AffectedTargetInput {
   spec : String
   task_id : String
   filter : String?
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct AffectedDirectSelectionInput {
@@ -387,14 +387,14 @@ pub(all) struct AffectedDirectSelectionInput {
   filter : String?
   matched_paths : Array[String]
   match_reasons : Array[String]
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct AffectedTransitiveTaskInput {
   task_id : String
   included_by : Array[String]
   match_reasons : Array[String]
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct AffectedReportInput {
@@ -402,7 +402,7 @@ pub(all) struct AffectedReportInput {
   direct_selections : Array[AffectedDirectSelectionInput]
   transitive_tasks : Array[AffectedTransitiveTaskInput]
   unmatched : Array[String]
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct AffectedSelectionOutput {
@@ -413,14 +413,14 @@ pub(all) struct AffectedSelectionOutput {
   included_by : Array[String]
   matched_paths : Array[String]
   match_reasons : Array[String]
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct AffectedReportSummaryOutput {
   matched_count : Int
   selected_count : Int
   unmatched_count : Int
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct AffectedReportCoreOutput {
@@ -428,7 +428,7 @@ pub(all) struct AffectedReportCoreOutput {
   selected : Array[AffectedSelectionOutput]
   unmatched : Array[String]
   summary : AffectedReportSummaryOutput
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct StableTestIdentityInput {
@@ -438,7 +438,7 @@ pub(all) struct StableTestIdentityInput {
   filter : String?
   variant : Array[StableVariantEntryInput]?
   test_id : String?
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
 pub(all) struct ResolvedStableTestIdentityOutput {
@@ -448,4 +448,4 @@ pub(all) struct ResolvedStableTestIdentityOutput {
   filter : String?
   variant : Array[StableVariantEntryInput]?
   test_id : String
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Show, Debug, FromJson, ToJson)

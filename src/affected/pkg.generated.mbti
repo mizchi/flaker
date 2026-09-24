@@ -11,4 +11,3 @@ pub fn resolve_affected(String, Array[String]) -> Array[String]
 // Type aliases
 
 // Traits
-

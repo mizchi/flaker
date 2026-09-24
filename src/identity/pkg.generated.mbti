@@ -17,4 +17,3 @@ pub fn resolve_test_identity(@contracts.StableTestIdentityInput) -> @contracts.R
 // Type aliases
 
 // Traits
-

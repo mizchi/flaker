@@ -1,0 +1,31 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/flaker/coverage"
+
+import {
+  "moonbitlang/core/json",
+}
+
+// Values
+pub fn bucketize_rate(Double) -> Int
+
+pub fn select_by_coverage(Array[TestCoverage], Array[String], count~ : Int) -> CoverageGuidedResult
+
+// Errors
+
+// Types and methods
+pub(all) struct CoverageGuidedResult {
+  selected : Array[String]
+  covered_edges : Int
+  total_changed_edges : Int
+  coverage_ratio : Double
+} derive(Eq, Show, ToJson, @json.FromJson)
+
+pub(all) struct TestCoverage {
+  suite : String
+  test_name : String
+  edges : Array[String]
+} derive(Eq, Show, ToJson, @json.FromJson)
+
+// Type aliases
+
+// Traits
