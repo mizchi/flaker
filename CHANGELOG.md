@@ -19,6 +19,7 @@
 - `flaker doctor` suggested `flaker init` for every config failure; it now suggests it only when `flaker.toml` is missing and points at the migration guide for removed or renamed keys.
 - Config migration errors (removed keys, `FLAKER_PROFILE`, unknown gate or strategy) print once, without a stack trace, and exit 2.
 - The `parquet_export` MoonBit tests compile again on current moon toolchains, so `pnpm test` no longer fails in its global setup.
+- `run` warns when the runner cannot list tests (the vitest runner now reports `vitest list`'s exit code and stderr) instead of silently planning from stored history, and `import --ci` warns when it imports nothing. Both failures had left the self-host nightly empty for months (#75).
 
 ### Added
 
