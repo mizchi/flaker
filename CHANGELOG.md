@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.13.0 (unreleased)
+## 0.13.0
 
 ### Breaking
 
@@ -15,12 +15,16 @@
 
 ### Fixed
 
-- `affected` and `hybrid` no longer throw `requires resolver and changedFiles` when there are no changed files (a clean checkout, a scheduled run). `affected` selects nothing and uses `fallback_strategy`; `hybrid` samples by weight. This broke `flaker apply`'s cold-start run and `run --gate iteration` on clean trees.
+- `affected` and `hybrid` no longer throw `requires resolver and changedFiles` when there are no changed files (a clean checkout, a scheduled run). `affected` selects nothing and uses `fallback_strategy`; `hybrid` samples by weight. This broke `flaker apply`'s cold-start run and `run --gate iteration` on clean trees, and `run --gate merge --changed ""` on empty-diff PRs (#90).
+- `flaker doctor` suggested `flaker init` for every config failure; it now suggests it only when `flaker.toml` is missing and points at the migration guide for removed or renamed keys.
+- Config migration errors (removed keys, `FLAKER_PROFILE`, unknown gate or strategy) print once, without a stack trace, and exit 2.
+- The `parquet_export` MoonBit tests compile again on current moon toolchains, so `pnpm test` no longer fails in its global setup.
 
 ### Added
 
 - `flaker calibrate` (was `apply --target calibrate`).
 - `flaker import --ci [--days <n>]` (was `apply --target collect_ci`).
+- `docs/agent-changelog.md`: an upgrade guide for coding agents (old form → current form, error line → fix, one-shot grep, verify checklist). The `flaker-setup` and `flaker-management` skills (plugin 0.4.0) now trigger on upgrade errors and route there.
 - `flaker explain cluster --workflow <name> | --lane <name> | --tag k=v` (#74). Co-failure clustering can now be narrowed to a specific GitHub Actions workflow, lane, or arbitrary tag, reducing the same-batch / same-workflow bias that inflates clusters when tests are always observed together in fixed cohorts. Three new optional columns on `workflow_runs` (`workflow_name`, `lane`, `tags JSON`) are populated automatically from the GitHub API at `flaker import --ci` time. A new optional `[workflow_lanes]` map in `flaker.toml` resolves `workflow_name → lane`. `flaker import` gains symmetric `--workflow-name <name>`, `--lane <name>`, and repeatable `--tag k=v` flags so locally-imported reports can also be tagged. Filters are AND-combined; backwards compatible (no filter = previous behaviour).
 
 See docs/migration-0.12-to-0.13.md.

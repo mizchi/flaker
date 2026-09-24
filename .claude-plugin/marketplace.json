@@ -9,7 +9,7 @@
     {
       "name": "flaker",
       "description": "Introduce and operate @mizchi/flaker on OSS repositories. Includes flaker-setup for onboarding and flaker-management for advisory rollout, CI promotion, quarantine, and Playwright E2E/VRT operations.",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "source": "./",
       "author": {
         "name": "mizchi"
