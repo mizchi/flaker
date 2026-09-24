@@ -53,6 +53,7 @@ describe("selector-record v1", () => {
     const r = structuredClone(valid);
     r.created_at = "2026-09-20T19:00:00+09:00";
     r.tests[1].project = "";
+    expect(check(r)).toBeNull();
     const parsed = parseSelectorRecord(r);
     expect(parsed.created_at).toBe("2026-09-20T19:00:00+09:00");
     expect(parsed.tests[1]).not.toHaveProperty("project");

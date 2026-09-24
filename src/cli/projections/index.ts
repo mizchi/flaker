@@ -18,6 +18,8 @@ export async function runProjection(
     throw new FlakerUsageError(`Unknown projection "${name}". Expected one of: ${PROJECTION_NAMES.join(", ")}`);
   }
   await resolveSelectorTestKeys(store);
+  // Issued together, run one after another: DuckDBStore serializes statements
+  // on its connection.
   const [tests, quarantine, flaky, misses, coFailures, latest] = await Promise.all([
     readDataset(store, "tests"),
     readDataset(store, "quarantine"),

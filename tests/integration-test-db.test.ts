@@ -143,3 +143,26 @@ describe("jev-test-filter's own CLI reads the exported context", () => {
     expect(bad.stderr).toMatch(/unsupported context version 2; expected 1/);
   });
 });
+
+describe("flaker export --projection jev-context", () => {
+  it("caps hinted tests at [selector].max_hinted_tests from flaker.toml", async () => {
+    const project = mkdtempSync(join(tmpdir(), "flaker-jev-cap-"));
+    const base = `[repo]\nowner = "a"\nname = "b"\n[storage]\npath = ".flaker/data"\n[affected]\nresolver = "git"\nconfig = ""\n`;
+    writeFileSync(join(project, "flaker.toml"), base);
+    const store = await openDatasetStore(project, loadConfig(project));
+    try {
+      await seedLoop(store, project);
+    } finally {
+      await store.close();
+    }
+    const exportContext = () => {
+      const res = spawnSync("node", [FLAKER_CLI, "export", "--projection", "jev-context"], { cwd: project, env: scrubbedEnv(), encoding: "utf8" });
+      expect(res.status, res.stderr).toBe(0);
+      return JSON.parse(res.stdout) as JevContextV1;
+    };
+
+    expect(exportContext().tests).toHaveLength(1);
+    writeFileSync(join(project, "flaker.toml"), `${base}[selector]\ntype = "jev"\nmax_hinted_tests = 0\n`);
+    expect(exportContext().tests).toEqual([]);
+  });
+});
