@@ -1,4 +1,3 @@
-// tests/cli/workflow-lanes-config.test.ts
 import { describe, expect, it } from "vitest";
 import { normalizeWorkflowLanes } from "../../src/cli/config.js";
 import { FlakerUsageError } from "../../src/cli/errors.js";

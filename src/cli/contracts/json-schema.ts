@@ -1,4 +1,3 @@
-// src/cli/contracts/json-schema.ts
 /** A JSON Schema (draft 2020-12) as a plain object. */
 export type JsonSchema = { [key: string]: unknown };
 

@@ -1,4 +1,3 @@
-// tests/datasets/config-sync.test.ts
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
 import {

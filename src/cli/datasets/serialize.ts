@@ -1,4 +1,3 @@
-// src/cli/datasets/serialize.ts
 import type { JsonSchema } from "../contracts/json-schema.js";
 
 type Prop = { type?: string | string[] };

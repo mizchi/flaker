@@ -1,4 +1,3 @@
-// tests/contracts/flaker-v1-datasets.test.ts
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { DuckDBStore } from "../../src/cli/storage/duckdb.js";
 import { DATASET_NAMES } from "../../src/cli/datasets/registry.js";

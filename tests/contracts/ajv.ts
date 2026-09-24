@@ -1,4 +1,3 @@
-// tests/contracts/ajv.ts
 import Ajv2020Module from "ajv/dist/2020.js";
 
 // ajv ships CJS; under ESM the class is either the module or its default.

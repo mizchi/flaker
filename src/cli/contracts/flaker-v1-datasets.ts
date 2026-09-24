@@ -1,4 +1,3 @@
-// src/cli/contracts/flaker-v1-datasets.ts
 /**
  * Row contracts of the public datasets (DuckDB schema `flaker_v1`), as
  * `flaker export <dataset> --format json` emits them: timestamps as ISO

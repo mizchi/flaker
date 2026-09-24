@@ -1,4 +1,3 @@
-// tests/datasets/helpers.ts
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
 import { syncDatasetSettings, type DatasetSettings } from "../../src/cli/datasets/config-sync.js";
 

@@ -1,4 +1,3 @@
-// tests/datasets/core-views.test.ts
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { DuckDBStore } from "../../src/cli/storage/duckdb.js";
 import { memoryStore, seedRun } from "./helpers.js";
