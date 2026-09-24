@@ -52,4 +52,19 @@ describe("flaker export", () => {
   it("exits 2 without a dataset", () => {
     expect(run(repo()).status).toBe(2);
   });
+
+  it("--projection jev-context writes a v1 context", () => {
+    const dir = repo();
+    const res = run(dir, "--projection", "jev-context");
+    expect(res.status).toBe(0);
+    const ctx = JSON.parse(res.stdout);
+    expect(ctx.version).toBe(1);
+    expect(ctx.digest).toMatch(/^sha256:[0-9a-f]{64}$/);
+  });
+
+  it("--projection with a dataset, or with a non-json format, exits 2", () => {
+    const dir = repo();
+    expect(run(dir, "tests", "--projection", "jev-context").status).toBe(2);
+    expect(run(dir, "--projection", "jev-context", "--format", "csv").status).toBe(2);
+  });
 });
