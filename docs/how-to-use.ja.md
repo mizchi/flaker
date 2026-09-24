@@ -284,9 +284,10 @@ flaker export results --format parquet -o .flaker/export/results.parquet
 flaker query "SELECT * FROM flaker_v1.flaky WHERE is_flaky"
 ```
 
-- `--format` は `json` (既定、配列), `jsonl`, `csv` (ヘッダは schema の列順、配列とオブジェクトは JSON 文字列), `parquet` (`-o` が必須) のいずれかです。
-- `--since <date>` は ISO 日付以降の行だけを残します。使えるのは `tests` (`last_seen_at`), `runs` と `results` (`created_at`), `quarantine` (`since`), `selector_verdicts` (`created_at`), `gate_calibration` (`calibrated_at`) で、それ以外の dataset ではエラーになります。
-- `--where <expr>` は dataset 自身の列に対する追加条件で、たとえば `--where "status = 'failed'"` です。行単位の式 1 つに限り、サブクエリ・`;`・コメント・ファイルシステム関数は拒否します。
+- `--format` は `json` (既定、配列), `jsonl`, `csv` (ヘッダは schema の列順、配列とオブジェクトは JSON 文字列、null は空セル、空文字列は `""`), `parquet` (`-o` が必須) のいずれかです。
+- 時刻は UTC です。JSON と CSV では末尾が `Z` の ISO 文字列になります。Parquet ではタイムゾーンなしの `TIMESTAMP` (`isAdjustedToUTC = false`) に UTC の時刻がそのまま入るので、UTC として読んでください。JSON 列 (`variant`, `title_path`, `changed_files`) は JSON 論理型の Parquet 文字列です。
+- `--since <date>` は ISO 日付以降の行だけを残します。日付だけ (`2026-09-01`) なら UTC の 0 時です。日時にはオフセットが必要で (`2026-09-01T09:00:00Z` や `…+09:00`)、`2026-02-30` のような存在しない日付は拒否します。使えるのは `tests` (`last_seen_at`), `runs` と `results` (`created_at`), `quarantine` (`since`), `selector_verdicts` (`created_at`), `gate_calibration` (`calibrated_at`) で、それ以外の dataset ではエラーになります。
+- `--where <expr>` は dataset 自身の列に対する追加条件で、たとえば `--where "status = 'failed'"` です。行単位の式 1 つに限り、サブクエリ・`;`・コメント・ファイルシステム関数は拒否します。DuckDB がクエリ全体を先に構文解析し、選んだ dataset への条件 1 つのままであることを確かめます。また export 中は DuckDB のファイルアクセスを `-o` の Parquet ファイル以外すべて切ります。
 - 不正な入力 (未知の dataset や format、時刻列のない dataset への `--since`、安全でない `--where`) は終了コード 2 で終わります。
 
 #### `[workflow_lanes]` と `runs.is_full`

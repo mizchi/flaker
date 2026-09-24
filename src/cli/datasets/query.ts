@@ -10,12 +10,30 @@ export interface DatasetQueryOptions {
   where?: string;
 }
 
-/** A DuckDB TIMESTAMP literal body (naive UTC) for a user-supplied date. */
+const SINCE_FORMAT =
+  /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/i;
+
+/**
+ * A DuckDB TIMESTAMP literal body (naive UTC) for a user-supplied `--since`.
+ * A date alone means midnight UTC. A date-time needs an offset (`Z` or
+ * `+09:00`), so the result does not depend on the machine's time zone.
+ */
 export function parseSince(raw: string): string {
-  const ms = Date.parse(raw);
-  if (!/^\d{4}-\d{2}-\d{2}/.test(raw) || Number.isNaN(ms)) {
-    throw new FlakerUsageError(`Invalid --since value: ${raw}. Expected an ISO date such as 2026-09-01.`);
+  const invalid = (why: string): never => {
+    throw new FlakerUsageError(
+      `Invalid --since value: ${raw}. ${why} Expected an ISO date such as 2026-09-01 or 2026-09-01T09:00:00Z.`,
+    );
+  };
+  const m = SINCE_FORMAT.exec(raw.trim());
+  if (!m) return invalid("Not an ISO date.");
+  const [, y, mo, d, hh, , , offset] = m;
+  const day = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d)));
+  if (day.getUTCFullYear() !== Number(y) || day.getUTCMonth() !== Number(mo) - 1 || day.getUTCDate() !== Number(d)) {
+    invalid("No such date.");
   }
+  if (hh !== undefined && offset === undefined) invalid("A date-time needs an offset (Z or +hh:mm).");
+  const ms = hh === undefined ? day.getTime() : Date.parse(raw.trim().replace(" ", "T"));
+  if (Number.isNaN(ms)) invalid("Not an ISO date.");
   return new Date(ms).toISOString().replace("T", " ").replace("Z", "");
 }
 

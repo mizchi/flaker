@@ -43,6 +43,16 @@ describe("runExportDataset", () => {
     expect(row).toContain(`"[""a, with comma""]"`);
   });
 
+  it("csv: a null is an empty cell, an empty string is a quoted empty cell", async () => {
+    const { formatRows } = await import("../../src/cli/datasets/format.js");
+    const text = formatRows([{ a: null, b: "", c: "x" }], "csv", ["a", "b", "c"]);
+    expect(text).toBe(`a,b,c\n,"",x\n`);
+    const { text: runs } = await runExportDataset({ store, dataset: "runs", format: "csv", where: "run_id = 2" });
+    const [header, row] = runs!.trimEnd().split("\n");
+    // lane is null for this run; no cell in the row is quoted or holds a comma.
+    expect(row.split(",")[header.split(",").indexOf("lane")]).toBe("");
+  });
+
   it("--since keeps rows at or after the date", async () => {
     const since = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
     const { text } = await runExportDataset({ store, dataset: "runs", format: "json", since });

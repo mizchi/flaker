@@ -6,10 +6,11 @@ export function isExportFormat(value: string): value is ExportFormat {
   return (EXPORT_FORMATS as readonly string[]).includes(value);
 }
 
+/** A null is an empty cell; an empty string is `""`, so the two stay apart. */
 function csvCell(value: unknown): string {
   if (value === null || value === undefined) return "";
   const text = typeof value === "object" ? JSON.stringify(value) : String(value);
-  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  return text === "" || /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 /** Rows (already normalized) as text. `columns` fixes the CSV header, even for zero rows. */

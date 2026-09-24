@@ -284,9 +284,10 @@ flaker export results --format parquet -o .flaker/export/results.parquet
 flaker query "SELECT * FROM flaker_v1.flaky WHERE is_flaky"
 ```
 
-- `--format` is `json` (default, an array), `jsonl`, `csv` (header in schema order; arrays and objects are JSON-encoded) or `parquet` (requires `-o`).
-- `--since <date>` keeps rows at or after an ISO date. It applies to `tests` (`last_seen_at`), `runs` and `results` (`created_at`), `quarantine` (`since`), `selector_verdicts` (`created_at`) and `gate_calibration` (`calibrated_at`); the other datasets reject it.
-- `--where <expr>` is an extra condition over the dataset's own columns, for example `--where "status = 'failed'"`. It must be a single row-level expression: subqueries, `;`, comments and filesystem functions are rejected.
+- `--format` is `json` (default, an array), `jsonl`, `csv` (header in schema order; arrays and objects are JSON-encoded; a null is an empty cell and an empty string is `""`) or `parquet` (requires `-o`).
+- Timestamps are UTC. JSON and CSV write them as ISO strings ending in `Z`. Parquet keeps them as `TIMESTAMP` without a time zone (`isAdjustedToUTC = false`) holding the UTC wall-clock time, so read them as UTC. The JSON columns (`variant`, `title_path`, `changed_files`) are Parquet strings with the JSON logical type.
+- `--since <date>` keeps rows at or after an ISO date. A date alone (`2026-09-01`) means midnight UTC. A date-time needs an offset (`2026-09-01T09:00:00Z` or `…+09:00`), and impossible dates such as `2026-02-30` are rejected. It applies to `tests` (`last_seen_at`), `runs` and `results` (`created_at`), `quarantine` (`since`), `selector_verdicts` (`created_at`) and `gate_calibration` (`calibrated_at`); the other datasets reject it.
+- `--where <expr>` is an extra condition over the dataset's own columns, for example `--where "status = 'failed'"`. It must be a single row-level expression: subqueries, `;`, comments and filesystem functions are rejected. DuckDB parses the whole query first and it must stay one filter over the chosen dataset, and export runs with DuckDB's file access turned off except for the `-o` Parquet file.
 - Invalid input (unknown dataset or format, `--since` on a dataset without a time column, an unsafe `--where`) exits with code 2.
 
 #### `[workflow_lanes]` and `runs.is_full`
