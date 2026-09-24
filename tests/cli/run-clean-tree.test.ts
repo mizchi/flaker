@@ -41,4 +41,14 @@ describe("run on a clean tree (no changed files)", () => {
       expect(res.status).toBe(0);
     });
   }
+
+  it("--gate merge --changed \"\" (an empty-diff PR, issue #90) samples instead of throwing", () => {
+    const res = spawnSync("node", [CLI, "run", "--gate", "merge", "--changed", "", "--dry-run"], {
+      cwd: cleanRepo(),
+      encoding: "utf8",
+      env: { ...process.env, CI: "", GITHUB_ACTIONS: "", FLAKER_GATE: "" },
+    });
+    expect(res.stderr).not.toContain("requires");
+    expect(res.status).toBe(0);
+  });
 });
