@@ -300,7 +300,7 @@ flaker query "SELECT * FROM flaker_v1.flaky WHERE is_flaky"
 "nightly.yml" = { lane = "full-batch", full = true }
 ```
 
-`full = true` の lane のランは `runs.is_full = true` になり、`full = false` なら常に `false` です。`full` の指定がない lane では、同じ workflow が `[flaky].window_days` の間に実行した異なるテストのうち 95% 以上の結果があるランを full とみなします。
+`full = true` の lane のランは `runs.is_full = true` になり、`full = false` なら常に `false` です。`full` の指定がない lane では、同じ workflow の直近 `[flaky].window_days` のランのうち最大のもの (そのラン自身を含む) と比べて、テスト数が 95% 以上あるランを full とみなします。テストの改名や削除があっても、その後の full run が partial に見えることはありません。
 
 ### flaky テスト一覧 — `flaker status --list flaky`
 

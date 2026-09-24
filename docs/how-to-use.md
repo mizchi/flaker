@@ -300,7 +300,7 @@ flaker query "SELECT * FROM flaker_v1.flaky WHERE is_flaky"
 "nightly.yml" = { lane = "full-batch", full = true }
 ```
 
-Runs in a lane with `full = true` have `runs.is_full = true`, and `full = false` forces `false`. For a lane without `full`, a run counts as full when it has results for at least 95% of the distinct tests its workflow ran within `[flaky].window_days`.
+Runs in a lane with `full = true` have `runs.is_full = true`, and `full = false` forces `false`. For a lane without `full`, a run counts as full when it has results for at least 95% as many tests as the largest run of the same workflow within the preceding `[flaky].window_days` (the run itself included). Renamed or deleted tests therefore do not make a later full run look partial.
 
 ### Flaky test listing — `flaker status --list flaky`
 
