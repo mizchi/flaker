@@ -53,7 +53,7 @@ gh release create v<version> \
   --notes "<curated body — typically a tightened version of the CHANGELOG entry>"
 ```
 
-`publish.yml` fires automatically on tag push (OIDC trusted publishing + npm provenance). Wait for it:
+`publish.yml` fires on `release: published`, i.e. on `gh release create`, **not** on the tag push (OIDC trusted publishing + npm provenance). Creating the release is the publish: confirm with the maintainer before running it. Wait for it:
 
 ```bash
 gh run list --workflow publish.yml --limit 1 --json status,conclusion
@@ -75,6 +75,7 @@ If `npx ... --version` reports the previous version while `npm view version` is 
 
 - **chaosbringer's `flaker-merge` advisory check** is a pre-existing flake on its side, unrelated to flaker releases. Ignore the FAILURE on that check when merging flaker PRs.
 - **`gh release create` requires the tag to already be on origin** — don't try to create the release before pushing the tag.
+- **`npm view` can 404 for a minute or two after `+ @mizchi/flaker@<version>`** appears in the publish log. Poll `npm view @mizchi/flaker@<version> version` before concluding the publish failed, and run the `npx` check from an empty directory: inside the flaker checkout `npx` can resolve a local binary instead of the registry package.
 - **Don't skip CHANGELOG** — release-please was removed in 0.10.5, so nothing else generates one. Missing entries are user-visible.
 
 ## What this skill is NOT for
