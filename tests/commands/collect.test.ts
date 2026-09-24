@@ -9,6 +9,7 @@ import {
   collectWorkflowRuns,
   defaultArtifactNameForAdapter,
   formatCollectSummary,
+  describeEmptyCollect,
   resolveCollectExitCode,
   writeCollectSummary,
   type GitHubClient,
@@ -916,5 +917,33 @@ describe("collectWorkflowRuns", () => {
     expect(secondResult.testsCollected).toBe(0);
     expect(secondResult.pendingArtifactRuns).toBe(0);
     expect(secondResult.failedRuns).toBe(0);
+  });
+});
+
+describe("describeEmptyCollect", () => {
+  const empty = {
+    runsCollected: 0,
+    testsCollected: 0,
+    pendingArtifactRuns: 0,
+    pendingArtifactRunIds: [],
+    failedRuns: 0,
+    failedRunIds: [],
+    failures: [],
+  };
+
+  it("explains a collect that found no runs", () => {
+    expect(describeEmptyCollect(empty, { days: 30, workflowPaths: [".github/workflows/ci.yml"] })).toBe(
+      "warning: no completed runs of .github/workflows/ci.yml in the last 30 days; nothing was imported. Run that workflow (or widen --days) so flaker has CI history.",
+    );
+  });
+
+  it("explains runs whose artifacts held no test results", () => {
+    expect(describeEmptyCollect({ ...empty, runsCollected: 3 }, { days: 7, workflowPaths: [] })).toBe(
+      "warning: 3 runs were collected but they contained no test results; check [adapter].artifact_name matches the uploaded artifact.",
+    );
+  });
+
+  it("stays quiet when tests were collected", () => {
+    expect(describeEmptyCollect({ ...empty, runsCollected: 1, testsCollected: 12 }, { days: 30, workflowPaths: [] })).toBeNull();
   });
 });

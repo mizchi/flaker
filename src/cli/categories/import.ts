@@ -4,7 +4,7 @@ import { DuckDBStore } from "../storage/duckdb.js";
 import { loadConfig } from "../config.js";
 import { runImport } from "../commands/import/report.js";
 import { runImportParquet } from "../commands/import/parquet.js";
-import { runCollectCi, formatCollectSummary } from "../commands/collect/ci.js";
+import { runCollectCi, formatCollectSummary, describeEmptyCollect } from "../commands/collect/ci.js";
 import { parseWorkflowRunSource } from "../run-source.js";
 import { parseTagOption, WorkflowFilterError } from "../workflow-filter.js";
 import { parsePositiveIntOption } from "../commands/exec/sampling-options.js";
@@ -69,6 +69,11 @@ export function registerImportCommands(program: Command): void {
             branch: opts.branchFilter,
           });
           console.log(formatCollectSummary(result));
+          const emptyWarning = describeEmptyCollect(result, {
+            days,
+            workflowPaths: config.collect?.workflow_paths ?? [],
+          });
+          if (emptyWarning) process.stderr.write(`${emptyWarning}\n`);
           process.exitCode = exitCode;
         } finally {
           await store.close();
