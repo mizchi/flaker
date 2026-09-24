@@ -194,4 +194,11 @@ describe("playwrightAdapter", () => {
       },
     ]);
   });
+
+  it("keeps the describe titles and the spec title as the title path, without the file suite", () => {
+    const results = playwrightAdapter.parse(fixtureJson);
+    const form = results.find((r) => r.testName === "should display form");
+    expect(form?.titlePath).toEqual(["login page", "should display form"]);
+    expect(form?.suite).toBe("tests/login.spec.ts");
+  });
 });

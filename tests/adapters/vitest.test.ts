@@ -105,4 +105,23 @@ describe("vitestAdapter", () => {
       }),
     ]);
   });
+
+  it("keeps the title path: ancestor titles, then the test's own title", () => {
+    const input = JSON.stringify({
+      testResults: [{
+        name: "tests/a.test.ts",
+        assertionResults: [{
+          ancestorTitles: ["outer", "inner"],
+          fullName: "outer inner works",
+          status: "passed",
+          title: "works",
+          duration: 1,
+          failureMessages: [],
+        }],
+      }],
+    });
+    const [result] = vitestAdapter.parse(input);
+    expect(result.titlePath).toEqual(["outer", "inner", "works"]);
+    expect(result.testName).toBe("outer inner works");
+  });
 });

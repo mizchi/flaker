@@ -224,8 +224,8 @@ export class DuckDBStore implements MetricStore {
     for (const r of results) {
       const resolved = resolveTestIdentity(r);
       await this.run(
-        `INSERT INTO test_results (id, workflow_run_id, test_id, task_id, suite, test_name, filter_text, status, duration_ms, retry_count, error_message, failure_location, stdout_text, stderr_text, artifact_paths, artifacts, commit_sha, variant, quarantine, created_at)
-         VALUES (nextval('test_results_id_seq'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO test_results (id, workflow_run_id, test_id, task_id, suite, test_name, filter_text, status, duration_ms, retry_count, error_message, failure_location, stdout_text, stderr_text, artifact_paths, artifacts, commit_sha, variant, quarantine, created_at, title_path)
+         VALUES (nextval('test_results_id_seq'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           resolved.workflowRunId,
           resolved.testId,
@@ -246,6 +246,7 @@ export class DuckDBStore implements MetricStore {
           resolved.variant ? JSON.stringify(resolved.variant) : null,
           resolved.quarantine ? JSON.stringify(resolved.quarantine) : null,
           resolved.createdAt,
+          resolved.titlePath ? JSON.stringify(resolved.titlePath) : null,
         ]
       );
     }

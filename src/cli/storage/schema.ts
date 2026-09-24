@@ -71,6 +71,7 @@ ALTER TABLE test_results ADD COLUMN IF NOT EXISTS stdout_text VARCHAR;
 ALTER TABLE test_results ADD COLUMN IF NOT EXISTS stderr_text VARCHAR;
 ALTER TABLE test_results ADD COLUMN IF NOT EXISTS artifact_paths JSON;
 ALTER TABLE test_results ADD COLUMN IF NOT EXISTS artifacts JSON;
+ALTER TABLE test_results ADD COLUMN IF NOT EXISTS title_path JSON;
 
 CREATE TABLE IF NOT EXISTS quarantined_test_identities (
   test_id      VARCHAR PRIMARY KEY,

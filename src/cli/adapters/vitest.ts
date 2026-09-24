@@ -33,6 +33,7 @@ export const vitestAdapter: TestResultAdapter = {
         results.push({
           suite,
           testName: test.fullName,
+          titlePath: [...(test.ancestorTitles ?? []), test.title],
           status: test.status === "skipped" ? "skipped" : test.status,
           durationMs: Math.round(test.duration ?? 0),
           retryCount: 0,

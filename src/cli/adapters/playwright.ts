@@ -124,6 +124,7 @@ function walkSuites(
   currentFile: string | null,
   currentTaskId: string | null,
   out: TestCaseResult[],
+  describePath: string[],
 ): void {
   const nextFile = suite.file ?? currentFile ?? suite.title;
   const nextTaskId = currentTaskId ?? suite.title;
@@ -158,6 +159,7 @@ function walkSuites(
         const result: TestCaseResult = resolveTestIdentity({
           suite: nextFile,
           testName: spec.title,
+          titlePath: [...describePath, spec.title],
           taskId: nextTaskId,
           status,
           durationMs: lastResult.duration,
@@ -186,7 +188,7 @@ function walkSuites(
 
   if (suite.suites) {
     for (const child of suite.suites) {
-      walkSuites(child, nextFile, child.title, out);
+      walkSuites(child, nextFile, child.title, out, [...describePath, child.title]);
     }
   }
 }
@@ -197,7 +199,7 @@ export const playwrightAdapter: TestResultAdapter = {
     const report: PlaywrightReport = JSON.parse(input);
     const results: TestCaseResult[] = [];
     for (const suite of report.suites) {
-      walkSuites(suite, suite.file ?? null, suite.title, results);
+      walkSuites(suite, suite.file ?? null, suite.title, results, []);
     }
     return results;
   },

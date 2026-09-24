@@ -28,6 +28,7 @@ export interface TestResult {
   workflowRunId: number;
   suite: string;
   testName: string;
+  titlePath?: string[] | null;
   taskId?: string | null;
   filter?: string | null;
   status: string;
