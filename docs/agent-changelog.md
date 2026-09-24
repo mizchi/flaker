@@ -67,7 +67,15 @@ Removed flags and commands do not name their replacement: commander prints its g
 | `strategy = "random"` | `strategy = "weighted"` |
 | `strategy = "gbdt"` | `strategy = "hybrid"` (needs `[affected].resolver`) or `"weighted"` |
 | `strategy = "coverage-guided"` | `strategy = "affected"` or `"hybrid"` |
-| `percentage`, `co_failure_days`, `detection_threshold`, `flaky_rate_threshold`, … (pre-0.2.0) | `sample_percentage`, `co_failure_window_days`, `detection_threshold_ratio`, `flaky_rate_threshold_percentage` (value is now a literal percentage: `0.3` → `30`) |
+| `percentage` (pre-0.2.0, in `[sampling]` and in `[profile.*]`/`[gate.*]`) | `sample_percentage`, same value |
+| `co_failure_days` (pre-0.2.0, same sections) | `co_failure_window_days`, same value |
+| `[sampling] detected_flaky_rate`, `detected_co_failure_strength` (pre-0.2.0) | `detected_flaky_rate_ratio`, `detected_co_failure_strength_ratio`, same value |
+| `[flaky] detection_threshold` (pre-0.2.0) | `detection_threshold_ratio`, same value |
+| `[quarantine] flaky_rate_threshold` (pre-0.2.0) | `flaky_rate_threshold_percentage`, **and convert the value**: the old key treated `0.3` as 30%, the new key is a literal percentage, so `0.3` → `30` (a value already above 1, such as `30`, stays `30`) |
+
+Only `flaky_rate_threshold` changes its value; every other rename keeps the number as it is.
+
+Keys inside a renamed section follow the same renames: `[profile.ci]` with `percentage = 30` becomes `[gate.merge]` with `sample_percentage = 30`. The loader reports a section rename before the keys inside it, so after renaming sections run `flaker doctor` again until it is clean.
 
 Unchanged: `[sampling]`, `holdout_ratio`, `fallback_strategy` (with a valid strategy), `max_duration_seconds`, `skip_quarantined`, `skip_flaky_tagged`, `[promotion]`, `[quarantine]`, `[affected]`, `[runner]`, `[adapter]`.
 
