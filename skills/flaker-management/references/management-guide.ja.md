@@ -5,7 +5,7 @@
 この guide は `flaker` を導入した後の運用を扱う。
 対象は次のような repo。
 
-- advisory の `flaker run --profile ci` はあるが、まだ required にしていない
+- advisory の `flaker run --gate merge` はあるが、まだ required にしていない
 - nightly / scheduled で full run を回している
 - Playwright E2E / VRT を徐々に gate に入れたい
 - flaky tag や quarantine を使って suite の信頼を保ちたい
@@ -25,21 +25,23 @@
 
 ## 2. 毎日の loop
 
-最低限の daily or nightly loop:
+最低限の daily or nightly loop (0.13.0 以降は `apply` の reconcile に寄せるのが基本):
 
 ```bash
 mkdir -p .artifacts
-flaker collect ci --days 1
-flaker run --profile scheduled
-flaker analyze flaky-tag --json > .artifacts/flaky-tag-triage.json
-flaker analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
+flaker apply
+flaker status --markdown --window-days 7 > .artifacts/flaker-review.md
 ```
 
-必要なら:
+`apply` は内部で `import --ci`（history 収集）/ `calibrate` / `quarantine_apply`（`[quarantine].auto = true` のとき）を状態に応じて自動実行する。個別に叩きたい場合のみ:
 
 ```bash
-flaker policy quarantine --auto --create-issues
+flaker import --ci --days 1
+flaker run --gate release
+flaker status --list flaky --json > .artifacts/flaky-list.json
 ```
+
+旧 `flaker analyze flaky-tag` による triage コマンドと `flaker policy quarantine --auto --create-issues` は 0.13.0 で廃止された。flaky 一覧は `flaker status --list flaky`、quarantine の適用は `flaker.toml` の `[quarantine].auto = true` を設定した上で `flaker apply` に任せる（`apply` が `quarantine_apply` アクションとして実行する）。
 
 この loop の役割:
 
@@ -118,22 +120,22 @@ AI 生成コードでは `理解の負債` と `意図の負債` が増えやす
 
 ## 6. flaker への落とし込み
 
-基本の config 役割:
+基本の config 役割 (0.13.0 以降は `[profile.*]` ではなく `[gate.*]`):
 
-- `profile.scheduled`
+- `[gate.release]`
   full execution。history の母集団。
-- `profile.ci`
+- `[gate.merge]`
   PR selective execution。`skip_flaky_tagged = true` を有効にして Verdict lane を守る。
-- `profile.local`
+- `[gate.iteration]`
   開発者向けの短い feedback loop。`affected` と `max_duration_seconds` を使う。
 
-基本コマンド:
+基本コマンド (`analyze kpi` / `analyze eval` / `analyze flaky-tag` / `policy quarantine` は 0.13.0 で廃止):
 
 ```bash
-flaker analyze kpi
-flaker analyze eval --markdown --window 7
-flaker analyze flaky-tag --json
-flaker policy quarantine --auto --create-issues
+flaker status
+flaker status --markdown --window-days 7
+flaker status --list flaky --json
+flaker apply   # [quarantine].auto = true なら quarantine_apply も自動実行される
 ```
 
 incident 時:
@@ -147,9 +149,9 @@ flaker debug diagnose --suite path/to/spec.ts --test "test name"
 ## 7. 推奨 cadence
 
 - per PR
-  `flaker run --profile ci`
+  `flaker run --gate merge`
 - daily or nightly
-  `collect ci --days 1` + `run --profile scheduled` + `flaky-tag` + `eval`
+  `flaker apply`（内部で `import --ci` 相当の収集 + calibrate + quarantine 適用）+ `flaker run --gate release` + `flaker status --markdown`
 - weekly
   KPI review, promote / keep / demote の判断
 - monthly

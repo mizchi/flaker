@@ -8,16 +8,17 @@ auto = true
 flaky_rate_threshold_percentage = 20
 min_runs = 20
 
-[profile.scheduled]
+[gate.release]
 strategy = "full"
 
-[profile.ci]
+[gate.merge]
 strategy = "hybrid"
 sample_percentage = 20
-adaptive = true
 skip_flaky_tagged = true
+# Once enough matched commits / FNR history exist, run `flaker calibrate`
+# to recompute [sampling] instead of hand-tuning sample_percentage.
 
-[profile.local]
+[gate.iteration]
 strategy = "affected"
 max_duration_seconds = 120
 fallback_strategy = "weighted"

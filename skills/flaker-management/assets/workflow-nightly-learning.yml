@@ -22,12 +22,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: mkdir -p .artifacts
-      - run: pnpm flaker collect ci --days 1
+      - run: pnpm flaker import --ci --days 1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: pnpm flaker run --profile scheduled
-      - run: pnpm flaker analyze flaky-tag --json > .artifacts/flaky-tag-triage.json
-      - run: pnpm flaker analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
+      - run: pnpm flaker run --gate release
+      - run: pnpm flaker status --list flaky --json > .artifacts/flaky-list.json
+      - run: pnpm flaker status --markdown --window-days 7 > .artifacts/flaker-review.md
 
       - uses: actions/upload-artifact@v4
         if: always()

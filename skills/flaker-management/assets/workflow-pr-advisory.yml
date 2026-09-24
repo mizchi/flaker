@@ -20,11 +20,11 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: mkdir -p .artifacts
-      - run: pnpm flaker run --profile ci
+      - run: pnpm flaker run --gate merge
         continue-on-error: true
 
-      - run: pnpm flaker analyze kpi > .artifacts/kpi.md
-      - run: pnpm flaker analyze eval --json > .artifacts/flaker-eval.json
+      - run: pnpm flaker status --markdown > .artifacts/kpi.md
+      - run: pnpm flaker status --json > .artifacts/flaker-eval.json
 
       - uses: actions/upload-artifact@v4
         if: always()

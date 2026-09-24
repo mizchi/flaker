@@ -51,8 +51,6 @@ jobs:
           tests/reporting/*.test.ts
           tests/commands/collect.test.ts
           tests/storage/duckdb.test.ts
-          tests/commands/ops-*.test.ts
-          tests/commands/flaky-tag-triage.test.ts
 
       - name: Install DuckDB C library
         run: |
@@ -145,7 +143,7 @@ jobs:
       - name: Collect CI history
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node dist/cli/main.js apply --target collect_ci 2>&1 | tee .artifacts/collect.txt
+        run: node dist/cli/main.js import --ci --days 30 2>&1 | tee .artifacts/collect.txt
 
       - name: Download historical self-host metrics
         env:
@@ -169,7 +167,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          node dist/cli/main.js run --profile ci > .artifacts/run.txt 2>&1
+          node dist/cli/main.js run --gate merge > .artifacts/run.txt 2>&1
           exit_code=$?
           echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
           if [ "$exit_code" -eq 0 ]; then
