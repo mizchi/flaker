@@ -42,13 +42,31 @@ SELECT
 FROM ranked
 GROUP BY test_id;
 
+-- is_full: a lane with \`full\` set decides. Otherwise a run is full when it
+-- ran >= full_run_ratio of the tests in the largest run of the same workflow
+-- within the flaky window up to it (itself included). The largest run, not
+-- the union of test ids, so renamed or deleted tests do not shrink the ratio.
 CREATE OR REPLACE VIEW flaker_v1.runs AS
 WITH cfg AS (SELECT * FROM flaker_dataset_config WHERE id = 1),
 run_sizes AS (
-  SELECT workflow_run_id, COUNT(DISTINCT test_id)::INTEGER AS n, MAX(created_at) AS at
-  FROM test_results
-  WHERE test_id IS NOT NULL
-  GROUP BY workflow_run_id
+  SELECT tr.workflow_run_id, COUNT(DISTINCT tr.test_id)::INTEGER AS n, MAX(tr.created_at) AS at
+  FROM test_results tr
+  WHERE tr.test_id IS NOT NULL
+  GROUP BY tr.workflow_run_id
+),
+sized AS (
+  SELECT rs.*, wr.workflow_name
+  FROM run_sizes rs JOIN workflow_runs wr ON wr.id = rs.workflow_run_id
+),
+largest AS (
+  SELECT cur.workflow_run_id, MAX(prev.n) AS max_n
+  FROM sized cur
+  CROSS JOIN cfg
+  JOIN sized prev
+    ON prev.workflow_name IS NOT DISTINCT FROM cur.workflow_name
+   AND prev.at <= cur.at
+   AND prev.at > cur.at - to_days(cfg.flaky_window_days)
+  GROUP BY cur.workflow_run_id
 )
 SELECT
   wr.id AS run_id,
@@ -61,20 +79,13 @@ SELECT
   CASE
     WHEN lc.is_full IS NOT NULL THEN lc.is_full
     WHEN COALESCE(rs.n, 0) = 0 THEN FALSE
-    ELSE rs.n >= cfg.full_run_ratio * (
-      SELECT COUNT(DISTINCT tr2.test_id)
-      FROM test_results tr2
-      JOIN workflow_runs wr2 ON wr2.id = tr2.workflow_run_id
-      WHERE tr2.test_id IS NOT NULL
-        AND wr2.workflow_name IS NOT DISTINCT FROM wr.workflow_name
-        AND tr2.created_at <= rs.at
-        AND tr2.created_at > rs.at - to_days(cfg.flaky_window_days)
-    )
+    ELSE rs.n >= cfg.full_run_ratio * lg.max_n
   END AS is_full,
   wr.created_at
 FROM workflow_runs wr
 CROSS JOIN cfg
 LEFT JOIN run_sizes rs ON rs.workflow_run_id = wr.id
+LEFT JOIN largest lg ON lg.workflow_run_id = wr.id
 LEFT JOIN flaker_lane_config lc ON lc.lane = wr.lane;
 
 CREATE OR REPLACE VIEW flaker_v1.results AS

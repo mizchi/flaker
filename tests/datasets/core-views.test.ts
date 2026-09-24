@@ -65,6 +65,40 @@ describe("flaker_v1 core views", () => {
     });
   });
 
+  it("runs: renaming half the tests does not make the next full run partial", async () => {
+    const renamed = ten.map((t, i) => (i < 5 ? t : { ...t, testName: `renamed${i}` }));
+    await seedRun(store, { id: 1, commitSha: "before", daysAgo: 3, results: ten });
+    await seedRun(store, { id: 2, commitSha: "after", daysAgo: 2, results: renamed });
+    await seedRun(store, { id: 3, commitSha: "part", daysAgo: 1, results: renamed.slice(0, 5) });
+    const rows = await store.raw<{ commit_sha: string; is_full: boolean }>(
+      `SELECT commit_sha, is_full FROM flaker_v1.runs ORDER BY run_id`,
+    );
+    expect(Object.fromEntries(rows.map((r) => [r.commit_sha, r.is_full]))).toEqual({
+      before: true, after: true, part: false,
+    });
+  });
+
+  it("runs: a run outside the window does not count toward the largest run", async () => {
+    await seedRun(store, { id: 1, commitSha: "old-big", daysAgo: 30, results: [
+      ...ten, ...ten.map((t) => ({ ...t, testName: `${t.testName}-extra` })),
+    ] });
+    await seedRun(store, { id: 2, commitSha: "now", daysAgo: 1, results: ten });
+    const [row] = await store.raw<{ is_full: boolean }>(`SELECT is_full FROM flaker_v1.runs WHERE run_id = 2`);
+    expect(row.is_full).toBe(true);
+  });
+
+  it("runs: stays fast at 200 runs x 50 tests", async () => {
+    const fifty = Array.from({ length: 50 }, (_, i) => ({ suite: "tests/s.test.ts", testName: `s${i}`, status: "passed" }));
+    for (let id = 1; id <= 200; id++) {
+      await seedRun(store, { id, commitSha: `c${id}`, daysAgo: (200 - id) / 20, results: id % 4 === 0 ? fifty.slice(0, 10) : fifty });
+    }
+    const started = performance.now();
+    const rows = await store.raw<{ is_full: boolean }>(`SELECT is_full FROM flaker_v1.runs`);
+    const elapsed = performance.now() - started;
+    expect(rows.filter((r) => r.is_full)).toHaveLength(150);
+    expect(elapsed).toBeLessThan(1000);
+  });
+
   it("runs: a run with no results is never full, and source follows the local-event rule", async () => {
     await store.insertWorkflowRun({
       id: 7, repo: "o/r", branch: "main", commitSha: "empty", event: "local-import",
