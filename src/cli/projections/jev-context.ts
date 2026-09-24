@@ -63,19 +63,19 @@ export function buildJevContext(input: JevContextInput): JevContextV1 {
   }
 
   // jev names a test by file + title_path (+ project), so test_keys that share
-  // a name (other variant keys) merge into one entry before ranking: misses
-  // add up, failed_with keeps each file once at its strongest. A name with a
+  // a name (other variant keys) merge into one entry before ranking: missed is
+  // the number of distinct commits any of them was missed on, failed_with keeps each file once at its strongest. A name with a
   // quarantined key is in skip already; flaky keys contribute nothing.
   const quarantinedNames = new Set([...quarantined].flatMap((key) => {
     const n = names.get(key);
     return n ? [nameKey(n)] : [];
   }));
-  const merged = new Map<string, { name: JevContextNameV1; missed: number; files: Map<string, { co: number; strength: number }> }>();
+  const merged = new Map<string, { name: JevContextNameV1; heads: Set<string>; files: Map<string, { co: number; strength: number }> }>();
   for (const key of [...new Set([...missed.keys(), ...hints.keys()])].sort(cmp)) {
     const name = names.get(key);
     if (!name || flaky.has(key) || quarantined.has(key) || quarantinedNames.has(nameKey(name))) continue;
-    const entry = merged.get(nameKey(name)) ?? { name, missed: 0, files: new Map() };
-    entry.missed += missed.get(key)?.size ?? 0;
+    const entry = merged.get(nameKey(name)) ?? { name, heads: new Set<string>(), files: new Map() };
+    for (const head of missed.get(key) ?? []) entry.heads.add(head);
     for (const h of hints.get(key) ?? []) {
       const prev = entry.files.get(h.file);
       if (!prev || h.strength > prev.strength || (h.strength === prev.strength && h.co > prev.co)) {
@@ -92,7 +92,7 @@ export function buildJevContext(input: JevContextInput): JevContextV1 {
         .sort((a, b) => b.strength - a.strength || b.co - a.co || cmp(a.file, b.file));
       return {
         name: entry.name,
-        missed: entry.missed,
+        missed: entry.heads.size,
         best: files[0]?.strength ?? 0,
         failedWith: files.slice(0, maxFiles).map((f) => f.file),
       };

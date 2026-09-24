@@ -102,4 +102,21 @@ describe("buildJevContext", () => {
     expect(b.digest).toBe(a.digest);
     expect(b.tests).toEqual(a.tests);
   });
+
+  it("a merged name counts the commits it was missed on: two variants missing on one commit give 1", () => {
+    const variants = [
+      { test_key: "v1", file: "tests/v.test.ts", title_path: ["v"], variant: { shard: "1" } },
+      { test_key: "v2", file: "tests/v.test.ts", title_path: ["v"], variant: { shard: "2" } },
+    ];
+    const sameCommit = buildJevContext(input({
+      tests: [...input().tests, ...variants],
+      misses: [{ test_key: "v1", selector_run_id: "s1", head_sha: "h1" }, { test_key: "v2", selector_run_id: "s1", head_sha: "h1" }],
+    }));
+    expect(sameCommit.tests.find((x) => x.file === "tests/v.test.ts")?.missed).toBe(1);
+    const twoCommits = buildJevContext(input({
+      tests: [...input().tests, ...variants],
+      misses: [{ test_key: "v1", selector_run_id: "s1", head_sha: "h1" }, { test_key: "v2", selector_run_id: "s2", head_sha: "h2" }],
+    }));
+    expect(twoCommits.tests.find((x) => x.file === "tests/v.test.ts")?.missed).toBe(2);
+  });
 });

@@ -4478,7 +4478,7 @@ function input(over: Partial<JevContextInput> = {}): JevContextInput {
     ],
     quarantine: [{ test_key: "q" }],
     flaky: [{ test_key: "flaky", is_flaky: true }, { test_key: "init", is_flaky: false }],
-    misses: [{ test_key: "init", selector_run_id: "s1" }, { test_key: "init", selector_run_id: "s2" }],
+    misses: [{ test_key: "init", selector_run_id: "s1", head_sha: "h1" }, { test_key: "init", selector_run_id: "s2", head_sha: "h2" }],
     co_failures: [
       ...["a", "b", "c", "d", "e", "f"].map((f, i) => ({ changed_file: `src/${f}.ts`, test_key: "init", co_failures: 2 + i, strength: 0.5 })),
       { changed_file: "src/cli/config.ts", test_key: "init", co_failures: 3, strength: 0.9 },
@@ -4530,6 +4530,54 @@ describe("buildJevContext", () => {
     expect(a.digest).toMatch(/^sha256:[0-9a-f]{64}$/);
     const c = buildJevContext(input({ quarantine: [] }));
     expect(c.digest).not.toBe(a.digest);
+  });
+
+  it("counts misses per head, not per selector run", () => {
+    const ctx = buildJevContext(input({
+      misses: [{ test_key: "init", selector_run_id: "s1", head_sha: "h1" }, { test_key: "init", selector_run_id: "s2", head_sha: "h1" }],
+    }));
+    expect(ctx.tests.find((x) => x.file === "tests/cli/init.test.ts")?.missed).toBe(1);
+  });
+
+  it("merges test_keys that share a name before ranking, whatever the row order", () => {
+    const variants = [
+      { test_key: "v1", file: "tests/v.test.ts", title_path: ["v"], variant: { shard: "1" } },
+      { test_key: "v2", file: "tests/v.test.ts", title_path: ["v"], variant: { shard: "2" } },
+    ];
+    const over = {
+      misses: [{ test_key: "v1", selector_run_id: "s1", head_sha: "h1" }, { test_key: "v2", selector_run_id: "s2", head_sha: "h2" }],
+      co_failures: [
+        { changed_file: "src/v.ts", test_key: "v1", co_failures: 2, strength: 0.4 },
+        { changed_file: "src/v.ts", test_key: "v2", co_failures: 3, strength: 0.8 },
+        { changed_file: "src/w.ts", test_key: "v2", co_failures: 2, strength: 0.5 },
+      ],
+    };
+    const a = buildJevContext(input({ ...over, tests: [...input().tests, ...variants] }));
+    const b = buildJevContext(input({
+      misses: [...over.misses].reverse(), co_failures: [...over.co_failures].reverse(),
+      tests: [...variants].reverse().concat(input().tests),
+    }));
+    const entries = a.tests.filter((x) => x.file === "tests/v.test.ts");
+    expect(entries).toEqual([{ file: "tests/v.test.ts", title_path: ["v"], missed: 2, failed_with: ["src/v.ts", "src/w.ts"] }]);
+    expect(b.digest).toBe(a.digest);
+    expect(b.tests).toEqual(a.tests);
+  });
+
+  it("a merged name counts the commits it was missed on: two variants missing on one commit give 1", () => {
+    const variants = [
+      { test_key: "v1", file: "tests/v.test.ts", title_path: ["v"], variant: { shard: "1" } },
+      { test_key: "v2", file: "tests/v.test.ts", title_path: ["v"], variant: { shard: "2" } },
+    ];
+    const sameCommit = buildJevContext(input({
+      tests: [...input().tests, ...variants],
+      misses: [{ test_key: "v1", selector_run_id: "s1", head_sha: "h1" }, { test_key: "v2", selector_run_id: "s1", head_sha: "h1" }],
+    }));
+    expect(sameCommit.tests.find((x) => x.file === "tests/v.test.ts")?.missed).toBe(1);
+    const twoCommits = buildJevContext(input({
+      tests: [...input().tests, ...variants],
+      misses: [{ test_key: "v1", selector_run_id: "s1", head_sha: "h1" }, { test_key: "v2", selector_run_id: "s2", head_sha: "h2" }],
+    }));
+    expect(twoCommits.tests.find((x) => x.file === "tests/v.test.ts")?.missed).toBe(2);
   });
 });
 ```
@@ -4634,7 +4682,8 @@ export interface JevContextInput {
   tests: Array<{ test_key: string; file: string; title_path: string[]; variant: Record<string, string> | null }>;
   quarantine: Array<{ test_key: string }>;
   flaky: Array<{ test_key: string; is_flaky: boolean }>;
-  misses: Array<{ test_key: string; selector_run_id: string }>;
+  /** flaker_v1.misses: already one row per (latest real selector run on a head, test). */
+  misses: Array<{ test_key: string; selector_run_id: string; head_sha: string }>;
   co_failures: Array<{ changed_file: string; test_key: string; co_failures: number; strength: number }>;
   gate: {
     cutoff: number; unsure_below: number; unsure_margin: number;
@@ -4660,17 +4709,18 @@ export function buildJevContext(input: JevContextInput): JevContextV1 {
   const quarantined = new Set(input.quarantine.map((q) => q.test_key));
   const flaky = new Set(input.flaky.filter((f) => f.is_flaky).map((f) => f.test_key));
 
-  const skip: JevContextSkipV1[] = [...quarantined]
-    .flatMap((key) => {
-      const n = names.get(key);
-      return n ? [{ ...n, reason: "quarantined" as const }] : [];
-    })
-    .sort((a, b) => cmp(nameKey(a), nameKey(b)));
+  const skipByName = new Map<string, JevContextSkipV1>();
+  for (const key of quarantined) {
+    const n = names.get(key);
+    if (n) skipByName.set(nameKey(n), { ...n, reason: "quarantined" });
+  }
+  const skip: JevContextSkipV1[] = [...skipByName.values()].sort((a, b) => cmp(nameKey(a), nameKey(b)));
 
+  // Misses count per head: one commit is one piece of evidence.
   const missed = new Map<string, Set<string>>();
   for (const m of input.misses) {
     const set = missed.get(m.test_key) ?? new Set<string>();
-    set.add(m.selector_run_id);
+    set.add(m.head_sha);
     missed.set(m.test_key, set);
   }
   const hints = new Map<string, Array<{ file: string; co: number; strength: number }>>();
@@ -4681,15 +4731,37 @@ export function buildJevContext(input: JevContextInput): JevContextV1 {
     hints.set(c.test_key, list);
   }
 
-  const candidates = [...new Set([...missed.keys(), ...hints.keys()])]
-    .filter((key) => !quarantined.has(key) && !flaky.has(key) && names.has(key))
-    .map((key) => {
-      const files = (hints.get(key) ?? [])
+  // jev names a test by file + title_path (+ project), so test_keys that share
+  // a name (other variant keys) merge into one entry before ranking: missed is
+  // the number of distinct commits any of them was missed on, failed_with keeps each file once at its strongest. A name with a
+  // quarantined key is in skip already; flaky keys contribute nothing.
+  const quarantinedNames = new Set([...quarantined].flatMap((key) => {
+    const n = names.get(key);
+    return n ? [nameKey(n)] : [];
+  }));
+  const merged = new Map<string, { name: JevContextNameV1; heads: Set<string>; files: Map<string, { co: number; strength: number }> }>();
+  for (const key of [...new Set([...missed.keys(), ...hints.keys()])].sort(cmp)) {
+    const name = names.get(key);
+    if (!name || flaky.has(key) || quarantined.has(key) || quarantinedNames.has(nameKey(name))) continue;
+    const entry = merged.get(nameKey(name)) ?? { name, heads: new Set<string>(), files: new Map() };
+    for (const head of missed.get(key) ?? []) entry.heads.add(head);
+    for (const h of hints.get(key) ?? []) {
+      const prev = entry.files.get(h.file);
+      if (!prev || h.strength > prev.strength || (h.strength === prev.strength && h.co > prev.co)) {
+        entry.files.set(h.file, { co: h.co, strength: h.strength });
+      }
+    }
+    merged.set(nameKey(name), entry);
+  }
+
+  const candidates = [...merged.values()]
+    .map((entry) => {
+      const files = [...entry.files.entries()]
+        .map(([file, v]) => ({ file, ...v }))
         .sort((a, b) => b.strength - a.strength || b.co - a.co || cmp(a.file, b.file));
       return {
-        key,
-        name: names.get(key)!,
-        missed: missed.get(key)?.size ?? 0,
+        name: entry.name,
+        missed: entry.heads.size,
         best: files[0]?.strength ?? 0,
         failedWith: files.slice(0, maxFiles).map((f) => f.file),
       };
@@ -4719,6 +4791,8 @@ export function buildJevContext(input: JevContextInput): JevContextV1 {
   };
 }
 ```
+
+Same-name merge: test_keys that share file + title_path (+ project) merge into one entry before ranking. `missed` is the number of distinct commits any of them was missed on, and `failed_with` keeps each file once at its strongest. `misses` rows are already one per (latest real selector run on a head, test), without record-quarantined verdicts.
 
 Order check for the test: init's co-failures are config.ts (0.9, 3) and then a–f (all strength 0.5, co 2..7). They sort by co desc, giving f(7), e(6), d(5), c(4), b(3), a(2). Top 5: config, f, e, d, c. That matches the expected array. Key order in the expected objects does not matter for `toEqual`.
 
@@ -4924,15 +4998,18 @@ The spec suggests the `dev eval-fixture` tooling for this. That generator target
 ```ts
 // tests/integration-test-db.test.ts
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { loadRecord, replay } from "jev-test-filter";
 import { gateOptions } from "jev-test-filter/gate";
+import type { MetricStore } from "../src/cli/storage/types.js";
 import type { DuckDBStore } from "../src/cli/storage/duckdb.js";
-import { DEFAULT_SELECTOR } from "../src/cli/config.js";
+import { DEFAULT_SELECTOR, loadConfig } from "../src/cli/config.js";
+import { openDatasetStore } from "../src/cli/datasets/open.js";
 import { runImport } from "../src/cli/commands/import/report.js";
-import { runImportSelector } from "../src/cli/commands/import/selector.js";
+import { runImportSelector, type ImportSelectorResult } from "../src/cli/commands/import/selector.js";
 import { runSelectorCalibration } from "../src/cli/commands/calibrate/selector.js";
 import { runProjection } from "../src/cli/projections/index.js";
 import type { JevContextV1 } from "../src/cli/contracts/jev-context-v1.js";
@@ -4942,6 +5019,43 @@ import { memoryStore } from "./datasets/helpers.js";
 
 const REPORT = resolve(import.meta.dirname, "fixtures/vitest-init-report.json");
 const HEAD = "c0ffee0000000000000000000000000000000002";
+const FLAKER_CLI = resolve(import.meta.dirname, "../dist/cli/main.js");
+const JEV_CLI = resolve(import.meta.dirname, "../node_modules/jev-test-filter/dist/cli.js");
+
+/**
+ * Two full CI runs (an earlier commit and HEAD) where config.ts changed and
+ * `init writes toml` failed, and a jev record on HEAD that left the failing
+ * test out. Returns the record's path and the selector import result.
+ */
+async function seedLoop(store: MetricStore, dir: string): Promise<{ recordPath: string; imported: ImportSelectorResult }> {
+  for (const sha of ["b0000000000000000000000000000000000000001", HEAD]) {
+    await store.insertCommitChanges(sha, [{ filePath: "src/cli/config.ts", changeType: "modified", additions: 1, deletions: 0 }]);
+    await runImport({ store, filePath: REPORT, adapterType: "vitest", commitSha: sha, branch: "main", source: "ci", workflowName: "ci" });
+    // runImport uses Date.now() as the run id; keep the two runs distinct.
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  const record = {
+    version: 2, createdAt: new Date().toISOString(), base: "origin/main",
+    head_sha: HEAD, base_sha: null, context_digest: null,
+    gate: { cutoff: 2, unsure_below: 0.5, unsure_margin: 1 }, framework: "vitest",
+    tests: [
+      { file: "tests/init.test.ts", titlePath: ["init", "writes toml"], line: 3, endLine: 5, framework: "vitest", dynamic: false },
+      { file: "tests/init.test.ts", titlePath: ["init", "reads toml"], line: 7, endLine: 9, framework: "vitest", dynamic: false },
+    ],
+    touched: [], quarantined: [],
+    answers: { q0000: { value: 1.2, confidence: 0.9 }, q0001: { value: 0.2, confidence: 0.9 } },
+    fallback: null,
+  };
+  const recordPath = join(dir, `${HEAD}.json`);
+  writeFileSync(recordPath, JSON.stringify(record));
+  const imported = await runImportSelector({ store, path: recordPath, adapter: "jev" });
+  return { recordPath, imported };
+}
+
+/** The environment without GIT_*: a pre-push hook exports GIT_DIR, which would point git at this repository. */
+function scrubbedEnv(): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
+}
 
 describe("test-db loop", () => {
   let store: DuckDBStore;
@@ -4955,30 +5069,7 @@ describe("test-db loop", () => {
   });
 
   it("a miss tightens the gate, the context carries it, and jev's replay then selects the test", async () => {
-    // Two full CI runs (earlier commit and HEAD) where config.ts changed and `init writes toml` failed.
-    for (const sha of ["b0000000000000000000000000000000000000001", HEAD]) {
-      await store.insertCommitChanges(sha, [{ filePath: "src/cli/config.ts", changeType: "modified", additions: 1, deletions: 0 }]);
-      await runImport({ store, filePath: REPORT, adapterType: "vitest", commitSha: sha, branch: "main", source: "ci", workflowName: "ci" });
-      // runImport uses Date.now() as the run id; keep the two runs distinct.
-      await new Promise((r) => setTimeout(r, 5));
-    }
-    // jev judged HEAD and left the failing test out.
-    const record = {
-      version: 2, createdAt: new Date().toISOString(), base: "origin/main",
-      head_sha: HEAD, base_sha: null, context_digest: null,
-      gate: { cutoff: 2, unsure_below: 0.5, unsure_margin: 1 }, framework: "vitest",
-      tests: [
-        { file: "tests/init.test.ts", titlePath: ["init", "writes toml"], line: 3, endLine: 5, framework: "vitest", dynamic: false },
-        { file: "tests/init.test.ts", titlePath: ["init", "reads toml"], line: 7, endLine: 9, framework: "vitest", dynamic: false },
-      ],
-      touched: [], quarantined: [],
-      answers: { q0000: { value: 1.2, confidence: 0.9 }, q0001: { value: 0.2, confidence: 0.9 } },
-      fallback: null,
-    };
-    const recordPath = join(dir, `${HEAD}.json`);
-    writeFileSync(recordPath, JSON.stringify(record));
-
-    const imported = await runImportSelector({ store, path: recordPath, adapter: "jev" });
+    const { recordPath, imported } = await seedLoop(store, dir);
     expect(imported).toMatchObject({ imported: 1, resolved: 2, unresolved: 0 });
 
     const misses = await store.raw<{ n: number }>(`SELECT COUNT(*)::INTEGER AS n FROM flaker_v1.misses`);
@@ -5000,7 +5091,66 @@ describe("test-db loop", () => {
     expect(again.verdicts.find((v) => v.test.titlePath[1] === "writes toml")?.selected).toBe(true);
   });
 });
+
+describe("jev-test-filter's own CLI reads the exported context", () => {
+  it("accepts `flaker export --projection jev-context` output and rejects a tampered version", async () => {
+    const project = mkdtempSync(join(tmpdir(), "flaker-jev-cli-"));
+    writeFileSync(
+      join(project, "flaker.toml"),
+      `[repo]\nowner = "a"\nname = "b"\n[storage]\npath = ".flaker/data"\n[affected]\nresolver = "git"\nconfig = ""\n`,
+    );
+    // The duckdb binding keeps a closed database's file lock until the
+    // instance is garbage-collected, so a child process could not open it.
+    // Seed a scratch database, checkpoint it, and copy it into place.
+    const scratch = mkdtempSync(join(tmpdir(), "flaker-jev-seed-"));
+    writeFileSync(join(scratch, "flaker.toml"), readFileSync(join(project, "flaker.toml"), "utf8"));
+    const store = await openDatasetStore(scratch, loadConfig(scratch));
+    try {
+      await seedLoop(store, scratch);
+      await store.addQuarantine({ suite: "tests/init.test.ts", testName: "init reads toml" }, "manual");
+      await runSelectorCalibration({ store, selector: DEFAULT_SELECTOR, windowDays: 90, dryRun: false });
+      await store.raw("CHECKPOINT");
+    } finally {
+      await store.close();
+    }
+    mkdirSync(join(project, ".flaker"));
+    copyFileSync(join(scratch, ".flaker/data"), join(project, ".flaker/data"));
+    expect(existsSync(join(scratch, ".flaker/data.wal"))).toBe(false);
+
+    const env = scrubbedEnv();
+    const exported = spawnSync("node", [FLAKER_CLI, "export", "--projection", "jev-context", "-o", "context.json"], { cwd: project, env, encoding: "utf8" });
+    expect(exported.status, exported.stderr).toBe(0);
+    const contextPath = join(project, "context.json");
+    const ctx = JSON.parse(readFileSync(contextPath, "utf8")) as JevContextV1;
+    expect(ctx.skip.length).toBeGreaterThan(0);
+    expect(ctx.tests.length).toBeGreaterThan(0);
+
+    // A git repository holding a test file, for jev to extract from.
+    const repo = mkdtempSync(join(tmpdir(), "flaker-jev-repo-"));
+    mkdirSync(join(repo, "tests"));
+    writeFileSync(join(repo, "tests/init.test.ts"), `import { it } from "vitest";\nit("writes toml", () => {});\n`);
+    const git = (...args: string[]) => {
+      const res = spawnSync("git", ["-c", "user.email=t@example.com", "-c", "user.name=t", ...args], { cwd: repo, env, encoding: "utf8" });
+      expect(res.status, res.stderr).toBe(0);
+    };
+    git("init", "-q");
+    git("add", ".");
+    git("commit", "-qm", "init");
+
+    const jev = (path: string) => spawnSync("node", [JEV_CLI, "--dry-run", "--context", path], { cwd: repo, env, encoding: "utf8" });
+    const ok = jev(contextPath);
+    expect(ok.status, ok.stderr).toBe(0);
+
+    const tamperedPath = join(project, "context-v2.json");
+    writeFileSync(tamperedPath, JSON.stringify({ ...ctx, version: 2 }));
+    const bad = jev(tamperedPath);
+    expect(bad.status).toBe(2);
+    expect(bad.stderr).toMatch(/unsupported context version 2; expected 1/);
+  });
+});
 ```
+
+The second test runs jev-test-filter's own CLI (`dist/cli.js --dry-run --context <file>`) on the file `flaker export --projection jev-context` wrote: exit 0, and exit 2 for a tampered `version`. The duckdb binding holds a closed database's lock until GC, so the test seeds a scratch database, checkpoints it and copies it into place before spawning the CLI. GIT_* variables are scrubbed from the child environment.
 
 `gateOptions(ctx.gate)` receives a `JevContextGateV1`. It only reads `cutoff`, `unsure_below` and `unsure_margin`, which is the same shape jev's `RecordGate` uses.
 
