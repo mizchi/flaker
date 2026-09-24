@@ -133,7 +133,7 @@ describe("calibrateGate", () => {
     expect(d.rationale).toMatch(/no candidate in the grid catches all/);
   });
 
-  it("tightens even when nothing catches the miss, and never keeps a gate known to miss", () => {
+  it("keeps the gate when no candidate misses fewer: selecting more would not catch the miss", () => {
     const r: CalibrationRecord = {
       selectorRunId: "z", source: "real", contextDigest: null,
       verdicts: [
@@ -143,9 +143,10 @@ describe("calibrateGate", () => {
       failures: ["z:low"],
     };
     const d = calibrateGate({ ...base, records: [r], current: DEFAULTS });
-    expect(d.decision).toBe("tighten");
-    expect(d.gate).not.toEqual(DEFAULTS);
-    expect(d.adopted.selected).toBeGreaterThan(d.current.selected);
+    expect(d.decision).toBe("keep");
+    expect(d.gate).toEqual(DEFAULTS);
+    expect(d.current.missed).toBe(1);
+    expect(d.rationale).toMatch(/no candidate in the grid misses fewer/);
   });
 
   it("a tighten candidate keeps every test the current gate selects (no dropped unsure rescues)", () => {

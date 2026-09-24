@@ -10,7 +10,7 @@
  *   that selects, on every record, everything the current gate selects. Among
  *   those: fewest misses, then fewest selected tests. When no candidate
  *   catches every failure the one with the fewest misses is still adopted;
- *   a gate known to miss is kept only if no candidate selects more;
+ *   when no candidate misses fewer than the current gate, it is kept;
  * - selecting fewer tests (loosen) needs zero misses, >= minFailures real
  *   failures and a Wilson 95% lower bound of real recall >= recallTarget.
  *   With zero misses the bound is n / (n + z^2), so recallTarget 0.90 needs
@@ -174,11 +174,11 @@ export function calibrateGate(input: CalibrateInput): CalibrationDecision {
   if (current.missed > 0) {
     const currentFlags = records.map((r) => replaySelected(r.verdicts, input.current));
     const tighter = candidates.filter((c) =>
-      (c.missed < current.missed || c.selected > current.selected)
+      c.missed < current.missed
       && coversSelection(records.map((r) => replaySelected(r.verdicts, c.gate)), currentFlags));
     if (tighter.length === 0) {
       return decide("keep", current,
-        `the current gate misses ${current.missed} of ${totalFailures} failures and no candidate in the grid selects more than it does`);
+        `the current gate misses ${current.missed} of ${totalFailures} failures and no candidate in the grid misses fewer, so selecting more tests would not catch them`);
     }
     const fewestMisses = Math.min(...tighter.map((c) => c.missed));
     const best = pickFewest(tighter.filter((c) => c.missed === fewestMisses), defaults);

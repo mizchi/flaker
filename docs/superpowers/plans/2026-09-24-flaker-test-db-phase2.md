@@ -3697,7 +3697,7 @@ describe("calibrateGate", () => {
     expect(d.rationale).toMatch(/no candidate in the grid catches all/);
   });
 
-  it("tightens even when nothing catches the miss, and never keeps a gate known to miss", () => {
+  it("keeps the gate when no candidate misses fewer: selecting more would not catch the miss", () => {
     const r: CalibrationRecord = {
       selectorRunId: "z", source: "real", contextDigest: null,
       verdicts: [
@@ -3707,9 +3707,10 @@ describe("calibrateGate", () => {
       failures: ["z:low"],
     };
     const d = calibrateGate({ ...base, records: [r], current: DEFAULTS });
-    expect(d.decision).toBe("tighten");
-    expect(d.gate).not.toEqual(DEFAULTS);
-    expect(d.adopted.selected).toBeGreaterThan(d.current.selected);
+    expect(d.decision).toBe("keep");
+    expect(d.gate).toEqual(DEFAULTS);
+    expect(d.current.missed).toBe(1);
+    expect(d.rationale).toMatch(/no candidate in the grid misses fewer/);
   });
 
   it("a tighten candidate keeps every test the current gate selects (no dropped unsure rescues)", () => {
@@ -3756,7 +3757,7 @@ describe("calibrateGate", () => {
  *   that selects, on every record, everything the current gate selects. Among
  *   those: fewest misses, then fewest selected tests. When no candidate
  *   catches every failure the one with the fewest misses is still adopted;
- *   a gate known to miss is kept only if no candidate selects more;
+ *   when no candidate misses fewer than the current gate, it is kept;
  * - selecting fewer tests (loosen) needs zero misses, >= minFailures real
  *   failures and a Wilson 95% lower bound of real recall >= recallTarget.
  *   With zero misses the bound is n / (n + z^2), so recallTarget 0.90 needs
@@ -3920,11 +3921,11 @@ export function calibrateGate(input: CalibrateInput): CalibrationDecision {
   if (current.missed > 0) {
     const currentFlags = records.map((r) => replaySelected(r.verdicts, input.current));
     const tighter = candidates.filter((c) =>
-      (c.missed < current.missed || c.selected > current.selected)
+      c.missed < current.missed
       && coversSelection(records.map((r) => replaySelected(r.verdicts, c.gate)), currentFlags));
     if (tighter.length === 0) {
       return decide("keep", current,
-        `the current gate misses ${current.missed} of ${totalFailures} failures and no candidate in the grid selects more than it does`);
+        `the current gate misses ${current.missed} of ${totalFailures} failures and no candidate in the grid misses fewer, so selecting more tests would not catch them`);
     }
     const fewestMisses = Math.min(...tighter.map((c) => c.missed));
     const best = pickFewest(tighter.filter((c) => c.missed === fewestMisses), defaults);
