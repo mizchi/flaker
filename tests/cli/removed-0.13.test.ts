@@ -86,3 +86,22 @@ describe("adaptive sampling removed in 0.13.0", () => {
     });
   }
 });
+
+describe("apply and ops surface in 0.13.0", () => {
+  it("apply no longer takes --emit, --target or --incident-*", () => {
+    const out = help("apply");
+    for (const flag of ["--emit", "--target", "--incident-run", "--incident-suite", "--incident-test", "--incident-repeat", "--incident-runner"]) {
+      expect(out).not.toContain(flag);
+    }
+    for (const flag of ["--json", "--output", "--refresh-only", "--plan-file", "--force"]) {
+      expect(out).toContain(flag);
+    }
+  });
+
+  for (const sub of ["weekly", "incident"]) {
+    it(`ops ${sub} is gone`, () => {
+      const res = spawnSync("node", [CLI, "ops", sub], { encoding: "utf8" });
+      expect(res.status).not.toBe(0);
+    });
+  }
+});

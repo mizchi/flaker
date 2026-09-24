@@ -8,7 +8,6 @@ import { registerImportCommands } from "./categories/import.js";
 import { registerReportCommands } from "./categories/report.js";
 import { statusAction, analyzeQueryAction } from "./categories/analyze.js";
 import { registerExplainCommands } from "./categories/explain.js";
-import { registerOpsCommands } from "./categories/ops.js";
 import { registerDebugCommands, debugDoctorAction } from "./categories/debug.js";
 import { registerDevCommands } from "./categories/dev.js";
 import { registerApplyCommands } from "./categories/apply.js";
@@ -34,7 +33,6 @@ export function createProgram(): Command {
   registerCalibrateCommand(program);
   registerImportCommands(program);
   registerReportCommands(program);
-  registerOpsCommands(program);
   registerExplainCommands(program);
   registerDebugCommands(program);
   registerDevCommands(program);

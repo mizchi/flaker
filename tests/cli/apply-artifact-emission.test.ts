@@ -54,14 +54,10 @@ describe("artifact serializers", () => {
   });
 });
 
-describe("apply --emit CLI smoke", () => {
-  it("`flaker apply --help` mentions --emit", () => {
-    const res = spawnSync("node", [CLI, "apply", "--help"], { encoding: "utf8" });
-    expect(res.status).toBe(0);
-    expect(res.stdout).toContain("--emit");
-  });
+describe("apply artifact CLI smoke", () => {
   it("`flaker apply --help` mentions --output", () => {
     const res = spawnSync("node", [CLI, "apply", "--help"], { encoding: "utf8" });
+    expect(res.status).toBe(0);
     expect(res.stdout).toContain("--output");
   });
   it("`flaker plan --help` mentions --output", () => {

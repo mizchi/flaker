@@ -18,14 +18,6 @@ export interface ApplyArtifact {
   actions: PlannedAction[];
   executed: DagExecutedAction[];
   probe: RepoProbe;
-  emitted?: EmittedArtifact;
-}
-
-export type EmitKind = "daily" | "weekly" | "incident";
-
-export interface EmittedArtifact {
-  kind: EmitKind;
-  report: unknown;
 }
 
 export function serializePlanArtifact(artifact: PlanArtifact): string {

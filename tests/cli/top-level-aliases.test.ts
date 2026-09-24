@@ -35,20 +35,7 @@ describe("top-level aliases", () => {
   // gate review/explain/history removed in 0.8.0 — tests deleted.
   // quarantine suggest/apply removed in 0.8.0 — tests deleted.
 
-  it("flaker ops weekly --help shows ops weekly options", () => {
-    const help = execSync(`node ${cliPath} ops weekly --help`, { encoding: "utf-8" });
-    expect(help).toContain("--window-days");
-    expect(help).toContain("--json");
-  });
-
-  // flaker ops daily removed in 0.10.0 — test deleted.
-
-  it("flaker ops incident --help shows ops incident options", () => {
-    const help = execSync(`node ${cliPath} ops incident --help`, { encoding: "utf-8" });
-    expect(help).toContain("--suite");
-    expect(help).toContain("--test");
-    expect(help).toContain("--run");
-  });
+  // flaker ops weekly/incident removed in 0.13.0 — tests deleted.
 
   it("flaker doctor --help shows the canonical doctor command (not deprecated)", () => {
     const help = execSync(`node ${cliPath} doctor --help`, { encoding: "utf-8" });
