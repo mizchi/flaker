@@ -9,7 +9,9 @@ import { parseWorkflowRunSource } from "../run-source.js";
 import { parseTagOption, WorkflowFilterError } from "../workflow-filter.js";
 import { parsePositiveIntOption } from "../commands/exec/sampling-options.js";
 import { openDatasetStore } from "../datasets/open.js";
-import { isSelectorAdapter, runImportSelector, formatImportSelector } from "../commands/import/selector.js";
+import {
+  formatImportSelector, importSelectorDiagnostics, isSelectorAdapter, runImportSelector, SelectorImportPathError,
+} from "../commands/import/selector.js";
 
 export function detectAdapter(filePath: string): string | undefined {
   const lower = filePath.toLowerCase();
@@ -92,8 +94,13 @@ export function registerImportCommands(program: Command): void {
         try {
           const result = await runImportSelector({ store, path: resolve(file), adapter: opts.adapter });
           console.log(formatImportSelector(result));
-          for (const bad of result.invalid) process.stderr.write(`${bad.file}: ${bad.error}\n`);
-          if (result.invalid.length > 0) process.exitCode = 1;
+          const diag = importSelectorDiagnostics(result);
+          for (const line of diag.stderr) process.stderr.write(`${line}\n`);
+          process.exitCode = diag.exitCode;
+        } catch (err) {
+          if (!(err instanceof SelectorImportPathError)) throw err;
+          process.stderr.write(`error: ${err.message}\n`);
+          process.exitCode = 1;
         } finally {
           await store.close();
         }

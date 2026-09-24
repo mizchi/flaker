@@ -274,8 +274,8 @@ flaker import .jev-test-filter --adapter jev
 - The path may be a file or a directory. A directory imports its `*.json` and then `records/*.json`, which is jev-test-filter's layout. `last.json` is a copy of the latest record, so it counts as a duplicate.
 - Records are keyed by their content: importing the same record again is a no-op and is reported as a duplicate.
 - A jev record that fell back to running everything (`fallback` set) carries no decisions and is skipped.
-- An invalid file is reported on stderr and the rest are still imported; the command then exits with code 1.
-- Each test is matched to a known `test_key` by `file` + `title_path` (+ `project`). A test flaker has not seen yet stays in `selector_verdicts` with `test_key = null`, and is matched on a later import once its results are in.
+- An invalid file, or one the database rejects, is reported on stderr and the rest are still imported; the command then exits with code 1. A directory with no records prints a warning and exits with code 0.
+- Each test is matched to a known `test_key` by `file` + `title_path` (+ `project`). A test flaker has not seen yet stays in `selector_verdicts` with `test_key = null`, and is matched on the next selector import (or `flaker calibrate --selector`) once its results are in.
 
 ### `flaker export` — public datasets (flaker_v1)
 

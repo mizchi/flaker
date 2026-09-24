@@ -274,8 +274,8 @@ flaker import .jev-test-filter --adapter jev
 - パスはファイルでもディレクトリでも構いません。ディレクトリなら直下の `*.json`、続いて `records/*.json` を取り込みます (jev-test-filter の配置)。`last.json` は最新 record のコピーなので duplicate として数えます。
 - record は内容で識別します。同じ record を再度取り込んでも何も変わらず、duplicate と報告されます。
 - すべてのテストを走らせる fallback になった jev record (`fallback` あり) は判定を持たないので skip します。
-- 不正なファイルは stderr に報告し、残りは取り込みます。その場合の終了コードは 1 です。
-- 各テストは `file` + `title_path` (+ `project`) で既知の `test_key` に照合します。flaker がまだ見ていないテストは `test_key = null` のまま `selector_verdicts` に残り、結果が入った後の import で照合されます。
+- 不正なファイルやデータベースが受け付けなかったファイルは stderr に報告し、残りは取り込みます。その場合の終了コードは 1 です。record が 1 つもないディレクトリは警告を出し、終了コード 0 で終わります。
+- 各テストは `file` + `title_path` (+ `project`) で既知の `test_key` に照合します。flaker がまだ見ていないテストは `test_key = null` のまま `selector_verdicts` に残り、結果が入った後の次の selector import (または `flaker calibrate --selector`) で照合されます。
 
 ### `flaker export` — 公開 dataset (flaker_v1)
 

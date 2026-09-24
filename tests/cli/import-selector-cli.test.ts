@@ -1,7 +1,7 @@
 // tests/cli/import-selector-cli.test.ts
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,5 +34,21 @@ describe("flaker import --adapter jev|selector-record", () => {
     const res = spawnSync("node", [CLI, "import", bad, "--adapter", "selector-record"], { cwd: dir, encoding: "utf8" });
     expect(res.status).toBe(1);
     expect(res.stderr).toMatch(/invalid selector-record/);
+  });
+
+  it("prints one line and exits 1 for a missing path", () => {
+    const dir = repo();
+    const res = spawnSync("node", [CLI, "import", join(dir, "nope"), "--adapter", "jev"], { cwd: dir, encoding: "utf8" });
+    expect(res.status).toBe(1);
+    expect(res.stderr.trimEnd()).toBe(`error: no such file or directory: ${join(dir, "nope")}`);
+  });
+
+  it("warns on stderr and exits 0 for a directory without records", () => {
+    const dir = repo();
+    const empty = join(dir, "records-empty");
+    mkdirSync(empty);
+    const res = spawnSync("node", [CLI, "import", empty, "--adapter", "jev"], { cwd: dir, encoding: "utf8" });
+    expect(res.status).toBe(0);
+    expect(res.stderr).toContain(`warning: no .json records found in ${empty}`);
   });
 });

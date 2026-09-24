@@ -12,26 +12,42 @@ export async function insertSelectorRecord(
   const id = selectorRunId(record);
   const existing = await store.raw(`SELECT 1 FROM selector_runs WHERE selector_run_id = ?`, [id]);
   if (existing.length > 0) return { selectorRunId: id, inserted: false };
-  await store.raw(
-    `INSERT INTO selector_runs (selector_run_id, selector, selector_version, head_sha, base_sha, context_digest, source, gate, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      id, record.selector, record.selector_version, record.head_sha, record.base_sha,
-      record.context_digest, record.source, record.gate ? JSON.stringify(record.gate) : null,
-      new Date(record.created_at),
-    ],
-  );
-  for (const [ordinal, t] of record.tests.entries()) {
+  // One transaction: a record is stored whole or not at all. The duplicate check reads only
+  // selector_runs, so a truncated record would otherwise be reported as a duplicate forever.
+  await store.raw(`BEGIN TRANSACTION`);
+  try {
     await store.raw(
-      `INSERT INTO selector_run_tests (selector_run_id, ordinal, test_key, file, title_path, project, runner_file, score, confidence, reason, selected)
-       VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO selector_runs (selector_run_id, selector, selector_version, head_sha, base_sha, context_digest, source, gate, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        id, ordinal, t.file, JSON.stringify(t.title_path), t.project ?? null, t.runner_file ?? null,
-        t.score, t.confidence, t.reason, t.selected,
+        id, record.selector, record.selector_version, record.head_sha, record.base_sha,
+        record.context_digest, record.source, record.gate ? JSON.stringify(record.gate) : null,
+        new Date(record.created_at),
       ],
     );
+    for (const [ordinal, t] of record.tests.entries()) {
+      await store.raw(
+        `INSERT INTO selector_run_tests (selector_run_id, ordinal, test_key, file, title_path, project, runner_file, score, confidence, reason, selected)
+         VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id, ordinal, t.file, JSON.stringify(t.title_path), t.project ?? null, t.runner_file ?? null,
+          t.score, t.confidence, t.reason, t.selected,
+        ],
+      );
+    }
+    await store.raw(`COMMIT`);
+  } catch (error) {
+    await store.raw(`ROLLBACK`);
+    // A concurrent import committed the same record between the check and the insert.
+    if (isPrimaryKeyViolation(error)) return { selectorRunId: id, inserted: false };
+    throw error;
   }
   return { selectorRunId: id, inserted: true };
+}
+
+function isPrimaryKeyViolation(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /duplicate key/i.test(message) && /primary key/i.test(message);
 }
 
 /** Fill `test_key` for verdicts not matched yet. Idempotent. */
