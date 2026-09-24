@@ -58,6 +58,19 @@ describe("flaker calibrate", () => {
     expect(out).toMatchObject({ selector: "jev", decision: { decision: "keep" }, written: false });
   });
 
+  it("--selector --json uses snake_case keys at every depth", () => {
+    const res = spawnSync("node", [CLI, "calibrate", "--selector", "--dry-run", "--json"], { cwd: repo(), encoding: "utf8" });
+    expect(res.status).toBe(0);
+    const keys: string[] = [];
+    const walk = (v: unknown): void => {
+      if (Array.isArray(v)) v.forEach(walk);
+      else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) { keys.push(k); walk(x); }
+    };
+    walk(JSON.parse(res.stdout));
+    expect(keys.filter((k) => /[A-Z]/.test(k))).toEqual([]);
+    expect(keys).toEqual(expect.arrayContaining(["real_failures", "recall_lb95", "without_full_run", "by_digest"]));
+  });
+
   it("--selector with another name exits 2", () => {
     const res = spawnSync("node", [CLI, "calibrate", "--selector", "other"], { cwd: repo(), encoding: "utf8" });
     expect(res.status).toBe(2);

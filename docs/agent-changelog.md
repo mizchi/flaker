@@ -2,7 +2,7 @@
 
 This file is for coding agents that have to make an existing repository work with the current flaker. Humans should read `CHANGELOG.md`. Every entry here gives the old form, the current form, and how to find the old form in a repository.
 
-Current version: **0.13.0**. Every mapping below points directly at the 0.13.0 form, even when the command was renamed more than once (for example `collect calibrate` → `apply --target calibrate` → `calibrate`).
+Current version: **0.14.0**. Every mapping below points directly at the current form, even when the command was renamed more than once (for example `collect calibrate` → `apply --target calibrate` → `calibrate`).
 
 ## How to use this file
 
@@ -117,6 +117,15 @@ With neither `--gate` nor `FLAKER_GATE`, `run` picks `merge` when `CI=true` or `
 | `flaker dev train` | removed; the `gbdt` strategy is gone |
 
 `flaker dev …` still runs but is hidden from `--help`. It is maintainer tooling; do not put it in user CI.
+
+## 0.13.x → 0.14.0
+
+No config key or command was removed or renamed. Two changes can still break a script:
+
+- `flaker query` opens the database read-only, accepts one statement (a trailing `;` is fine), and cannot read files. A script that runs `INSERT`/`UPDATE`/`DELETE`/`CREATE` through it, chains statements with `;`, or reads `FROM 'x.csv'` / `read_parquet(...)` now fails. Find them with `grep -rnE "flaker query" .github package.json scripts Taskfile.pkl justfile Makefile 2>/dev/null` and read each query. Reads of `flaker_v1.*` or the tables keep working. For data to hand to another tool, use `flaker export <dataset>`. flaker 0.14.0 has no retention or prune command: a cleanup step such as `DELETE … ; VACUUM` has to move to the DuckDB CLI, run against the file at `[storage].path` (`.flaker/data` by default: a single DuckDB file, not a directory) while no flaker command is using it. The storage tables it touches are internal and may change in any release, so re-check such a step after each upgrade.
+- The per-run Parquet files that `flaker collect` and local runs write (`test_results_<run>.parquet`) gained a `title_path` column, and flaker 0.13 cannot import them. Upgrade every job that runs `flaker import --adapter parquet` together with the job that writes them.
+
+New and optional: `[selector]`, `flaker import --adapter selector-record|jev`, `flaker calibrate --selector`, `flaker export`, and the `flaker_v1` datasets. `[selector]` must not contain `cutoff`, `unsure_below` or `unsure_margin`; the loader exits 2 with `flaker.toml sets values that belong in the database`. See `docs/jev-test-filter-integration.md`.
 
 ## Behaviour changes that do not raise an error
 

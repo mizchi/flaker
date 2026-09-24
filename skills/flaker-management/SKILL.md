@@ -1,6 +1,6 @@
 ---
 name: flaker-management
-description: Operate @mizchi/flaker after setup. Use when the user asks how to run flaker day-to-day, review sampling and flaky metrics, design advisory vs required CI gates, promote or demote Playwright E2E or VRT checks, tune PR time budgets, run nightly review, or manage quarantine and `@flaky` tags in an OSS repository. Also use when existing flaker CI or scripts break after upgrading flaker (e.g. `unknown command 'ops'`, `unknown option '--target'`, `[profile.ci] was renamed to [gate.merge]`). Targets @mizchi/flaker 0.13.0+ (gate-based declarative apply model).
+description: Operate @mizchi/flaker after setup. Use when the user asks how to run flaker day-to-day, review sampling and flaky metrics, design advisory vs required CI gates, promote or demote Playwright E2E or VRT checks, tune PR time budgets, run nightly review, or manage quarantine and `@flaky` tags in an OSS repository. Also use when existing flaker CI or scripts break after upgrading flaker (e.g. `unknown command 'ops'`, `unknown option '--target'`, `[profile.ci] was renamed to [gate.merge]`). Also use when reviewing or tuning a test selector such as jev-test-filter against flaker's history (`calibrate --selector`, `misses`, `gate_calibration`, `jev-context`), or when an external tool needs flaker's data (`flaker export`, `flaker_v1`). Targets @mizchi/flaker 0.14.0+ (gate-based declarative apply model).
 ---
 
 # flaker management skill
@@ -16,7 +16,7 @@ If the repository does not have `flaker.toml` and no CI lane yet, use `flaker-se
 
 ## Upgrading an existing setup comes first
 
-If the existing setup predates 0.13.0, migrate it before giving any operating advice. Signs: `[profile.*]` sections, `run --profile`, `FLAKER_PROFILE`, `apply --target|--emit`, `flaker ops …`, `analyze`/`collect`/`policy`/`gate` subcommands, `adaptive = true`, or an error such as `flaker.toml uses removed or renamed keys`, `unknown option '--profile'`, `unknown command 'ops'`.
+If the existing setup predates 0.13.0, migrate it before giving any operating advice. From 0.13.x to 0.14.0 no config changes, but `flaker query` became read-only, one statement, with no file access; a script that wrote through it or read `FROM 'x.csv'` has to change. Signs: `[profile.*]` sections, `run --profile`, `FLAKER_PROFILE`, `apply --target|--emit`, `flaker ops …`, `analyze`/`collect`/`policy`/`gate` subcommands, `adaptive = true`, or an error such as `flaker.toml uses removed or renamed keys`, `unknown option '--profile'`, `unknown command 'ops'`.
 
 Read `../../docs/agent-changelog.md` (GitHub: <https://github.com/mizchi/flaker/blob/main/docs/agent-changelog.md>). It has a one-shot grep for every old form, the exact error lines with fixes, a rewrite map resolved to the current command, and a verify checklist. Apply it to `flaker.toml`, workflows and scripts together, then run the checklist.
 
@@ -61,6 +61,21 @@ flaker apply && flaker status
 - current PR runtime budget
 - whether the focus is generic CI health, or specifically Playwright E2E / VRT
 
+## Selector calibration (jev-test-filter)
+
+When the repository runs jev-test-filter with flaker (`[selector]` in `flaker.toml`), the loop is `flaker export --projection jev-context` → jev → `flaker import .jev-test-filter --adapter jev` → `flaker import --ci` → `flaker calibrate --selector`. The full guide is `../../docs/jev-test-filter-integration.md` (or `.ja.md`).
+
+- What jev missed: `flaker query "SELECT test_key, head_sha, reason, changed_files FROM flaker_v1.misses"`. One row per test and commit, only real runs, not counting tests the record quarantined.
+- The current gate and why: the latest row of `flaker_v1.gate_calibration` (`decision`, `rationale`). Preview with `flaker calibrate --selector --dry-run --json`.
+- The rule: any miss tightens at once, to a gate that keeps every test the current one selects. Loosening needs zero misses, `min_failures` real failures and a Wilson 95% recall lower bound ≥ `recall_target`; at the default 0.90 that is 35 real failures. A `keep` whose rationale starts `only N real failures observed` or `recall lower bound … is below the target` is expected for weeks on a new setup. Do not lower `recall_target` to get past it: the target is the recall the loosened gate promises, and 0.8 accepts that selection may skip one regression in five.
+- Many `unmatched` failures mean jev and the reporter name tests differently (file path or title), not that jev missed them.
+- Read progress from `flaker calibrate --selector --dry-run --json`: `decision.real_failures` (evidence so far), `decision.rationale`, and `without_full_run` (records with no full run on their commit). A high `without_full_run` means jev and the full runs are on different commits — fix the CI layout (see the guide), not the thresholds.
+- flaker has no retention command. Do not suggest `flaker query` for cleanup: it is read-only.
+
+## Giving flaker's data to other tools
+
+The public, versioned data is the DuckDB schema `flaker_v1` (nine datasets, JSON Schemas in `@mizchi/flaker/contracts/flaker-v1-datasets`). Point external tools at `flaker export <dataset> --format json|jsonl|csv|parquet` or at `flaker_v1.*` in the database file, never at the storage tables, which change without notice.
+
 ## Required output shape
 
 When applying this skill, return:
@@ -79,7 +94,7 @@ When applying this skill, return:
 - Keep a full scheduled lane even after PR gating starts.
 - For AI-generated code, require a short per-test contract so visual checks encode intent, not just pixels.
 - Do not promote `--gate merge` to required until `flaker status` drift reports `ready`.
-- Do not reach for pre-0.13.0 command forms in new scripts — `analyze kpi`, `analyze eval`, `collect ci`, `debug doctor`, `quarantine suggest/apply`, `gate review/history/explain`, and the whole `ops` group (`ops weekly`, `ops incident`, `ops daily`) no longer exist at all in 0.13.0, not even as deprecated aliases. Use the primary commands instead.
+- Do not reach for pre-0.13.0 command forms in new scripts — `analyze kpi`, `analyze eval`, `collect ci`, `debug doctor`, `quarantine suggest/apply`, `gate review/history/explain`, and the whole `ops` group (`ops weekly`, `ops incident`, `ops daily`) no longer exist at all since 0.13.0, not even as deprecated aliases. Use the primary commands instead.
 
 ## flaker commands to prefer
 
@@ -121,7 +136,7 @@ Demote back to advisory when ANY of the following holds for 1+ week:
 
 ## Anti-patterns
 
-- Calling `flaker import --ci` by hand in daily cron instead of `flaker apply` — `apply` already handles the ordering (`collect_ci` → `calibrate` → `cold_start_run` → `quarantine_apply`) and idempotency; only reach for `import --ci --days <n>` directly when you need a one-off backfill outside the reconcile loop.
+- Calling `flaker import --ci` by hand in daily cron instead of `flaker apply` (the selector loop is the exception only for its own steps: `apply` does not import selector records or run `calibrate --selector`, so run those after `apply`) — `apply` already handles the ordering (`collect_ci` → `calibrate` → `cold_start_run` → `quarantine_apply`) and idempotency; only reach for `import --ci --days <n>` directly when you need a one-off backfill outside the reconcile loop.
 - Looking for `flaker analyze kpi` or `flaker analyze eval` — both are gone; use `flaker status` and `flaker status --markdown` instead.
 - Looking for `flaker ops weekly` / `flaker ops incident` — the `ops` group is gone; use `flaker status --markdown` + `flaker explain insights` for the weekly bundle, and `flaker debug retry|confirm|diagnose` for incidents.
 - Basing promotion on `flaker status` numbers alone when they look close — `flaker status --gate merge --detail --json` is the authoritative source for exact values.

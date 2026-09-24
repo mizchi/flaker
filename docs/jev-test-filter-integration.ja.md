@@ -80,6 +80,21 @@ jev と flaker はたいてい別の job で動きます。2 つのファイル�
 
 record のファイル名はコミットで決まるので、複数の run の record を 1 つのディレクトリに集めてまとめて取り込めます。取り込み済みの record をもう一度取り込んでも何も起きません。
 
+`--base main` を使うには、checkout に base branch が必要です。shallow clone (`actions/checkout` の既定) にはないので、`fetch-depth: 0` にして `--base origin/main` を渡してください。
+
+`flaker import --ci` を使うには、full run の workflow が report を artifact として upload し、`[adapter].artifact_name` をその artifact 名に合わせる必要があります。既定の artifact 名を持つのは `playwright`、`junit`、`vrt-*`、`custom` の adapter だけなので、`vitest` では明示的に設定し、report は `vitest run --reporter=json --outputFile=report.json` で書き出してください。`import --ci` を走らせる job には、Actions を読める token (`permissions: actions: read`) が必要です。
+
+`flaker apply` はこの流れを実行しません。selector の record の取り込みも `calibrate --selector` もしないので、selector の手順は自分で走らせてください。`flaker apply` を使うなら、その後に走らせます (`import --ci` は apply が実行します)。
+
+#### jev と full run を同じコミットに載せる
+
+calibration が学べるのは、jev の record と full run の両方があるコミットだけです。PR の job が採点するのは PR の head で、nightly の full run が見るのは main の最新コミットなので、両者が同じコミットになることはめったにありません。そのままでは `calibrate --selector` はいつまでも gate を維持します。次のどちらかの構成にしてください。
+
+- **main で jev を走らせる。** main への push のたびに、`--base` を 1 つ前のコミット (`${{ github.event.before }}`。branch の最初の push では全桁 0 になるので、そのときは `HEAD~1`) にして jev を走らせ、同じ workflow で同じコミットの全件を走らせます。full lane の artifact として upload するのは全件の report だけにしてください。jev が選んだテストだけの run は部分的な run で、これを full と数えると、選ばれなかったテストがすべて通ったように見えます。
+- **一部の PR で jev の後に全件を走らせる。** PR の job で jev の選択を先に走らせ、同じ checkout で残りのテストを走らせて、その結果を full lane として取り込みます。一部の PR に絞ればコストを抑えられます。
+
+構成が機能しているかは `flaker calibrate --selector --dry-run --json` で分かります。`without_full_run` は自分のコミットに full run がない record の数で、`decision.real_failures` はこれまでに集まった根拠の件数です。
+
 ## context で jev の何が変わるか
 
 `jev-context` v1 は 3 つの部分からなります。

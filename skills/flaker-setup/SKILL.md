@@ -1,15 +1,17 @@
 ---
 name: flaker-setup
-description: Set up @mizchi/flaker on a new repository, or bring an existing flaker setup up to date. Use when the user asks to introduce flaker, configure flaker.toml, integrate flaker into GitHub Actions, "start using flaker on this project", or upgrade flaker — including when flaker fails after an upgrade with errors like "[profile.ci] was renamed to [gate.merge]", "was removed in 0.13.0", "unknown option '--profile'" or "unknown command 'ops'". Targets @mizchi/flaker 0.13.0+ (gate-based declarative apply model).
+description: Set up @mizchi/flaker on a new repository, or bring an existing flaker setup up to date. Use when the user asks to introduce flaker, configure flaker.toml, integrate flaker into GitHub Actions, "start using flaker on this project", or upgrade flaker — including when flaker fails after an upgrade with errors like "[profile.ci] was renamed to [gate.merge]", "was removed in 0.13.0", "unknown option '--profile'" or "unknown command 'ops'". Also use when connecting flaker to jev-test-filter or another test selector ("jev と連携", `flaker import --adapter jev`, `calibrate --selector`). Targets @mizchi/flaker 0.14.0+ (gate-based declarative apply model).
 ---
 
 # flaker setup skill
 
-`@mizchi/flaker` (0.13.0) is a test-intelligence CLI with a declarative apply model: `flaker.toml` describes the desired state, and `flaker apply` reconciles the repo to that state by running its `collect_ci` / `calibrate` / `cold_start_run` / `quarantine_apply` actions in the right order based on current DB state and repo probe. Callers do not memorize the sequence.
+`@mizchi/flaker` (0.14.0) is a test-intelligence CLI with a declarative apply model: `flaker.toml` describes the desired state, and `flaker apply` reconciles the repo to that state by running its `collect_ci` / `calibrate` / `cold_start_run` / `quarantine_apply` actions in the right order based on current DB state and repo probe. Callers do not memorize the sequence.
 
 ## Existing flaker setup? Upgrade first
 
 If the repository already has `flaker.toml`, or its CI already calls `flaker`, this is an upgrade, not a setup. Signs of a pre-0.13.0 setup: `[profile.*]` sections, `run --profile`, `FLAKER_PROFILE`, `apply --target` / `--emit`, `flaker ops|collect|analyze|policy|gate …`, `adaptive = true`, `strategy = "random"|"gbdt"|"coverage-guided"`.
+
+A 0.13.x setup needs no config rewrite for 0.14.0, but scripts that pass `flaker query` a write, several statements, or a file (`FROM 'x.csv'`) now fail; the agent changelog lists them.
 
 Read `${CLAUDE_PLUGIN_ROOT}/docs/agent-changelog.md` (GitHub: <https://github.com/mizchi/flaker/blob/main/docs/agent-changelog.md>) and follow it: it has a one-shot grep for every old form, the exact error lines with fixes, a rewrite map resolved to the current command, and a verify checklist. Fix config, env vars, workflows and `package.json` scripts together; a config that loads can still leave CI calling removed commands.
 
@@ -84,6 +86,30 @@ strategy = "full"
 ```
 
 `flaker init` generates a starter toml including `[gate.*]` defaults; expect to edit `[affected].resolver` before the first `flaker apply`. Recommend `flaker calibrate` once enough history has accumulated to write a tuned `[sampling]` block back to `flaker.toml` — it replaces the old manual `adaptive = true` toggle, which no longer exists.
+
+## Optional: connect a test selector (jev-test-filter)
+
+Only when the user asks for it. flaker never selects tests for jev; it stores jev's decisions, checks them against full runs on the same commits, and hands jev a context (gate values, quarantined tests, per-test hints). Follow `${CLAUDE_PLUGIN_ROOT}/docs/jev-test-filter-integration.md` (or `.ja.md`); the short form:
+
+```toml
+[selector]
+type = "jev"             # recall_target = 0.90, min_failures = 20, max_hinted_tests = 200 by default
+
+[workflow_lanes]
+"nightly.yml" = { lane = "full-batch", full = true }   # calibration needs full runs on the commits jev scored
+```
+
+```bash
+flaker export --projection jev-context -o .flaker/context.json
+jev-test-filter --base main --context .flaker/context.json --exec -- vitest run   # needs TYPESAFE_API_KEY
+flaker import .jev-test-filter --adapter jev
+flaker import --ci
+flaker calibrate --selector
+```
+
+Calibration only learns from commits that have both a jev record and a full run, so a PR-only jev job plus a nightly full run never overlaps. Run jev on pushes to main with a full run on the same commit, or run the full suite after jev on some PRs (the guide's "Put jev and a full run on the same commits"). In CI, check out with `fetch-depth: 0` and pass `--base origin/main`; for `vitest`, set `[adapter].artifact_name` to the artifact the full run uploads (`vitest run --reporter=json --outputFile=report.json`). Upload only the full-suite report under the full lane; the tests jev selected are a partial run. `flaker apply` does not run the selector steps, so run `import --adapter jev` and `calibrate --selector` after it.
+
+Add `.jev-test-filter/` to `.gitignore`. Never put `cutoff`, `unsure_below` or `unsure_margin` in `flaker.toml`: the loader rejects them, and the current gate is the latest row of `flaker_v1.gate_calibration`.
 
 ## Decision points to confirm before touching files
 
@@ -210,12 +236,15 @@ If the user wants to gate sooner, push back: empirically less than 20 matched co
 | `flaker.toml uses deprecated keys` | Config from 0.1.x or earlier | Apply rename table from `docs/how-to-use.md#config-migration` |
 | `unknown option '--profile'` / `unknown command 'ops'` in CI | Workflow written for 0.12.x or earlier | Rewrite with the Commands table in `docs/agent-changelog.md` |
 | `Config file not found` | Wrong cwd | `cd` to repo root containing `flaker.toml` |
+| `flaker.toml sets values that belong in the database` | `cutoff` / `unsure_below` / `unsure_margin` under `[selector]` | Delete them; run `flaker calibrate --selector` instead |
+| `calibrate --selector` keeps: `no selector record has a full run on its head commit yet` | No full run on a commit jev scored (jev only on PR heads, full runs only on main), or a hand-imported report without `--commit` | Put jev and a full run on the same commits (see above); mark the full lane `full = true`; pass `--commit <sha>` to `flaker import <report>` |
+| `calibrate --selector` keeps for weeks; rationale starts `only N real failures observed; loosening needs…` or `recall lower bound … is below the target` | Expected: loosening needs 35 caught real failures at `recall_target = 0.90` | Leave `recall_target` alone; check `decision.real_failures` and `without_full_run` in `flaker calibrate --selector --dry-run --json` |
 | `flaker apply` aborts with `GITHUB_TOKEN` missing | Planner included `collect_ci` but env var absent | `export GITHUB_TOKEN=$(gh auth token)` and re-run |
 | `actrun runner requires [runner.actrun] workflow` | Missing actrun config | Add `[runner.actrun] workflow = ".github/workflows/<file>.yml"` |
 | `hybrid` selects 0 tests | Resolver not configured | Set `[affected].resolver` |
 | `flaker apply` stops after `collect_ci` | Calibrate or cold-start failed | Inspect the `ok/fail` lines; fix and re-run apply (idempotent) |
 | `flaker status` drift: `data_confidence` unmet | < ~10 matched commits | Wait, or run more `flaker apply` after CI accumulates |
-| Tests timeout in parallel | DuckDB single-writer | Serialize commands sharing the same `data.duckdb` |
+| Tests timeout in parallel | DuckDB single-writer | Serialize commands sharing the same database file (`[storage].path`, `.flaker/data` by default) |
 | `dist/moonbit/flaker.js` missing | Custom build environment | Should not happen with npm install — investigate package.json `files:` |
 
 ## Anti-patterns
@@ -225,7 +254,7 @@ If the user wants to gate sooner, push back: empirically less than 20 matched co
 - **Do not** set `holdout_ratio > 0.2` — wastes runner time.
 - **Do not** skip `flaker apply` / `flaker calibrate` and hand-tune `[sampling]` — the calibrated values outperform manual settings in 90% of cases.
 - **Do not** make the PR job required before `flaker status` drift reports `ready`.
-- **Do not** reach for pre-0.13.0 command forms — `setup init`, `exec run`, `collect ci`, `collect calibrate`, `analyze kpi`, `analyze eval`, `debug doctor`, `quarantine suggest/apply`, `policy quarantine/check/report`, `gate review/history/explain`, and `ops <weekly|incident|daily>` no longer exist at all in 0.13.0 (not even as deprecated aliases). Use the primary commands: `flaker init`, `flaker run --gate <iteration|merge|release>`, `flaker apply`, `flaker status`, `flaker calibrate`, `flaker doctor`, `flaker explain <reason|insights|cluster|bundle|context>`, `flaker debug <retry|confirm|bisect|diagnose>`, `flaker query`, etc.
+- **Do not** reach for pre-0.13.0 command forms — `setup init`, `exec run`, `collect ci`, `collect calibrate`, `analyze kpi`, `analyze eval`, `debug doctor`, `quarantine suggest/apply`, `policy quarantine/check/report`, `gate review/history/explain`, and `ops <weekly|incident|daily>` no longer exist at all since 0.13.0 (not even as deprecated aliases). Use the primary commands: `flaker init`, `flaker run --gate <iteration|merge|release>`, `flaker apply`, `flaker status`, `flaker calibrate`, `flaker doctor`, `flaker explain <reason|insights|cluster|bundle|context>`, `flaker debug <retry|confirm|bisect|diagnose>`, `flaker query`, etc.
 
 ## Reference docs (in this plugin)
 
@@ -238,4 +267,5 @@ All paths relative to `${CLAUDE_PLUGIN_ROOT}` of the installed plugin, or in the
 - `docs/how-to-use.md` / `docs/how-to-use.ja.md` — full command reference including the `flaker plan` / `flaker apply` chapter and `#config-migration` table
 - `docs/contributing.md` — sibling dogfood, MoonBit/TS fallback, build internals
 - `docs/agent-changelog.md` — upgrade guide for agents: old form → current form, error → fix, verify checklist
+- `docs/jev-test-filter-integration.md` / `.ja.md` — connecting jev-test-filter: import, calibrate, export the context
 - `CHANGELOG.md` — version history, breaking changes per release
