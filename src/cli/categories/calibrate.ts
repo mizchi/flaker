@@ -65,21 +65,31 @@ async function selectorCalibrateAction(opts: CalibrateCliOpts): Promise<void> {
   try {
     const result = await runSelectorCalibration({ store, selector, windowDays, dryRun: opts.dryRun === true });
     if (opts.json) {
-      console.log(JSON.stringify({
+      console.log(JSON.stringify(snakeKeys({
         selector: result.selector,
-        calibrated_at: result.calibratedAt,
+        calibratedAt: result.calibratedAt,
         decision: result.decision,
-        without_full_run: result.withoutFullRun,
+        withoutFullRun: result.withoutFullRun,
         superseded: result.superseded,
         unmatched: result.unmatched,
         written: result.written,
-      }, null, 2));
+      }), null, 2));
     } else {
       console.log(formatSelectorCalibration(result));
     }
   } finally {
     await store.close();
   }
+}
+
+/** The JSON output uses snake_case keys throughout, like the flaker_v1 datasets. */
+function snakeKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(snakeKeys);
+  if (value === null || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value).map(([key, v]) => [
+    key.replace(/[A-Z]/g, (m) => "_" + m.toLowerCase()),
+    snakeKeys(v),
+  ]));
 }
 
 export function registerCalibrateCommand(program: Command): void {
