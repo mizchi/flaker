@@ -12,10 +12,17 @@ export interface LoadedCalibration {
   records: CalibrationRecord[];
   /** Selector runs with no full run on their head (or no head at all). */
   withoutFullRun: number;
+  /** Earlier selector runs on a head that a later run on the same head replaces. */
+  superseded: number;
   /** Real failures on a record's head that no verdict of that record names. */
   unmatched: UnmatchedFailure[];
 }
 
+/**
+ * Real selector runs in the window, one per head (the latest), joined to the
+ * failures of a full real run on that head. Mutation selector runs are left
+ * out, as in the misses view: they are scored against mutation runs later.
+ */
 export async function loadCalibrationRecords(
   store: MetricStore,
   opts: { selector: string; since: Date },
@@ -27,12 +34,12 @@ export async function loadCalibrationRecords(
   }>(
     `SELECT selector_run_id, source, context_digest, head_sha, test_key, score, confidence, reason
      FROM flaker_v1.selector_verdicts
-     WHERE selector = ? AND created_at >= ?::TIMESTAMP`,
+     WHERE selector = ? AND source = 'real' AND created_at >= ?::TIMESTAMP`,
     [opts.selector, since],
   );
   const runIds = await store.raw<{ selector_run_id: string; head_sha: string | null; source: "real" | "mutation"; context_digest: string | null }>(
     `SELECT selector_run_id, head_sha, source, context_digest FROM selector_runs
-     WHERE selector = ? AND created_at >= ?::TIMESTAMP ORDER BY created_at, selector_run_id`,
+     WHERE selector = ? AND source = 'real' AND created_at >= ?::TIMESTAMP ORDER BY created_at, selector_run_id`,
     [opts.selector, since],
   );
   const fullHeads = new Set((await store.raw<{ commit_sha: string }>(
@@ -54,8 +61,14 @@ export async function loadCalibrationRecords(
     byRun.set(v.selector_run_id, list);
   }
 
-  const out: LoadedCalibration = { records: [], withoutFullRun: 0, unmatched: [] };
-  for (const run of runIds) {
+  // One record per head: the latest run. Re-running the selector on a commit
+  // must not count the same regression once per run.
+  const latestByHead = new Map<string, (typeof runIds)[number]>();
+  for (const run of runIds) if (run.head_sha !== null) latestByHead.set(run.head_sha, run);
+  const kept = runIds.filter((run) => run.head_sha === null || latestByHead.get(run.head_sha) === run);
+
+  const out: LoadedCalibration = { records: [], withoutFullRun: 0, superseded: runIds.length - kept.length, unmatched: [] };
+  for (const run of kept) {
     if (run.head_sha === null || !fullHeads.has(run.head_sha)) {
       out.withoutFullRun++;
       continue;

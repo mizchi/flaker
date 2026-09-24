@@ -41,4 +41,14 @@ describe("runSelectorCalibration", () => {
     expect(r.written).toBe(false);
     expect(await latestGateCalibration(store, "jev")).toBeNull();
   });
+
+  it("retries a same-instant calibration one millisecond later instead of failing on the key", async () => {
+    const now = new Date("2026-09-24T00:00:00.000Z");
+    await runSelectorCalibration({ store, selector: DEFAULT_SELECTOR, windowDays: 3650, dryRun: false, now });
+    const second = await runSelectorCalibration({ store, selector: DEFAULT_SELECTOR, windowDays: 3650, dryRun: false, now });
+    expect(second.written).toBe(true);
+    expect(second.calibratedAt).toBe("2026-09-24T00:00:00.001Z");
+    const [row] = await store.raw<{ n: number }>(`SELECT COUNT(*)::INTEGER AS n FROM gate_calibrations`);
+    expect(row.n).toBe(2);
+  });
 });

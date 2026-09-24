@@ -27,11 +27,43 @@ export async function latestGateCalibration(
   return row ? (normalizeRow(row, FLAKER_V1_SCHEMAS.gate_calibration) as unknown as FlakerV1GateCalibrationRow) : null;
 }
 
+/** Same-instant collisions on (selector, calibrated_at) are retried this many times, 1 ms apart. */
+const APPEND_ATTEMPTS = 5;
+
+const isKeyCollision = (error: unknown) =>
+  error instanceof Error && /primary key|duplicate key|constraint/i.test(error.message);
+
+/** Append one row; on a same-instant key collision retry at +1 ms. Returns the instant written. */
+async function appendGateCalibration(
+  store: MetricStore,
+  selector: string,
+  at: Date,
+  decision: CalibrationDecision,
+): Promise<Date> {
+  for (let attempt = 0; ; attempt++) {
+    const calibratedAt = new Date(at.getTime() + attempt);
+    try {
+      await store.raw(
+        `INSERT INTO gate_calibrations (selector, calibrated_at, cutoff, unsure_below, unsure_margin, records, real_failures, recall_lb95, decision, rationale)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          selector, calibratedAt, decision.gate.cutoff, decision.gate.unsure_below, decision.gate.unsure_margin,
+          decision.records, decision.realFailures, decision.recallLb95, decision.decision, decision.rationale,
+        ],
+      );
+      return calibratedAt;
+    } catch (error) {
+      if (!isKeyCollision(error) || attempt + 1 >= APPEND_ATTEMPTS) throw error;
+    }
+  }
+}
+
 export interface SelectorCalibrationResult {
   selector: string;
   calibratedAt: string;
   decision: CalibrationDecision;
   withoutFullRun: number;
+  superseded: number;
   unmatched: UnmatchedFailure[];
   written: boolean;
 }
@@ -61,19 +93,13 @@ export async function runSelectorCalibration(opts: {
     recallTarget: opts.selector.recall_target,
     minFailures: opts.selector.min_failures,
   });
+  let calibratedAt = now;
   if (!opts.dryRun) {
-    await opts.store.raw(
-      `INSERT INTO gate_calibrations (selector, calibrated_at, cutoff, unsure_below, unsure_margin, records, real_failures, recall_lb95, decision, rationale)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        name, now, decision.gate.cutoff, decision.gate.unsure_below, decision.gate.unsure_margin,
-        decision.records, decision.realFailures, decision.recallLb95, decision.decision, decision.rationale,
-      ],
-    );
+    calibratedAt = await appendGateCalibration(opts.store, name, now, decision);
   }
   return {
-    selector: name, calibratedAt: now.toISOString(), decision,
-    withoutFullRun: loaded.withoutFullRun, unmatched: loaded.unmatched, written: !opts.dryRun,
+    selector: name, calibratedAt: calibratedAt.toISOString(), decision,
+    withoutFullRun: loaded.withoutFullRun, superseded: loaded.superseded, unmatched: loaded.unmatched, written: !opts.dryRun,
   };
 }
 
@@ -83,7 +109,7 @@ export function formatSelectorCalibration(r: SelectorCalibrationResult): string 
   const d = r.decision;
   const lines = [
     `Selector gate calibration (${r.selector})`,
-    `  records with a full run:  ${d.records} (${r.withoutFullRun} without one)`,
+    `  records with a full run:  ${d.records} (${r.withoutFullRun} without one, ${r.superseded} superseded by a later run on the same head)`,
     `  real failures:            ${d.realFailures}`,
     `  current gate:             ${g(d.current.gate)} → selected ${d.current.selected}, missed ${d.current.missed}`,
     `  decision:                 ${d.decision} → ${g(d.gate)} (selected ${d.adopted.selected}, missed ${d.adopted.missed})`,

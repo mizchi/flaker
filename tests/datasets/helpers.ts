@@ -77,12 +77,13 @@ export async function seedSelectorRun(store: DuckDBStore, run: {
   headSha: string | null;
   source?: "real" | "mutation";
   contextDigest?: string | null;
+  createdAt?: Date;
   tests: SeedVerdict[];
 }): Promise<void> {
   await store.raw(
     `INSERT INTO selector_runs (selector_run_id, selector, selector_version, head_sha, base_sha, context_digest, source, gate, created_at)
      VALUES (?, 'jev', NULL, ?, NULL, ?, ?, NULL, ?)`,
-    [run.id, run.headSha, run.contextDigest ?? null, run.source ?? "real", new Date()],
+    [run.id, run.headSha, run.contextDigest ?? null, run.source ?? "real", run.createdAt ?? new Date()],
   );
   for (const [i, t] of run.tests.entries()) {
     await store.raw(

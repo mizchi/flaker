@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { wilsonLowerBound } from "../../src/cli/selector/wilson.js";
+import { perfectRunsNeeded, wilsonLowerBound } from "../../src/cli/selector/wilson.js";
 
 describe("wilsonLowerBound (95%)", () => {
   it("matches reference values", () => {
@@ -15,5 +15,12 @@ describe("wilsonLowerBound (95%)", () => {
 
   it("is 0 with no observations", () => {
     expect(wilsonLowerBound(0, 0)).toBe(0);
+  });
+
+  it("counts the perfect observations a target needs", () => {
+    expect(perfectRunsNeeded(0.9)).toBe(35);
+    expect(perfectRunsNeeded(0.98)).toBe(189);
+    expect(perfectRunsNeeded(0)).toBe(0);
+    expect(perfectRunsNeeded(1)).toBe(Infinity);
   });
 });

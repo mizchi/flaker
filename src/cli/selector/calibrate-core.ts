@@ -4,15 +4,21 @@
  * failures a full run proved) and the current gate in, the adopted gate and
  * why out. "Tighten at once, loosen with care":
  *
- * - a candidate that misses any observed failure (real or mutation) is out;
- * - a miss under the current gate switches at once to the fewest-selection
- *   candidate that catches everything (tighten);
- * - selecting fewer tests (loosen) needs >= minFailures real failures and a
- *   Wilson 95% lower bound of real recall >= recallTarget;
+ * - a failure of a test the record quarantined is not the selector's miss:
+ *   it could never pick that test. Such failures are counted apart;
+ * - a miss under the current gate switches at once (tighten) to a candidate
+ *   that selects, on every record, everything the current gate selects. Among
+ *   those: fewest misses, then fewest selected tests. When no candidate
+ *   catches every failure the one with the fewest misses is still adopted;
+ *   a gate known to miss is kept only if no candidate selects more;
+ * - selecting fewer tests (loosen) needs zero misses, >= minFailures real
+ *   failures and a Wilson 95% lower bound of real recall >= recallTarget.
+ *   With zero misses the bound is n / (n + z^2), so recallTarget 0.90 needs
+ *   at least 35 real failures whatever minFailures says;
  * - otherwise keep, and say why. Ties go to the candidate nearest the defaults.
  */
 import { replaySelected, type GateValues, type ReplayVerdict } from "./replay.js";
-import { wilsonLowerBound } from "./wilson.js";
+import { perfectRunsNeeded, wilsonLowerBound } from "./wilson.js";
 
 export interface CalibrationRecord {
   selectorRunId: string;
@@ -52,6 +58,8 @@ export interface CalibrationDecision {
   gate: GateValues;
   records: number;
   realFailures: number;
+  /** Failures of tests the record quarantined: not counted as misses or as evidence. */
+  quarantinedFailures: number;
   recallLb95: number | null;
   rationale: string;
   current: CandidateOutcome;
@@ -98,6 +106,28 @@ export function evaluateCandidate(records: readonly CalibrationRecord[], gate: G
   return { gate, selected, missed, realCaught, realMissed };
 }
 
+/** Drop failures of tests a record quarantined; return the records and how many were dropped. */
+function withoutQuarantined(records: readonly CalibrationRecord[]): { records: CalibrationRecord[]; dropped: number } {
+  let dropped = 0;
+  const out = records.map((r) => {
+    const quarantined = new Set(r.verdicts.filter((v) => v.reason === "quarantined" && v.testKey).map((v) => v.testKey!));
+    const failures = r.failures.filter((f) => !quarantined.has(f));
+    dropped += r.failures.length - failures.length;
+    return failures.length === r.failures.length ? r : { ...r, failures };
+  });
+  return { records: out, dropped };
+}
+
+/** Whether `flags` selects, on every record, everything `base` selects. */
+function coversSelection(flags: boolean[][], base: boolean[][]): boolean {
+  return base.every((row, r) => row.every((selected, i) => !selected || flags[r][i]));
+}
+
+const needText = (target: number) => {
+  const n = perfectRunsNeeded(target);
+  return Number.isFinite(n) ? `at least ${n} real failures` : "more real failures than any finite count (recall_target is 1)";
+};
+
 function pickFewest(candidates: CandidateOutcome[], defaults: GateValues): CandidateOutcome {
   return [...candidates].sort((a, b) =>
     a.selected - b.selected
@@ -106,7 +136,8 @@ function pickFewest(candidates: CandidateOutcome[], defaults: GateValues): Candi
 }
 
 export function calibrateGate(input: CalibrateInput): CalibrationDecision {
-  const { records, defaults } = input;
+  const { defaults } = input;
+  const { records, dropped: quarantinedFailures } = withoutQuarantined(input.records);
   const realFailures = records.filter((r) => r.source === "real").reduce((n, r) => n + r.failures.length, 0);
   const totalFailures = records.reduce((n, r) => n + r.failures.length, 0);
   const current = evaluateCandidate(records, input.current);
@@ -122,9 +153,12 @@ export function calibrateGate(input: CalibrateInput): CalibrationDecision {
   }
   const digestReports = [...byDigest.values()].sort((a, b) => String(a.contextDigest).localeCompare(String(b.contextDigest)));
 
+  const quarantineNote = quarantinedFailures === 0 ? ""
+    : quarantinedFailures === 1 ? "; 1 failure of a quarantined test is not counted"
+    : `; ${quarantinedFailures} failures of quarantined tests are not counted`;
   const decide = (decision: CalibrationDecision["decision"], adopted: CandidateOutcome, rationale: string): CalibrationDecision => ({
-    decision, gate: adopted.gate, records: records.length, realFailures, recallLb95: lb(adopted),
-    rationale, current, adopted, byDigest: digestReports,
+    decision, gate: adopted.gate, records: records.length, realFailures, quarantinedFailures, recallLb95: lb(adopted),
+    rationale: rationale + quarantineNote, current, adopted, byDigest: digestReports,
   });
 
   if (records.length === 0) {
@@ -138,13 +172,20 @@ export function calibrateGate(input: CalibrateInput): CalibrationDecision {
   const feasible = candidates.filter((c) => c.missed === 0);
 
   if (current.missed > 0) {
-    if (feasible.length === 0) {
+    const currentFlags = records.map((r) => replaySelected(r.verdicts, input.current));
+    const tighter = candidates.filter((c) =>
+      (c.missed < current.missed || c.selected > current.selected)
+      && coversSelection(records.map((r) => replaySelected(r.verdicts, c.gate)), currentFlags));
+    if (tighter.length === 0) {
       return decide("keep", current,
-        `the current gate misses ${current.missed} of ${totalFailures} failures and no candidate in the grid catches all of them`);
+        `the current gate misses ${current.missed} of ${totalFailures} failures and no candidate in the grid selects more than it does`);
     }
-    const best = pickFewest(feasible, defaults);
-    return decide("tighten", best,
-      `the current gate (${fmt(input.current)}) missed ${current.missed} of ${totalFailures} failures; ${fmt(best.gate)} catches all of them with the fewest selected tests`);
+    const fewestMisses = Math.min(...tighter.map((c) => c.missed));
+    const best = pickFewest(tighter.filter((c) => c.missed === fewestMisses), defaults);
+    const missedText = `the current gate (${fmt(input.current)}) missed ${current.missed} of ${totalFailures} failures`;
+    return decide("tighten", best, best.missed === 0
+      ? `${missedText}; ${fmt(best.gate)} catches all of them with the fewest selected tests while keeping every test the current gate selects`
+      : `${missedText} and no candidate in the grid catches all of them; ${fmt(best.gate)} misses the fewest (${best.missed}) while keeping every test the current gate selects`);
   }
 
   const looser = feasible.filter((c) => c.selected < current.selected);
@@ -153,14 +194,14 @@ export function calibrateGate(input: CalibrateInput): CalibrationDecision {
   }
   if (realFailures < input.minFailures) {
     return decide("keep", current,
-      `only ${realFailures} real failures observed; loosening needs at least ${input.minFailures}`);
+      `only ${realFailures} real failures observed; loosening needs at least ${input.minFailures} (min_failures), and because a loosening must have zero misses, ${needText(input.recallTarget)} for the recall lower bound to reach ${input.recallTarget}`);
   }
   const best = pickFewest(looser, defaults);
   const bound = lb(best) ?? 0;
   if (bound < input.recallTarget) {
     return {
       ...decide("keep", current,
-        `recall lower bound ${bound.toFixed(3)} over ${realFailures} real failures is below the target ${input.recallTarget}`),
+        `recall lower bound ${bound.toFixed(3)} over ${realFailures} real failures is below the target ${input.recallTarget}; a loosening must have zero misses, so it needs ${needText(input.recallTarget)}`),
       recallLb95: bound,
     };
   }

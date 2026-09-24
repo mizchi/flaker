@@ -70,6 +70,7 @@ async function selectorCalibrateAction(opts: CalibrateCliOpts): Promise<void> {
         calibrated_at: result.calibratedAt,
         decision: result.decision,
         without_full_run: result.withoutFullRun,
+        superseded: result.superseded,
         unmatched: result.unmatched,
         written: result.written,
       }, null, 2));

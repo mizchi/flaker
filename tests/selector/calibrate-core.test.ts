@@ -96,4 +96,80 @@ describe("calibrateGate", () => {
     expect(DEFAULT_GRID).toContainEqual(DEFAULTS);
     expect(Math.min(...DEFAULT_GRID.map((g) => g.cutoff))).toBeLessThanOrEqual(0.5);
   });
+
+  it("does not count a failure of a test the record quarantined: the selector could not pick it", () => {
+    const r: CalibrationRecord = {
+      selectorRunId: "q", source: "real", contextDigest: null,
+      verdicts: [
+        { testKey: "q:fail", score: 3, confidence: 1, reason: "quarantined" },
+        { testKey: "q:p0", score: 0.2, confidence: 0.9, reason: "below" },
+      ],
+      failures: ["q:fail"],
+    };
+    const d = calibrateGate({ ...base, records: [r], current: DEFAULTS });
+    expect(d.decision).toBe("keep");
+    expect(d.gate).toEqual(DEFAULTS);
+    expect(d.realFailures).toBe(0);
+    expect(d.quarantinedFailures).toBe(1);
+    expect(d.current.missed).toBe(0);
+    expect(d.rationale).toMatch(/1 failure of a quarantined test is not counted/);
+  });
+
+  it("still tightens when no candidate catches every failure, to the fewest misses", () => {
+    const r: CalibrationRecord = {
+      selectorRunId: "u", source: "real", contextDigest: null,
+      verdicts: [
+        { testKey: "u:low", score: 0.3, confidence: 0.9, reason: "below" },
+        { testKey: "u:mid", score: 1.2, confidence: 0.9, reason: "below" },
+        { testKey: "u:p0", score: 0.1, confidence: 0.9, reason: "below" },
+      ],
+      failures: ["u:low", "u:mid"],
+    };
+    const d = calibrateGate({ ...base, records: [r], current: DEFAULTS });
+    expect(d.decision).toBe("tighten");
+    expect(d.current.missed).toBe(2);
+    expect(d.adopted.missed).toBe(1);
+    expect(d.gate).toEqual({ cutoff: 1, unsure_below: 0.5, unsure_margin: 1 });
+    expect(d.rationale).toMatch(/no candidate in the grid catches all/);
+  });
+
+  it("tightens even when nothing catches the miss, and never keeps a gate known to miss", () => {
+    const r: CalibrationRecord = {
+      selectorRunId: "z", source: "real", contextDigest: null,
+      verdicts: [
+        { testKey: "z:low", score: 0.3, confidence: 0.9, reason: "below" },
+        { testKey: "z:p0", score: 1.2, confidence: 0.9, reason: "below" },
+      ],
+      failures: ["z:low"],
+    };
+    const d = calibrateGate({ ...base, records: [r], current: DEFAULTS });
+    expect(d.decision).toBe("tighten");
+    expect(d.gate).not.toEqual(DEFAULTS);
+    expect(d.adopted.selected).toBeGreaterThan(d.current.selected);
+  });
+
+  it("a tighten candidate keeps every test the current gate selects (no dropped unsure rescues)", () => {
+    const r: CalibrationRecord = {
+      selectorRunId: "s", source: "real", contextDigest: null,
+      verdicts: [
+        { testKey: "s:x", score: 1.6, confidence: 0.9, reason: "below" },
+        { testKey: "s:rescued", score: 1.2, confidence: 0.4, reason: "unsure" },
+      ],
+      failures: ["s:x"],
+    };
+    const d = calibrateGate({ ...base, records: [r], current: DEFAULTS });
+    expect(d.decision).toBe("tighten");
+    expect(d.gate).not.toEqual({ cutoff: 1.5, unsure_below: 0.3, unsure_margin: 0 });
+    expect(d.adopted).toMatchObject({ missed: 0, selected: 2 });
+  });
+
+  it("says a loosening needs zero misses and how many real failures that takes", () => {
+    const current = { cutoff: 1.5, unsure_below: 0.5, unsure_margin: 1 };
+    const few = calibrateGate({ ...base, recallTarget: 0.9, records: many(5, 2.5, [1.6]), current });
+    expect(few.rationale).toMatch(/zero misses/);
+    expect(few.rationale).toMatch(/at least 35 real failures/);
+    const enough = calibrateGate({ ...base, recallTarget: 0.9, records: many(25, 2.5, [1.6]), current });
+    expect(enough.decision).toBe("keep");
+    expect(enough.rationale).toMatch(/below the target 0.9.*at least 35 real failures/);
+  });
 });

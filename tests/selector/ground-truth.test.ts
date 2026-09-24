@@ -38,4 +38,26 @@ describe("loadCalibrationRecords", () => {
       { selectorRunId: "sr1", headSha: "H", testKey: await keyFor(store, S, "unknown-to-selector") },
     ]);
   });
+
+  it("loads only real selector runs: a mutation record on a real full run is not scored", async () => {
+    await seedSelectorRun(store, { id: "m1", headSha: "H", source: "mutation", tests: [
+      { testKey: await keyFor(store, S, "known"), file: S, titlePath: ["known"], reason: "below", selected: false, score: 0.4, confidence: 0.9 },
+    ] });
+    const loaded = await loadCalibrationRecords(store, { selector: "jev", since: new Date(0) });
+    expect(loaded.records).toEqual([]);
+    expect(loaded.unmatched).toEqual([]);
+  });
+
+  it("keeps one selector run per head, the latest, so one regression counts once", async () => {
+    const known = await keyFor(store, S, "known");
+    for (const [i, id] of ["old", "mid", "new"].entries()) {
+      await seedSelectorRun(store, { id, headSha: "H", createdAt: new Date(Date.now() - (3 - i) * 60_000), tests: [
+        { testKey: known, file: S, titlePath: ["known"], reason: "below", selected: false, score: 0.4, confidence: 0.9 },
+      ] });
+    }
+    const loaded = await loadCalibrationRecords(store, { selector: "jev", since: new Date(0) });
+    expect(loaded.records.map((r) => r.selectorRunId)).toEqual(["new"]);
+    expect(loaded.records.flatMap((r) => r.failures)).toEqual([known]);
+    expect(loaded.superseded).toBe(2);
+  });
 });
