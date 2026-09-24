@@ -80,6 +80,21 @@ jev and flaker usually run in different jobs. Carry the two files between them a
 
 A record is named after its commit, so records from many runs can be collected into one directory and imported at once. Importing a record that is already stored is a no-op.
 
+`--base main` needs the base branch in the checkout. A shallow clone (the `actions/checkout` default) does not have it: use `fetch-depth: 0` and `--base origin/main`.
+
+For `flaker import --ci`, the full-run workflow has to upload its report as an artifact, and `[adapter].artifact_name` has to match that artifact's name. Only the `playwright`, `junit`, `vrt-*` and `custom` adapters have their own default name; for `vitest`, set it explicitly, and write the report with `vitest run --reporter=json --outputFile=report.json`. The job that runs `import --ci` needs a token that can read Actions (`permissions: actions: read`).
+
+`flaker apply` does not run this loop: it neither imports selector records nor runs `calibrate --selector`. Run the selector steps yourself, after `flaker apply` if you use it (apply already runs `import --ci`).
+
+#### Put jev and a full run on the same commits
+
+Calibration learns only from commits that have both a jev record and a full run. A PR job scores the PR head, while a nightly full run tests main's latest commit, so the two rarely share a commit and `calibrate --selector` keeps the gate indefinitely. Pick one layout:
+
+- **jev on main.** On every push to main, run jev with `--base` set to the previous commit (`${{ github.event.before }}`; it is all zeros on the first push of a branch, so fall back to `HEAD~1`), and run the full suite on the same commit in the same workflow. Upload only the full-suite report as the full lane's artifact. The tests jev selected are a partial run, and counted as full they would make every unselected test look like it passed.
+- **A full run after jev on some PRs.** In the PR job, run jev's selection first, then the rest of the suite on the same checkout, and import the result as a full lane. Doing this on a sample of PRs keeps the cost down.
+
+`flaker calibrate --selector --dry-run --json` shows whether the layout works: `without_full_run` counts records with no full run on their commit, and `decision.real_failures` is the evidence gathered so far.
+
 ## What the context changes in jev
 
 `jev-context` v1 has three parts:

@@ -121,7 +121,7 @@ owner = "your-org"
 name = "your-repo"
 
 [storage]
-path = ".flaker/data.duckdb"
+path = ".flaker/data"      # DuckDB のファイル 1 つ
 
 # テスト結果のパース形式
 [adapter]
@@ -336,7 +336,7 @@ flaker calibrate --selector                              # gate_calibration に�
 flaker export --projection jev-context -o .flaker/context.json
 ```
 
-`flaker calibrate --selector [name]` は real な selector record を、その `head_sha` の full run と結合します。`head_sha` ごとに最新の record だけを数えるので、同じコミットで selector を何度走らせても同じ regression を重ねて数えません。mutation の record は対象外です。正解はその run で落ちたテストから flaky と quarantine を除いたものです。record 自身が quarantine していたテストの失敗は selector の取りこぼしではないので、別に数えて報告します。そのうえで、すべての record を jev 自身の gate (`jev-test-filter/gate` を bundle したもの、API 呼び出しなし) で `cutoff × unsure_below × unsure_margin` の grid にわたってオフライン再判定します。採用規則は「締めるのは即座に、緩めるのは慎重に」です。現在の gate が失敗を取りこぼしていれば、即座に切り替えます (`tighten`)。切り替え先は、すべての record で現在の gate が選ぶテストをすべて選び続ける候補に限り、その中から取りこぼしが最も少なく、次に選択テスト数が最も少ないものを選びます。すべての失敗を拾う候補がなくても、現在の gate より取りこぼしが少ない候補があれば、その中で最も少ないものを採用します。取りこぼしを減らせる候補がなければ、テストを多く選んでも拾えないので gate を維持し、取りこぼしを報告します。選択テストを減らす (`loosen`) には、取りこぼしがゼロで、real な失敗が `min_failures` 件以上あり、recall の Wilson 95% 下限が `recall_target` 以上である必要があります。どちらでもなければ現状を維持し、理由を `rationale` に残します (`keep`)。同点なら jev の既定値に近い候補を選びます。1 回の実行で `gate_calibration` に 1 行追記します。`--dry-run` は何も追記せず、`--json` は結果を JSON で出力します。どの判定にも照合できない失敗は `unmatched` として一覧にし、取りこぼしには数えません。レポートは context digest ごとにも分けて出します。
+`flaker calibrate --selector [name]` は real な selector record を、その `head_sha` の full run と結合します。`head_sha` ごとに最新の record だけを数えるので、同じコミットで selector を何度走らせても同じ regression を重ねて数えません。mutation の record は対象外です。正解はその run で落ちたテストから flaky と quarantine を除いたものです。record 自身が quarantine していたテストの失敗は selector の取りこぼしではないので、別に数えて報告します。そのうえで、すべての record を jev 自身の gate (`jev-test-filter/gate` を bundle したもの、API 呼び出しなし) で `cutoff × unsure_below × unsure_margin` の grid にわたってオフライン再判定します。採用規則は「締めるのは即座に、緩めるのは慎重に」です。現在の gate が失敗を取りこぼしていれば、即座に切り替えます (`tighten`)。切り替え先は、すべての record で現在の gate が選ぶテストをすべて選び続ける候補に限り、その中から取りこぼしが最も少なく、次に選択テスト数が最も少ないものを選びます。すべての失敗を拾う候補がなくても、現在の gate より取りこぼしが少ない候補があれば、その中で最も少ないものを採用します。取りこぼしを減らせる候補がなければ、テストを多く選んでも拾えないので gate を維持し、取りこぼしを報告します。選択テストを減らす (`loosen`) には、取りこぼしがゼロで、real な失敗が `min_failures` 件以上あり、recall の Wilson 95% 下限が `recall_target` 以上である必要があります。どちらでもなければ現状を維持し、理由を `rationale` に残します (`keep`)。同点なら jev の既定値に近い候補を選びます。1 回の実行で `gate_calibration` に 1 行追記します。`--dry-run` は何も追記せず、`--json` は結果を snake_case のキーの JSON で出力します (`decision.real_failures`、`decision.recall_lb95`、`decision.rationale`、`without_full_run`、`unmatched`)。どの判定にも照合できない失敗は `unmatched` として一覧にし、取りこぼしには数えません。レポートは context digest ごとにも分けて出します。
 
 この下限は見た目より厳しい条件です。real な失敗 n 件をすべて拾えたとき、Wilson 95% 下限は n / (n + 3.8415) で、20 件なら 0.839、35 件なら 0.901、50 件なら 0.929 です。緩めるには取りこぼしがゼロでなければならないので、既定の `recall_target = 0.90` では少なくとも 35 件の real な失敗をすべて拾っている必要があり、`min_failures = 20` より多くなります。緩めるのを見送ったときは rationale にそう書きます。`recall_target = 0.98` なら 189 件が必要です (189 件で 0.9801、188 件では 0.9800 に届きません)。
 

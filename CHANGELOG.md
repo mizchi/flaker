@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.14.0
 
 ### Added
 
@@ -14,6 +14,8 @@
 - `flaker export --projection jev-context [-o <file>]` writes the context jev-test-filter reads with `--context`: the latest calibrated gate, quarantined tests as `skip`, and per-test hints from `misses` and `co_failures`.
 - `[selector]` in `flaker.toml`: `type` (`"jev"`), `recall_target` (default 0.90), `min_failures` (default 20) and `max_hinted_tests` (default 200). Gate values are not kept there; `cutoff`, `unsure_below` or `unsure_margin` under `[selector]` is an error.
 - `jev-context` v1, with its type and JSON Schema exported as `@mizchi/flaker/contracts/jev-context-v1`.
+- `docs/jev-test-filter-integration.md` (and `.ja.md`): a step-by-step guide to using flaker with jev-test-filter.
+- Claude Code plugin 0.5.0: `flaker-setup` and `flaker-management` cover connecting and tuning a test selector, handing data to other tools with `flaker export`, and the 0.13 → 0.14 upgrade.
 
 ### Requires
 

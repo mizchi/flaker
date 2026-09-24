@@ -226,7 +226,7 @@ Retries can help classify failures, but they are not proof of stability.
 
 The current CLI and config already fit this model:
 
-| Mental model | Current flaker shape (0.13.0) |
+| Mental model | Current flaker shape (0.14.0) |
 |-------------|----------------------|
 | Iteration Gate | `[gate.iteration]` |
 | Merge Gate | `[gate.merge]` |
@@ -261,11 +261,11 @@ pnpm flaker status        # dashboard + promotion drift
 
 The full Day 0 → Week 4 onboarding checklist lives at [docs/new-project-checklist.ja.md](docs/new-project-checklist.ja.md) / [.md](docs/new-project-checklist.md).
 
-> **Canonical command forms (0.13.0)**
+> **Canonical command forms (0.14.0)**
 >
 > The primary surface is: `init`, `plan`, `apply`, `status`, `run`, `calibrate`, `doctor`, `debug`, `query`, `explain`, `import`, `report`. `dev` is a hidden maintainer-only group.
 >
-> | Canonical (0.13.0) | Notes |
+> | Canonical (0.14.0) | Notes |
 > |---|---|
 > | `flaker apply` | reconciles the repo to `flaker.toml`; runs CI import + calibrate internally when needed |
 > | `flaker calibrate [--window-days <n>] [--dry-run] [--json]` | recommend and write `[sampling]` |
