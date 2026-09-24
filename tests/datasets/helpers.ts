@@ -32,15 +32,19 @@ export async function seedRun(store: DuckDBStore, run: {
   daysAgo: number;
   workflowName?: string;
   lane?: string;
-  source?: "ci" | "local";
+  /** "mutation" is not a WorkflowRun source yet; it is written straight to the table. */
+  source?: "ci" | "local" | "mutation";
   results: SeedResult[];
 }): Promise<void> {
   const createdAt = new Date(Date.now() - run.daysAgo * DAY);
   await store.insertWorkflowRun({
     id: run.id, repo: "o/r", branch: "main", commitSha: run.commitSha, event: "push",
-    source: run.source ?? "ci", status: "completed", createdAt, durationMs: 1,
+    source: run.source === "mutation" ? "ci" : run.source ?? "ci", status: "completed", createdAt, durationMs: 1,
     workflowName: run.workflowName ?? "ci", lane: run.lane ?? null,
   });
+  if (run.source === "mutation") {
+    await store.raw(`UPDATE workflow_runs SET source = 'mutation' WHERE id = ?`, [run.id]);
+  }
   await store.insertTestResults(run.results.map((r) => ({
     workflowRunId: run.id, suite: r.suite, testName: r.testName, status: r.status,
     durationMs: 10, retryCount: r.retryCount ?? 0, errorMessage: null,

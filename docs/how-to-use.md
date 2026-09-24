@@ -268,12 +268,14 @@ The storage tables are internal and may change in any release. The public, versi
 | `tests` | Test identity: `suite`, `test_name`, `task_id`, `variant`, `file`, `title_path` (JSON array), first and last seen. `file` + `title_path` is what selectors are matched on |
 | `runs` | One execution: `source` (`ci` / `local` / `mutation`), `workflow_name`, `lane`, `commit_sha`, `branch`, `event`, `is_full` (whether the whole suite ran) |
 | `results` | Per-test results: `run_id`, `test_key`, `status`, `retry_count`, `duration_ms` |
-| `flaky` | Flaky verdicts: `window_days`, `runs`, `failures`, `flaky_rate`, `is_flaky` |
+| `flaky` | Flaky verdicts: `window_days`, `runs`, `failures`, `flaky_rate`, `is_flaky`. `failures` counts every result that failed at least once; `flaky_rate` counts only flake evidence (a retried pass, a `flaky` status, or a failure on a commit where the test also passed), so a plain regression has `flaky_rate = 0` |
 | `quarantine` | Quarantined tests: `reason`, `since`, `source` (`auto` / `manual`) |
-| `co_failures` | "This test failed when this file changed", aggregated: `changed_file`, `co_failures`, `changes`, `strength` |
+| `co_failures` | "This test failed when this file changed", aggregated: `changed_file`, `co_failures`, `changes`, `strength`. `changes` counts the commits in the window that changed the file and have a result for the test; `co_failures` counts those where the test failed at least once. One failing result on a commit is enough, and every file that commit changed is credited |
 | `selector_verdicts` | A selector's per-test decisions: `score`, `confidence`, `reason`, `selected` |
-| `misses` | Tests the selector did not select that really failed in a full run |
+| `misses` | Tests the selector did not select that really failed in a full run, one row per verdict. Only `real` selector runs are scored, against real full runs; mutation scoring arrives with the mutation phase |
 | `gate_calibration` | History of selector gate calibrations. The latest row is the current value |
+
+Runs with `source = mutation` never feed `flaky`, `co_failures` or `misses`.
 
 Stability rule: within `flaker_v1`, columns are only added. Removing, renaming or changing the meaning of a column means a new `flaker_v2`. External tools may open the `.duckdb` file directly, but they should read `flaker_v1.*` only, never the storage tables.
 

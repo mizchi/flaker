@@ -268,12 +268,14 @@ flaker 上での identity mapping:
 | `tests` | テストの identity。`suite`, `test_name`, `task_id`, `variant`, `file`, `title_path` (JSON 配列), 初出と最終観測。`file` + `title_path` は selector との突き合わせに使う |
 | `runs` | 実行単位。`source` (`ci` / `local` / `mutation`), `workflow_name`, `lane`, `commit_sha`, `branch`, `event`, `is_full` (全テストを実行したランか) |
 | `results` | テスト単位の結果。`run_id`, `test_key`, `status`, `retry_count`, `duration_ms` |
-| `flaky` | flaky 判定。`window_days`, `runs`, `failures`, `flaky_rate`, `is_flaky` |
+| `flaky` | flaky 判定。`window_days`, `runs`, `failures`, `flaky_rate`, `is_flaky`。`failures` は一度でも失敗した結果の数。`flaky_rate` が数えるのは flaky の証拠 (retry で通った結果、`flaky` status、同じ commit で pass もしている失敗) だけなので、単なる regression は `flaky_rate = 0` になる |
 | `quarantine` | 隔離中のテスト。`reason`, `since`, `source` (`auto` / `manual`) |
-| `co_failures` | 「このファイルが変わったときにこのテストが落ちた」の集計。`changed_file`, `co_failures`, `changes`, `strength` |
+| `co_failures` | 「このファイルが変わったときにこのテストが落ちた」の集計。`changed_file`, `co_failures`, `changes`, `strength`。`changes` は window 内でそのファイルを変更し、かつそのテストの結果がある commit の数。`co_failures` はそのうちテストが一度でも失敗した commit の数。commit 上の失敗 1 件で数え、その commit が変更した全ファイルに計上する |
 | `selector_verdicts` | selector のテストごとの判定。`score`, `confidence`, `reason`, `selected` |
-| `misses` | selector が選ばなかったのに full run で実際に失敗したテスト |
+| `misses` | selector が選ばなかったのに full run で実際に失敗したテスト。判定 1 件につき 1 行。採点するのは `real` の selector run と real の full run の組だけで、mutation の採点は mutation フェーズで入る |
 | `gate_calibration` | selector gate の calibrate 結果の履歴。最新行が現行値 |
+
+`source = mutation` のランは `flaky`・`co_failures`・`misses` に一切入りません。
 
 安定性のルール: `flaker_v1` の中では列の追加だけを行います。列の削除・改名・意味の変更は `flaker_v2` を新設して行います。外部ツールが `.duckdb` ファイルを直接開くのは構いませんが、読むのは `flaker_v1.*` だけにして、ストレージのテーブルは読まないでください。
 

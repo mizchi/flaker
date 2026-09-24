@@ -103,32 +103,45 @@ WHERE tr.test_id IS NOT NULL;
 const FAILURE_SQL = (alias: string) =>
   `(${alias}.status IN ('failed', 'flaky') OR (${alias}.retry_count > 0 AND ${alias}.status = 'passed'))`;
 
+/** Results that are not from a mutation trial (mutations are synthetic, not history). */
+const REAL_RESULTS_SQL = `
+  SELECT tr.*
+  FROM test_results tr
+  LEFT JOIN workflow_runs wr ON wr.id = tr.workflow_run_id
+  WHERE tr.test_id IS NOT NULL AND wr.source IS DISTINCT FROM 'mutation'`;
+
 const HISTORY_VIEWS = `
+-- flaky: failures counts every result that failed at least once. flaky_rate
+-- counts only flake evidence: a retried pass, a 'flaky' status, or a failure
+-- on a commit where the same test also passed. A plain regression therefore
+-- has flaky_rate 0 and is not flaky, so it cannot hide its own failures from
+-- selector ground truth.
 CREATE OR REPLACE VIEW flaker_v1.flaky AS
 WITH cfg AS (SELECT * FROM flaker_dataset_config WHERE id = 1),
 recent AS (
-  SELECT tr.test_id, tr.commit_sha, tr.status, tr.retry_count
-  FROM test_results tr CROSS JOIN cfg
-  WHERE tr.test_id IS NOT NULL
-    AND tr.created_at > ${NOW_UTC} - to_days(cfg.flaky_window_days)
+  SELECT r.test_id, r.commit_sha, r.status, r.retry_count
+  FROM (${REAL_RESULTS_SQL}) r CROSS JOIN cfg
+  WHERE r.created_at > ${NOW_UTC} - to_days(cfg.flaky_window_days)
 ),
-flips AS (
-  SELECT test_id, COUNT(*) FILTER (WHERE statuses > 1)::INTEGER AS flip_commits
-  FROM (
-    SELECT test_id, commit_sha,
-      COUNT(DISTINCT status) FILTER (WHERE status IN ('passed', 'failed')) AS statuses
-    FROM recent
-    GROUP BY test_id, commit_sha
-  )
-  GROUP BY test_id
+flip_commits AS (
+  SELECT test_id, commit_sha
+  FROM recent
+  WHERE status IN ('passed', 'failed')
+  GROUP BY test_id, commit_sha
+  HAVING COUNT(DISTINCT status) > 1
 ),
 agg AS (
   SELECT
     r.test_id,
     COUNT(*)::INTEGER AS runs,
     COUNT(*) FILTER (WHERE ${FAILURE_SQL("r")})::INTEGER AS failures,
-    COUNT(*) FILTER (WHERE r.status = 'flaky' OR (r.retry_count > 0 AND r.status = 'passed'))::INTEGER AS retried
+    COUNT(*) FILTER (
+      WHERE r.status = 'flaky'
+        OR (r.retry_count > 0 AND r.status = 'passed')
+        OR (r.status = 'failed' AND fc.commit_sha IS NOT NULL)
+    )::INTEGER AS evidence
   FROM recent r
+  LEFT JOIN flip_commits fc ON fc.test_id = r.test_id AND fc.commit_sha = r.commit_sha
   GROUP BY r.test_id
 )
 SELECT
@@ -136,13 +149,11 @@ SELECT
   cfg.flaky_window_days AS window_days,
   agg.runs,
   agg.failures,
-  ROUND(agg.failures * 1.0 / agg.runs, 4)::DOUBLE AS flaky_rate,
-  (agg.failures * 1.0 / agg.runs >= cfg.flaky_threshold_ratio
-    AND (agg.retried > 0 OR COALESCE(flips.flip_commits, 0) > 0)) AS is_flaky,
+  ROUND(agg.evidence * 1.0 / agg.runs, 4)::DOUBLE AS flaky_rate,
+  (agg.evidence > 0 AND agg.evidence * 1.0 / agg.runs >= cfg.flaky_threshold_ratio) AS is_flaky,
   ${NOW_UTC} AS computed_at
 FROM agg
-CROSS JOIN cfg
-LEFT JOIN flips ON flips.test_id = agg.test_id;
+CROSS JOIN cfg;
 
 CREATE OR REPLACE VIEW flaker_v1.quarantine AS
 SELECT
@@ -152,6 +163,11 @@ SELECT
   CASE WHEN reason LIKE 'plan:%' THEN 'auto' ELSE 'manual' END AS source
 FROM quarantined_test_identities;
 
+-- co_failures: per (changed file, test) over the commits in the window that
+-- changed the file and have a result for the test. changes counts those
+-- commits; co_failures counts the ones where the test failed at least once.
+-- A single failing result on a commit is enough, and every file the commit
+-- changed gets the co-failure.
 CREATE OR REPLACE VIEW flaker_v1.co_failures AS
 WITH cfg AS (SELECT * FROM flaker_dataset_config WHERE id = 1)
 SELECT
@@ -166,10 +182,9 @@ SELECT
   )::DOUBLE AS strength,
   cfg.co_failure_window_days AS window_days
 FROM commit_changes cc
-JOIN test_results tr ON tr.commit_sha = cc.commit_sha
+JOIN (${REAL_RESULTS_SQL}) tr ON tr.commit_sha = cc.commit_sha
 CROSS JOIN cfg
-WHERE tr.test_id IS NOT NULL
-  AND tr.created_at > ${NOW_UTC} - to_days(cfg.co_failure_window_days)
+WHERE tr.created_at > ${NOW_UTC} - to_days(cfg.co_failure_window_days)
 GROUP BY cc.file_path, tr.test_id, cfg.co_failure_window_days
 HAVING COUNT(DISTINCT cc.commit_sha) FILTER (WHERE ${FAILURE_SQL("tr")}) > 0;
 `;
@@ -201,17 +216,21 @@ SELECT selector, calibrated_at, cutoff, unsure_below, unsure_margin,
   records, real_failures, recall_lb95, decision, rationale
 FROM gate_calibrations;
 
--- Internal (not flaker_v1): failures in full runs that count as ground truth.
+-- Internal (not flaker_v1): failures in full real runs that count as ground
+-- truth, one row per (commit, test); ci_run_id is the first such run.
 CREATE OR REPLACE VIEW selector_ground_truth AS
-SELECT DISTINCT r.run_id AS ci_run_id, ru.commit_sha, r.test_key
+SELECT MIN(r.run_id) AS ci_run_id, ru.commit_sha, r.test_key
 FROM flaker_v1.results r
 JOIN flaker_v1.runs ru ON ru.run_id = r.run_id
 WHERE ru.is_full
   AND ru.source <> 'mutation'
   AND r.status = 'failed'
   AND r.test_key NOT IN (SELECT test_key FROM flaker_v1.flaky WHERE is_flaky)
-  AND r.test_key NOT IN (SELECT test_key FROM flaker_v1.quarantine);
+  AND r.test_key NOT IN (SELECT test_key FROM flaker_v1.quarantine)
+GROUP BY ru.commit_sha, r.test_key;
 
+-- misses: only real selector runs are scored, against real full runs.
+-- Scoring mutation verdicts against mutation runs comes with the mutation phase.
 CREATE OR REPLACE VIEW flaker_v1.misses AS
 SELECT DISTINCT
   v.selector_run_id,
@@ -226,7 +245,7 @@ SELECT DISTINCT
   ) AS changed_files
 FROM flaker_v1.selector_verdicts v
 JOIN selector_ground_truth gt ON gt.commit_sha = v.head_sha AND gt.test_key = v.test_key
-WHERE v.test_key IS NOT NULL AND NOT v.selected;
+WHERE v.test_key IS NOT NULL AND NOT v.selected AND v.source = 'real';
 `;
 
 export const FLAKER_V1_VIEWS_SQL = [CORE_VIEWS, HISTORY_VIEWS, SELECTOR_VIEWS].join("\n");

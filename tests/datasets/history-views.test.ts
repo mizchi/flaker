@@ -35,9 +35,43 @@ describe("flaker_v1 history views", () => {
       ORDER BY t.test_name`);
     expect(rows).toEqual([
       { test_name: "flip", runs: 2, failures: 1, flaky_rate: 0.5, is_flaky: true, window_days: 14 },
-      { test_name: "regression", runs: 2, failures: 2, flaky_rate: 1, is_flaky: false, window_days: 14 },
+      { test_name: "regression", runs: 2, failures: 2, flaky_rate: 0, is_flaky: false, window_days: 14 },
       { test_name: "retry", runs: 2, failures: 1, flaky_rate: 0.5, is_flaky: true, window_days: 14 },
     ]);
+  });
+
+  it("flaky: flaky_rate counts retried and same-commit flipped outcomes only", async () => {
+    await store.close();
+    store = await memoryStore({ flakyThresholdRatio: 0.3 });
+    // Retried once, then a real regression on four later commits.
+    await seedRun(store, { id: 1, commitSha: "c1", daysAgo: 6, results: [
+      { suite: S, testName: "regressed", status: "passed", retryCount: 1 },
+    ] });
+    for (let i = 2; i <= 5; i++) {
+      await seedRun(store, { id: i, commitSha: `c${i}`, daysAgo: 6 - i, results: [
+        { suite: S, testName: "regressed", status: "failed" },
+      ] });
+    }
+    const [row] = await store.raw<{ failures: number; flaky_rate: number; is_flaky: boolean }>(
+      `SELECT failures, flaky_rate, is_flaky FROM flaker_v1.flaky`,
+    );
+    expect(row).toEqual({ failures: 5, flaky_rate: 0.2, is_flaky: false });
+  });
+
+  it("flaky and co_failures ignore mutation runs", async () => {
+    await store.insertCommitChanges("m1", [{ filePath: "src/x.ts", changeType: "modified", additions: 1, deletions: 0 }]);
+    await seedRun(store, { id: 1, commitSha: "m1", daysAgo: 2, source: "mutation", results: [
+      { suite: S, testName: "t", status: "passed", retryCount: 1 },
+      { suite: S, testName: "u", status: "failed" },
+    ] });
+    await seedRun(store, { id: 2, commitSha: "c2", daysAgo: 1, results: [
+      { suite: S, testName: "t", status: "passed" },
+      { suite: S, testName: "u", status: "passed" },
+    ] });
+    const flaky = await store.raw<{ runs: number; is_flaky: boolean }>(`SELECT runs, is_flaky FROM flaker_v1.flaky`);
+    expect(flaky).toEqual([{ runs: 1, is_flaky: false }, { runs: 1, is_flaky: false }]);
+    const co = await store.raw(`SELECT * FROM flaker_v1.co_failures`);
+    expect(co).toEqual([]);
   });
 
   it("quarantine: source is auto for plan-applied entries, manual otherwise", async () => {

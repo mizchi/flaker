@@ -47,6 +47,35 @@ describe("flaker_v1 selector views", () => {
     expect(JSON.parse(rows[0].changed_files)).toEqual(["src/a.ts", "src/b.ts"]);
   });
 
+  it("misses: one row per verdict when the commit has several failing full runs", async () => {
+    await seedRun(store, { id: 11, commitSha: "H", daysAgo: 1, results: names.map((n) => ({
+      suite: S, testName: n, status: n === "passing" ? "passed" : "failed",
+    })) });
+    await seedSelectorRun(store, { id: "sr4", headSha: "H", tests: [
+      { testKey: await keyFor(store, S, "missed"), file: S, titlePath: ["missed"], reason: "below", selected: false },
+    ] });
+    const rows = await store.raw<{ ci_run_id: bigint }>(`SELECT ci_run_id FROM flaker_v1.misses`);
+    expect(rows.map((r) => Number(r.ci_run_id))).toEqual([10]);
+  });
+
+  it("misses: a mutation selector run is not scored against real full runs", async () => {
+    await seedSelectorRun(store, { id: "sr5", headSha: "H", source: "mutation", tests: [
+      { testKey: await keyFor(store, S, "missed"), file: S, titlePath: ["missed"], reason: "below", selected: false },
+    ] });
+    expect(await store.raw(`SELECT * FROM flaker_v1.misses`)).toEqual([]);
+  });
+
+  it("misses: a mutation full run is not ground truth", async () => {
+    await store.insertCommitChanges("M", [{ filePath: "src/a.ts", changeType: "modified", additions: 1, deletions: 0 }]);
+    await seedRun(store, { id: 12, commitSha: "M", daysAgo: 1, source: "mutation", results: names.map((n) => ({
+      suite: S, testName: n, status: "failed",
+    })) });
+    await seedSelectorRun(store, { id: "sr6", headSha: "M", tests: [
+      { testKey: await keyFor(store, S, "missed"), file: S, titlePath: ["missed"], reason: "below", selected: false },
+    ] });
+    expect(await store.raw(`SELECT * FROM flaker_v1.misses`)).toEqual([]);
+  });
+
   it("misses: nothing for a head without a full run", async () => {
     await seedSelectorRun(store, { id: "sr2", headSha: "NOFULL", tests: [
       { testKey: await keyFor(store, S, "missed"), file: S, titlePath: ["missed"], reason: "below", selected: false },
