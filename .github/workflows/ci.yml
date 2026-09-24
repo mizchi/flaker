@@ -70,10 +70,14 @@ jobs:
           sudo cp /tmp/duckdb/libduckdb.so /usr/local/lib/
           sudo ldconfig
 
+      # The experimental native CLI does not build on current MoonBit
+      # toolchains until mizchi/github and f4ah6o/duckdb catch up (#92).
+      # Non-blocking so the JS path and the test suite stay required.
       - name: Native CLI build
+        continue-on-error: true
         run: |
           C_INCLUDE_PATH=/usr/local/include LIBRARY_PATH=/usr/local/lib \
-          moon build --target native src/cmd/flaker_native 2>/dev/null || true
+          moon build --target native src/cmd/flaker_native || true
           # Manual link (moon doesn't pass cc-link-flags for deps)
           cc -O2 -o dist/flaker \
             -I"$HOME/.moon/include" \
@@ -94,6 +98,7 @@ jobs:
             -Wl,-rpath,/usr/local/lib
 
       - name: Native CLI smoke
+        continue-on-error: true
         run: |
           LD_LIBRARY_PATH=/usr/local/lib dist/flaker --help
           LD_LIBRARY_PATH=/usr/local/lib dist/flaker collect calibrate || echo "No data yet (expected)"
