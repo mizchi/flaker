@@ -49,4 +49,23 @@ describe("flaker calibrate", () => {
     expect(res.stderr).toMatch(/Invalid --window-days value: abc\. Expected a positive integer\./);
     expect(readFileSync(join(dir, "flaker.toml"), "utf8")).toBe(before);
   });
+
+  it("--selector --dry-run --json reports a keep on an empty database", () => {
+    const dir = repo();
+    const res = spawnSync("node", [CLI, "calibrate", "--selector", "--dry-run", "--json"], { cwd: dir, encoding: "utf8" });
+    expect(res.status).toBe(0);
+    const out = JSON.parse(res.stdout) as { selector: string; decision: { decision: string }; written: boolean };
+    expect(out).toMatchObject({ selector: "jev", decision: { decision: "keep" }, written: false });
+  });
+
+  it("--selector with another name exits 2", () => {
+    const res = spawnSync("node", [CLI, "calibrate", "--selector", "other"], { cwd: repo(), encoding: "utf8" });
+    expect(res.status).toBe(2);
+  });
+
+  it("bare calibrate still writes [sampling] and touches no gate", () => {
+    const dir = repo();
+    const res = spawnSync("node", [CLI, "calibrate", "--dry-run", "--json"], { cwd: dir, encoding: "utf8" });
+    expect(JSON.parse(res.stdout).sampling.strategy).toBe("hybrid");
+  });
 });

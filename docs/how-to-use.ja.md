@@ -290,7 +290,7 @@ flaker import .jev-test-filter --adapter jev
 | `quarantine` | 隔離中のテスト。`reason`, `since`, `source` (`auto` / `manual`) |
 | `co_failures` | 「このファイルが変わったときにこのテストが落ちた」の集計。`changed_file`, `co_failures`, `changes`, `strength`。`changes` は window 内でそのファイルを変更し、かつそのテストの結果がある commit の数。`co_failures` はそのうちテストが一度でも失敗した commit の数。commit 上の失敗 1 件で数え、その commit が変更した全ファイルに計上する |
 | `selector_verdicts` | selector のテストごとの判定。`score`, `confidence`, `reason`, `selected` |
-| `misses` | selector が選ばなかったのに full run で実際に失敗したテスト。判定 1 件につき 1 行。採点するのは `real` の selector run と real の full run の組だけで、mutation の採点は mutation フェーズで入る |
+| `misses` | selector 自身の取りこぼし。selector が選ばなかったのに同じコミットの full run で実際に失敗したテストで、判定 1 件につき 1 行。採点するのは `real` の selector run と real の full run の組だけで、`head_sha` ごとに最新の selector run だけを数えるので、同じコミットで selector を走らせ直しても取りこぼしは重複しない。record 自身が quarantine していた判定 (`reason = quarantined`) は取りこぼしに含めない。mutation の採点は mutation フェーズで入る |
 | `gate_calibration` | selector gate の calibrate 結果の履歴。最新行が現行値 |
 
 `source = mutation` のランは `flaky`・`co_failures`・`misses` に一切入りません。
@@ -321,6 +321,36 @@ flaker query "SELECT * FROM flaker_v1.flaky WHERE is_flaky"
 ```
 
 `full = true` の lane のランは `runs.is_full = true` になり、`full = false` なら常に `false` です。`full` の指定がない lane では、同じ workflow の直近 `[flaky].window_days` のランのうち最大のもの (そのラン自身を含む) と比べて、テスト数が 95% 以上あるランを full とみなします。テストの改名や削除があっても、その後の full run が partial に見えることはありません。
+
+### jev-test-filter による selector の calibration
+
+手順を追った導入は [flaker と jev-test-filter を組み合わせる](jev-test-filter-integration.ja.md) を見てください。この節はリファレンスです。
+
+flaker は selector の判定を、同じコミットの full run で実際に分かった結果と突き合わせ、その証拠から selector の gate を調整します。[jev-test-filter](https://github.com/mizchi/jev-test-filter) との流れは次のとおりです。
+
+```bash
+jev-test-filter --context .flaker/context.json …        # .jev-test-filter/records/<sha>.json を書く
+flaker import .jev-test-filter --adapter jev
+flaker import --ci                                       # 同じコミットの full run
+flaker calibrate --selector                              # gate_calibration に追記
+flaker export --projection jev-context -o .flaker/context.json
+```
+
+`flaker calibrate --selector [name]` は real な selector record を、その `head_sha` の full run と結合します。`head_sha` ごとに最新の record だけを数えるので、同じコミットで selector を何度走らせても同じ regression を重ねて数えません。mutation の record は対象外です。正解はその run で落ちたテストから flaky と quarantine を除いたものです。record 自身が quarantine していたテストの失敗は selector の取りこぼしではないので、別に数えて報告します。そのうえで、すべての record を jev 自身の gate (`jev-test-filter/gate` を bundle したもの、API 呼び出しなし) で `cutoff × unsure_below × unsure_margin` の grid にわたってオフライン再判定します。採用規則は「締めるのは即座に、緩めるのは慎重に」です。現在の gate が失敗を取りこぼしていれば、即座に切り替えます (`tighten`)。切り替え先は、すべての record で現在の gate が選ぶテストをすべて選び続ける候補に限り、その中から取りこぼしが最も少なく、次に選択テスト数が最も少ないものを選びます。すべての失敗を拾う候補がなくても、現在の gate より取りこぼしが少ない候補があれば、その中で最も少ないものを採用します。取りこぼしを減らせる候補がなければ、テストを多く選んでも拾えないので gate を維持し、取りこぼしを報告します。選択テストを減らす (`loosen`) には、取りこぼしがゼロで、real な失敗が `min_failures` 件以上あり、recall の Wilson 95% 下限が `recall_target` 以上である必要があります。どちらでもなければ現状を維持し、理由を `rationale` に残します (`keep`)。同点なら jev の既定値に近い候補を選びます。1 回の実行で `gate_calibration` に 1 行追記します。`--dry-run` は何も追記せず、`--json` は結果を JSON で出力します。どの判定にも照合できない失敗は `unmatched` として一覧にし、取りこぼしには数えません。レポートは context digest ごとにも分けて出します。
+
+この下限は見た目より厳しい条件です。real な失敗 n 件をすべて拾えたとき、Wilson 95% 下限は n / (n + 3.8415) で、20 件なら 0.839、35 件なら 0.901、50 件なら 0.929 です。緩めるには取りこぼしがゼロでなければならないので、既定の `recall_target = 0.90` では少なくとも 35 件の real な失敗をすべて拾っている必要があり、`min_failures = 20` より多くなります。緩めるのを見送ったときは rationale にそう書きます。`recall_target = 0.98` なら 189 件が必要です (189 件で 0.9801、188 件では 0.9800 に届きません)。
+
+`flaker export --projection jev-context` は、jev-test-filter が `--context` で読む context を書き出します。中身は `gate_calibration` の最新の gate とその根拠、`skip` (quarantine 中のテスト)、`tests` (hint: selector がそのテストを取りこぼしたコミット数と、一緒に落ちたファイル最大 5 件。`co_failures` のうち同時失敗 2 回以上のもの) です。flaky と quarantine 中のテストには hint を付けません。`digest` は `skip` と `tests` だけの sha256 なので、gate が変わっても変わりません。型と JSON Schema は `@mizchi/flaker/contracts/jev-context-v1` から export しています。context を読むには jev-test-filter 0.1.3 以降が必要です。projection は常に JSON で、`--format`・`--since`・`--where`・dataset 引数を付けると終了コード 2 になります。
+
+```toml
+[selector]
+type = "jev"             # 唯一の selector
+recall_target = 0.90     # 緩めるのに必要な recall の Wilson 95% 下限
+min_failures = 20        # 緩めるのに必要な real な失敗の件数
+max_hinted_tests = 200   # jev-context の tests[] の上限
+```
+
+gate の値 (`cutoff`・`unsure_below`・`unsure_margin`) は `flaker.toml` には置きません。`[selector]` にそれらを書くとエラーになります。正本はデータベースの `gate_calibration` で、その最新行が現在の gate です。
 
 ### flaky テスト一覧 — `flaker status --list flaky`
 

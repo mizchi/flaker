@@ -95,7 +95,7 @@ export const FLAKER_V1_SCHEMAS: Record<DatasetName, JsonSchema> = {
     test_key: STR_OR_NULL, file: STR, title_path: STRINGS, project: STR_OR_NULL, score: NUM_OR_NULL,
     confidence: NUM_OR_NULL, reason: STR, selected: BOOL, created_at: TIME,
   }),
-  misses: datasetRow("misses", "Tests the selector did not select that failed in a full run.", {
+  misses: datasetRow("misses", "Tests the selector did not select that failed in a full real run on the same commit: the latest real selector run per head_sha only, excluding flaky, quarantined and record-quarantined tests.", {
     selector_run_id: STR, test_key: STR, head_sha: STR, ci_run_id: INT, reason: STR, changed_files: STRINGS,
   }),
   gate_calibration: datasetRow("gate_calibration", "Calibration history; the latest row per selector is current.", {

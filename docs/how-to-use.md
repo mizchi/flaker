@@ -290,7 +290,7 @@ The storage tables are internal and may change in any release. The public, versi
 | `quarantine` | Quarantined tests: `reason`, `since`, `source` (`auto` / `manual`) |
 | `co_failures` | "This test failed when this file changed", aggregated: `changed_file`, `co_failures`, `changes`, `strength`. `changes` counts the commits in the window that changed the file and have a result for the test; `co_failures` counts those where the test failed at least once. One failing result on a commit is enough, and every file that commit changed is credited |
 | `selector_verdicts` | A selector's per-test decisions: `score`, `confidence`, `reason`, `selected` |
-| `misses` | Tests the selector did not select that really failed in a full run, one row per verdict. Only `real` selector runs are scored, against real full runs; mutation scoring arrives with the mutation phase |
+| `misses` | The selector's own misses: tests it did not select that really failed in a full run on the same commit, one row per verdict. Only `real` selector runs are scored, against real full runs, and only the latest selector run per `head_sha`, so re-running the selector on a commit does not repeat a miss. A verdict the record itself quarantined (`reason = quarantined`) is not a miss. Mutation scoring arrives with the mutation phase |
 | `gate_calibration` | History of selector gate calibrations. The latest row is the current value |
 
 Runs with `source = mutation` never feed `flaky`, `co_failures` or `misses`.
@@ -321,6 +321,36 @@ flaker query "SELECT * FROM flaker_v1.flaky WHERE is_flaky"
 ```
 
 Runs in a lane with `full = true` have `runs.is_full = true`, and `full = false` forces `false`. For a lane without `full`, a run counts as full when it has results for at least 95% as many tests as the largest run of the same workflow within the preceding `[flaky].window_days` (the run itself included). Renamed or deleted tests therefore do not make a later full run look partial.
+
+### Selector calibration with jev-test-filter
+
+For a step-by-step setup, see [Using flaker with jev-test-filter](jev-test-filter-integration.md). This section is the reference.
+
+flaker compares a selector's decisions with what a full run on the same commit really proved, and tunes the selector's gate from that evidence. With [jev-test-filter](https://github.com/mizchi/jev-test-filter) the loop is:
+
+```bash
+jev-test-filter --context .flaker/context.json …        # writes .jev-test-filter/records/<sha>.json
+flaker import .jev-test-filter --adapter jev
+flaker import --ci                                       # full runs on the same commits
+flaker calibrate --selector                              # appends to gate_calibration
+flaker export --projection jev-context -o .flaker/context.json
+```
+
+`flaker calibrate --selector [name]` joins each real selector record to a full run on its `head_sha`. Only the latest record per `head_sha` counts, so re-running the selector on one commit does not count the same regression twice; mutation records are left out. The ground truth is the tests that failed there, minus flaky and quarantined tests; a failure of a test the record itself quarantined is not the selector's miss and is reported apart. It then replays every record offline through jev's own gate (bundled from `jev-test-filter/gate`, no API calls) over a grid of `cutoff × unsure_below × unsure_margin`. The adoption rule is "tighten at once, loosen with care". If the current gate missed a failure, calibrate switches at once (`tighten`) to a candidate that still selects every test the current gate selects, on every record. Among those it takes the one with the fewest misses, then the fewest selected tests. When no candidate catches every failure, the one with the fewest misses is still adopted if it misses fewer than the current gate. When none misses fewer, the gate is kept and the misses are reported, because selecting more tests would not catch them. Selecting fewer tests (`loosen`) needs zero misses, at least `min_failures` real failures, and a Wilson 95% lower bound of recall of at least `recall_target`. Otherwise the gate is kept, and the reason goes into `rationale` (`keep`). Ties go to the candidate nearest jev's defaults. Each run appends one row to `gate_calibration`; `--dry-run` appends nothing and `--json` prints the result. Failures that match no verdict are listed as `unmatched` and not counted as misses, and the report is split by context digest.
+
+The bound is stricter than it looks. When every real failure is caught, the Wilson 95% lower bound over n failures is n / (n + 3.8415): 20 failures give 0.839, 35 give 0.901 and 50 give 0.929. Because a loosening must have zero misses, the default `recall_target = 0.90` needs at least 35 real failures, all caught, which is more than `min_failures = 20`; the rationale says so when a loosening is withheld. `recall_target = 0.98` would need 189 (0.9801 at 189; 188 gives 0.9800 and falls short).
+
+`flaker export --projection jev-context` writes the context jev-test-filter reads with `--context`. It holds the latest gate from `gate_calibration` with its basis, `skip` (quarantined tests) and `tests` (hints: on how many commits the selector missed a test, and up to five files it failed with, taken from `co_failures` with at least 2 co-failures). Flaky and quarantined tests get no hints. `digest` is the sha256 of `skip` and `tests` only, so a new gate does not change it. The type and JSON Schema are exported from `@mizchi/flaker/contracts/jev-context-v1`. Reading the context needs jev-test-filter 0.1.3 or later. A projection is always JSON; `--format`, `--since`, `--where` and a dataset argument are rejected with exit code 2.
+
+```toml
+[selector]
+type = "jev"             # the only selector
+recall_target = 0.90     # Wilson 95% lower bound of recall needed to loosen
+min_failures = 20        # real failures needed to loosen
+max_hinted_tests = 200   # cap on tests[] in jev-context
+```
+
+Gate values (`cutoff`, `unsure_below`, `unsure_margin`) are never kept in `flaker.toml`, and a `[selector]` that sets one is rejected. The source of truth is `gate_calibration` in the database: its latest row is the current gate.
 
 ### Flaky test listing — `flaker status --list flaky`
 

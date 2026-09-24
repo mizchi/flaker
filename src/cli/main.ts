@@ -125,7 +125,7 @@ Primary commands:
   doctor                                        Verify local environment
   debug <retry|confirm|bisect|diagnose>         Incident investigation
   query <sql>                                   SQL escape hatch
-  export <dataset> [--format …]                 Write a public dataset (flaker_v1)
+  export <dataset> | export --projection <name> Write a public dataset (flaker_v1) or a projection
   explain <topic>                               AI-assisted analysis
   import <file> | import --ci                   Ingest reports or CI artifacts
   report <file> --summary|--diff|--aggregate    Local report shaping

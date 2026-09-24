@@ -3386,7 +3386,7 @@ git commit -m "feat: add the [selector] section: recall target, failure minimum,
 ```ts
 // tests/selector/wilson.test.ts
 import { describe, expect, it } from "vitest";
-import { wilsonLowerBound } from "../../src/cli/selector/wilson.js";
+import { perfectRunsNeeded, wilsonLowerBound } from "../../src/cli/selector/wilson.js";
 
 describe("wilsonLowerBound (95%)", () => {
   it("matches reference values", () => {
@@ -3402,6 +3402,13 @@ describe("wilsonLowerBound (95%)", () => {
 
   it("is 0 with no observations", () => {
     expect(wilsonLowerBound(0, 0)).toBe(0);
+  });
+
+  it("counts the perfect observations a target needs", () => {
+    expect(perfectRunsNeeded(0.9)).toBe(35);
+    expect(perfectRunsNeeded(0.98)).toBe(189);
+    expect(perfectRunsNeeded(0)).toBe(0);
+    expect(perfectRunsNeeded(1)).toBe(Infinity);
   });
 });
 ```
@@ -3423,6 +3430,19 @@ export function wilsonLowerBound(k: number, n: number, z: number = Z95): number 
   const centre = p + z2 / (2 * n);
   const spread = z * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n));
   return (centre - spread) / (1 + z2 / n);
+}
+
+/**
+ * The fewest observations, all successes, whose lower bound reaches `target`:
+ * n / (n + z²) >= target. Infinity when target >= 1, 0 when target <= 0.
+ */
+export function perfectRunsNeeded(target: number, z: number = Z95): number {
+  if (target <= 0) return 0;
+  if (target >= 1) return Infinity;
+  let n = Math.max(1, Math.floor((target * z * z) / (1 - target)));
+  while (wilsonLowerBound(n, n, z) < target) n++;
+  while (n > 1 && wilsonLowerBound(n - 1, n - 1, z) >= target) n--;
+  return n;
 }
 ```
 
@@ -3640,6 +3660,83 @@ describe("calibrateGate", () => {
     expect(DEFAULT_GRID).toContainEqual(DEFAULTS);
     expect(Math.min(...DEFAULT_GRID.map((g) => g.cutoff))).toBeLessThanOrEqual(0.5);
   });
+
+  it("does not count a failure of a test the record quarantined: the selector could not pick it", () => {
+    const r: CalibrationRecord = {
+      selectorRunId: "q", source: "real", contextDigest: null,
+      verdicts: [
+        { testKey: "q:fail", score: 3, confidence: 1, reason: "quarantined" },
+        { testKey: "q:p0", score: 0.2, confidence: 0.9, reason: "below" },
+      ],
+      failures: ["q:fail"],
+    };
+    const d = calibrateGate({ ...base, records: [r], current: DEFAULTS });
+    expect(d.decision).toBe("keep");
+    expect(d.gate).toEqual(DEFAULTS);
+    expect(d.realFailures).toBe(0);
+    expect(d.quarantinedFailures).toBe(1);
+    expect(d.current.missed).toBe(0);
+    expect(d.rationale).toMatch(/1 failure of a quarantined test is not counted/);
+  });
+
+  it("still tightens when no candidate catches every failure, to the fewest misses", () => {
+    const r: CalibrationRecord = {
+      selectorRunId: "u", source: "real", contextDigest: null,
+      verdicts: [
+        { testKey: "u:low", score: 0.3, confidence: 0.9, reason: "below" },
+        { testKey: "u:mid", score: 1.2, confidence: 0.9, reason: "below" },
+        { testKey: "u:p0", score: 0.1, confidence: 0.9, reason: "below" },
+      ],
+      failures: ["u:low", "u:mid"],
+    };
+    const d = calibrateGate({ ...base, records: [r], current: DEFAULTS });
+    expect(d.decision).toBe("tighten");
+    expect(d.current.missed).toBe(2);
+    expect(d.adopted.missed).toBe(1);
+    expect(d.gate).toEqual({ cutoff: 1, unsure_below: 0.5, unsure_margin: 1 });
+    expect(d.rationale).toMatch(/no candidate in the grid catches all/);
+  });
+
+  it("keeps the gate when no candidate misses fewer: selecting more would not catch the miss", () => {
+    const r: CalibrationRecord = {
+      selectorRunId: "z", source: "real", contextDigest: null,
+      verdicts: [
+        { testKey: "z:low", score: 0.3, confidence: 0.9, reason: "below" },
+        { testKey: "z:p0", score: 1.2, confidence: 0.9, reason: "below" },
+      ],
+      failures: ["z:low"],
+    };
+    const d = calibrateGate({ ...base, records: [r], current: DEFAULTS });
+    expect(d.decision).toBe("keep");
+    expect(d.gate).toEqual(DEFAULTS);
+    expect(d.current.missed).toBe(1);
+    expect(d.rationale).toMatch(/no candidate in the grid misses fewer/);
+  });
+
+  it("a tighten candidate keeps every test the current gate selects (no dropped unsure rescues)", () => {
+    const r: CalibrationRecord = {
+      selectorRunId: "s", source: "real", contextDigest: null,
+      verdicts: [
+        { testKey: "s:x", score: 1.6, confidence: 0.9, reason: "below" },
+        { testKey: "s:rescued", score: 1.2, confidence: 0.4, reason: "unsure" },
+      ],
+      failures: ["s:x"],
+    };
+    const d = calibrateGate({ ...base, records: [r], current: DEFAULTS });
+    expect(d.decision).toBe("tighten");
+    expect(d.gate).not.toEqual({ cutoff: 1.5, unsure_below: 0.3, unsure_margin: 0 });
+    expect(d.adopted).toMatchObject({ missed: 0, selected: 2 });
+  });
+
+  it("says a loosening needs zero misses and how many real failures that takes", () => {
+    const current = { cutoff: 1.5, unsure_below: 0.5, unsure_margin: 1 };
+    const few = calibrateGate({ ...base, recallTarget: 0.9, records: many(5, 2.5, [1.6]), current });
+    expect(few.rationale).toMatch(/zero misses/);
+    expect(few.rationale).toMatch(/at least 35 real failures/);
+    const enough = calibrateGate({ ...base, recallTarget: 0.9, records: many(25, 2.5, [1.6]), current });
+    expect(enough.decision).toBe("keep");
+    expect(enough.rationale).toMatch(/below the target 0.9.*at least 35 real failures/);
+  });
 });
 ```
 
@@ -3654,15 +3751,21 @@ describe("calibrateGate", () => {
  * failures a full run proved) and the current gate in, the adopted gate and
  * why out. "Tighten at once, loosen with care":
  *
- * - a candidate that misses any observed failure (real or mutation) is out;
- * - a miss under the current gate switches at once to the fewest-selection
- *   candidate that catches everything (tighten);
- * - selecting fewer tests (loosen) needs >= minFailures real failures and a
- *   Wilson 95% lower bound of real recall >= recallTarget;
+ * - a failure of a test the record quarantined is not the selector's miss:
+ *   it could never pick that test. Such failures are counted apart;
+ * - a miss under the current gate switches at once (tighten) to a candidate
+ *   that selects, on every record, everything the current gate selects. Among
+ *   those: fewest misses, then fewest selected tests. When no candidate
+ *   catches every failure the one with the fewest misses is still adopted;
+ *   when no candidate misses fewer than the current gate, it is kept;
+ * - selecting fewer tests (loosen) needs zero misses, >= minFailures real
+ *   failures and a Wilson 95% lower bound of real recall >= recallTarget.
+ *   With zero misses the bound is n / (n + z^2), so recallTarget 0.90 needs
+ *   at least 35 real failures whatever minFailures says;
  * - otherwise keep, and say why. Ties go to the candidate nearest the defaults.
  */
 import { replaySelected, type GateValues, type ReplayVerdict } from "./replay.js";
-import { wilsonLowerBound } from "./wilson.js";
+import { perfectRunsNeeded, wilsonLowerBound } from "./wilson.js";
 
 export interface CalibrationRecord {
   selectorRunId: string;
@@ -3702,6 +3805,8 @@ export interface CalibrationDecision {
   gate: GateValues;
   records: number;
   realFailures: number;
+  /** Failures of tests the record quarantined: not counted as misses or as evidence. */
+  quarantinedFailures: number;
   recallLb95: number | null;
   rationale: string;
   current: CandidateOutcome;
@@ -3748,6 +3853,28 @@ export function evaluateCandidate(records: readonly CalibrationRecord[], gate: G
   return { gate, selected, missed, realCaught, realMissed };
 }
 
+/** Drop failures of tests a record quarantined; return the records and how many were dropped. */
+function withoutQuarantined(records: readonly CalibrationRecord[]): { records: CalibrationRecord[]; dropped: number } {
+  let dropped = 0;
+  const out = records.map((r) => {
+    const quarantined = new Set(r.verdicts.filter((v) => v.reason === "quarantined" && v.testKey).map((v) => v.testKey!));
+    const failures = r.failures.filter((f) => !quarantined.has(f));
+    dropped += r.failures.length - failures.length;
+    return failures.length === r.failures.length ? r : { ...r, failures };
+  });
+  return { records: out, dropped };
+}
+
+/** Whether `flags` selects, on every record, everything `base` selects. */
+function coversSelection(flags: boolean[][], base: boolean[][]): boolean {
+  return base.every((row, r) => row.every((selected, i) => !selected || flags[r][i]));
+}
+
+const needText = (target: number) => {
+  const n = perfectRunsNeeded(target);
+  return Number.isFinite(n) ? `at least ${n} real failures` : "more real failures than any finite count (recall_target is 1)";
+};
+
 function pickFewest(candidates: CandidateOutcome[], defaults: GateValues): CandidateOutcome {
   return [...candidates].sort((a, b) =>
     a.selected - b.selected
@@ -3756,7 +3883,8 @@ function pickFewest(candidates: CandidateOutcome[], defaults: GateValues): Candi
 }
 
 export function calibrateGate(input: CalibrateInput): CalibrationDecision {
-  const { records, defaults } = input;
+  const { defaults } = input;
+  const { records, dropped: quarantinedFailures } = withoutQuarantined(input.records);
   const realFailures = records.filter((r) => r.source === "real").reduce((n, r) => n + r.failures.length, 0);
   const totalFailures = records.reduce((n, r) => n + r.failures.length, 0);
   const current = evaluateCandidate(records, input.current);
@@ -3772,9 +3900,12 @@ export function calibrateGate(input: CalibrateInput): CalibrationDecision {
   }
   const digestReports = [...byDigest.values()].sort((a, b) => String(a.contextDigest).localeCompare(String(b.contextDigest)));
 
+  const quarantineNote = quarantinedFailures === 0 ? ""
+    : quarantinedFailures === 1 ? "; 1 failure of a quarantined test is not counted"
+    : `; ${quarantinedFailures} failures of quarantined tests are not counted`;
   const decide = (decision: CalibrationDecision["decision"], adopted: CandidateOutcome, rationale: string): CalibrationDecision => ({
-    decision, gate: adopted.gate, records: records.length, realFailures, recallLb95: lb(adopted),
-    rationale, current, adopted, byDigest: digestReports,
+    decision, gate: adopted.gate, records: records.length, realFailures, quarantinedFailures, recallLb95: lb(adopted),
+    rationale: rationale + quarantineNote, current, adopted, byDigest: digestReports,
   });
 
   if (records.length === 0) {
@@ -3788,13 +3919,20 @@ export function calibrateGate(input: CalibrateInput): CalibrationDecision {
   const feasible = candidates.filter((c) => c.missed === 0);
 
   if (current.missed > 0) {
-    if (feasible.length === 0) {
+    const currentFlags = records.map((r) => replaySelected(r.verdicts, input.current));
+    const tighter = candidates.filter((c) =>
+      c.missed < current.missed
+      && coversSelection(records.map((r) => replaySelected(r.verdicts, c.gate)), currentFlags));
+    if (tighter.length === 0) {
       return decide("keep", current,
-        `the current gate misses ${current.missed} of ${totalFailures} failures and no candidate in the grid catches all of them`);
+        `the current gate misses ${current.missed} of ${totalFailures} failures and no candidate in the grid misses fewer, so selecting more tests would not catch them`);
     }
-    const best = pickFewest(feasible, defaults);
-    return decide("tighten", best,
-      `the current gate (${fmt(input.current)}) missed ${current.missed} of ${totalFailures} failures; ${fmt(best.gate)} catches all of them with the fewest selected tests`);
+    const fewestMisses = Math.min(...tighter.map((c) => c.missed));
+    const best = pickFewest(tighter.filter((c) => c.missed === fewestMisses), defaults);
+    const missedText = `the current gate (${fmt(input.current)}) missed ${current.missed} of ${totalFailures} failures`;
+    return decide("tighten", best, best.missed === 0
+      ? `${missedText}; ${fmt(best.gate)} catches all of them with the fewest selected tests while keeping every test the current gate selects`
+      : `${missedText} and no candidate in the grid catches all of them; ${fmt(best.gate)} misses the fewest (${best.missed}) while keeping every test the current gate selects`);
   }
 
   const looser = feasible.filter((c) => c.selected < current.selected);
@@ -3803,14 +3941,14 @@ export function calibrateGate(input: CalibrateInput): CalibrationDecision {
   }
   if (realFailures < input.minFailures) {
     return decide("keep", current,
-      `only ${realFailures} real failures observed; loosening needs at least ${input.minFailures}`);
+      `only ${realFailures} real failures observed; loosening needs at least ${input.minFailures} (min_failures), and because a loosening must have zero misses, ${needText(input.recallTarget)} for the recall lower bound to reach ${input.recallTarget}`);
   }
   const best = pickFewest(looser, defaults);
   const bound = lb(best) ?? 0;
   if (bound < input.recallTarget) {
     return {
       ...decide("keep", current,
-        `recall lower bound ${bound.toFixed(3)} over ${realFailures} real failures is below the target ${input.recallTarget}`),
+        `recall lower bound ${bound.toFixed(3)} over ${realFailures} real failures is below the target ${input.recallTarget}; a loosening must have zero misses, so it needs ${needText(input.recallTarget)}`),
       recallLb95: bound,
     };
   }
@@ -3832,6 +3970,7 @@ git commit -m "feat: decide the selector gate: tighten on any miss, loosen only 
 
 **Files:**
 - Create: `src/cli/selector/ground-truth.ts`, `tests/selector/ground-truth.test.ts`
+- Modify: `tests/datasets/helpers.ts` (`seedSelectorRun` takes an optional `createdAt`)
 
 - [ ] **Step 1: Write the failing test**
 
@@ -3876,6 +4015,28 @@ describe("loadCalibrationRecords", () => {
       { selectorRunId: "sr1", headSha: "H", testKey: await keyFor(store, S, "unknown-to-selector") },
     ]);
   });
+
+  it("loads only real selector runs: a mutation record on a real full run is not scored", async () => {
+    await seedSelectorRun(store, { id: "m1", headSha: "H", source: "mutation", tests: [
+      { testKey: await keyFor(store, S, "known"), file: S, titlePath: ["known"], reason: "below", selected: false, score: 0.4, confidence: 0.9 },
+    ] });
+    const loaded = await loadCalibrationRecords(store, { selector: "jev", since: new Date(0) });
+    expect(loaded.records).toEqual([]);
+    expect(loaded.unmatched).toEqual([]);
+  });
+
+  it("keeps one selector run per head, the latest, so one regression counts once", async () => {
+    const known = await keyFor(store, S, "known");
+    for (const [i, id] of ["old", "mid", "new"].entries()) {
+      await seedSelectorRun(store, { id, headSha: "H", createdAt: new Date(Date.now() - (3 - i) * 60_000), tests: [
+        { testKey: known, file: S, titlePath: ["known"], reason: "below", selected: false, score: 0.4, confidence: 0.9 },
+      ] });
+    }
+    const loaded = await loadCalibrationRecords(store, { selector: "jev", since: new Date(0) });
+    expect(loaded.records.map((r) => r.selectorRunId)).toEqual(["new"]);
+    expect(loaded.records.flatMap((r) => r.failures)).toEqual([known]);
+    expect(loaded.superseded).toBe(2);
+  });
 });
 ```
 
@@ -3898,10 +4059,17 @@ export interface LoadedCalibration {
   records: CalibrationRecord[];
   /** Selector runs with no full run on their head (or no head at all). */
   withoutFullRun: number;
+  /** Earlier selector runs on a head that a later run on the same head replaces. */
+  superseded: number;
   /** Real failures on a record's head that no verdict of that record names. */
   unmatched: UnmatchedFailure[];
 }
 
+/**
+ * Real selector runs in the window, one per head (the latest), joined to the
+ * failures of a full real run on that head. Mutation selector runs are left
+ * out, as in the misses view: they are scored against mutation runs later.
+ */
 export async function loadCalibrationRecords(
   store: MetricStore,
   opts: { selector: string; since: Date },
@@ -3913,12 +4081,12 @@ export async function loadCalibrationRecords(
   }>(
     `SELECT selector_run_id, source, context_digest, head_sha, test_key, score, confidence, reason
      FROM flaker_v1.selector_verdicts
-     WHERE selector = ? AND created_at >= ?::TIMESTAMP`,
+     WHERE selector = ? AND source = 'real' AND created_at >= ?::TIMESTAMP`,
     [opts.selector, since],
   );
   const runIds = await store.raw<{ selector_run_id: string; head_sha: string | null; source: "real" | "mutation"; context_digest: string | null }>(
     `SELECT selector_run_id, head_sha, source, context_digest FROM selector_runs
-     WHERE selector = ? AND created_at >= ?::TIMESTAMP ORDER BY created_at, selector_run_id`,
+     WHERE selector = ? AND source = 'real' AND created_at >= ?::TIMESTAMP ORDER BY created_at, selector_run_id`,
     [opts.selector, since],
   );
   const fullHeads = new Set((await store.raw<{ commit_sha: string }>(
@@ -3940,8 +4108,14 @@ export async function loadCalibrationRecords(
     byRun.set(v.selector_run_id, list);
   }
 
-  const out: LoadedCalibration = { records: [], withoutFullRun: 0, unmatched: [] };
-  for (const run of runIds) {
+  // One record per head: the latest run. Re-running the selector on a commit
+  // must not count the same regression once per run.
+  const latestByHead = new Map<string, (typeof runIds)[number]>();
+  for (const run of runIds) if (run.head_sha !== null) latestByHead.set(run.head_sha, run);
+  const kept = runIds.filter((run) => run.head_sha === null || latestByHead.get(run.head_sha) === run);
+
+  const out: LoadedCalibration = { records: [], withoutFullRun: 0, superseded: runIds.length - kept.length, unmatched: [] };
+  for (const run of kept) {
     if (run.head_sha === null || !fullHeads.has(run.head_sha)) {
       out.withoutFullRun++;
       continue;
@@ -4020,6 +4194,16 @@ describe("runSelectorCalibration", () => {
     expect(r.written).toBe(false);
     expect(await latestGateCalibration(store, "jev")).toBeNull();
   });
+
+  it("retries a same-instant calibration one millisecond later instead of failing on the key", async () => {
+    const now = new Date("2026-09-24T00:00:00.000Z");
+    await runSelectorCalibration({ store, selector: DEFAULT_SELECTOR, windowDays: 3650, dryRun: false, now });
+    const second = await runSelectorCalibration({ store, selector: DEFAULT_SELECTOR, windowDays: 3650, dryRun: false, now });
+    expect(second.written).toBe(true);
+    expect(second.calibratedAt).toBe("2026-09-24T00:00:00.001Z");
+    const [row] = await store.raw<{ n: number }>(`SELECT COUNT(*)::INTEGER AS n FROM gate_calibrations`);
+    expect(row.n).toBe(2);
+  });
 });
 ```
 
@@ -4080,11 +4264,43 @@ export async function latestGateCalibration(
   return row ? (normalizeRow(row, FLAKER_V1_SCHEMAS.gate_calibration) as unknown as FlakerV1GateCalibrationRow) : null;
 }
 
+/** Same-instant collisions on (selector, calibrated_at) are retried this many times, 1 ms apart. */
+const APPEND_ATTEMPTS = 5;
+
+const isKeyCollision = (error: unknown) =>
+  error instanceof Error && /primary key|duplicate key|constraint/i.test(error.message);
+
+/** Append one row; on a same-instant key collision retry at +1 ms. Returns the instant written. */
+async function appendGateCalibration(
+  store: MetricStore,
+  selector: string,
+  at: Date,
+  decision: CalibrationDecision,
+): Promise<Date> {
+  for (let attempt = 0; ; attempt++) {
+    const calibratedAt = new Date(at.getTime() + attempt);
+    try {
+      await store.raw(
+        `INSERT INTO gate_calibrations (selector, calibrated_at, cutoff, unsure_below, unsure_margin, records, real_failures, recall_lb95, decision, rationale)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          selector, calibratedAt, decision.gate.cutoff, decision.gate.unsure_below, decision.gate.unsure_margin,
+          decision.records, decision.realFailures, decision.recallLb95, decision.decision, decision.rationale,
+        ],
+      );
+      return calibratedAt;
+    } catch (error) {
+      if (!isKeyCollision(error) || attempt + 1 >= APPEND_ATTEMPTS) throw error;
+    }
+  }
+}
+
 export interface SelectorCalibrationResult {
   selector: string;
   calibratedAt: string;
   decision: CalibrationDecision;
   withoutFullRun: number;
+  superseded: number;
   unmatched: UnmatchedFailure[];
   written: boolean;
 }
@@ -4114,19 +4330,13 @@ export async function runSelectorCalibration(opts: {
     recallTarget: opts.selector.recall_target,
     minFailures: opts.selector.min_failures,
   });
+  let calibratedAt = now;
   if (!opts.dryRun) {
-    await opts.store.raw(
-      `INSERT INTO gate_calibrations (selector, calibrated_at, cutoff, unsure_below, unsure_margin, records, real_failures, recall_lb95, decision, rationale)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        name, now, decision.gate.cutoff, decision.gate.unsure_below, decision.gate.unsure_margin,
-        decision.records, decision.realFailures, decision.recallLb95, decision.decision, decision.rationale,
-      ],
-    );
+    calibratedAt = await appendGateCalibration(opts.store, name, now, decision);
   }
   return {
-    selector: name, calibratedAt: now.toISOString(), decision,
-    withoutFullRun: loaded.withoutFullRun, unmatched: loaded.unmatched, written: !opts.dryRun,
+    selector: name, calibratedAt: calibratedAt.toISOString(), decision,
+    withoutFullRun: loaded.withoutFullRun, superseded: loaded.superseded, unmatched: loaded.unmatched, written: !opts.dryRun,
   };
 }
 
@@ -4136,7 +4346,7 @@ export function formatSelectorCalibration(r: SelectorCalibrationResult): string 
   const d = r.decision;
   const lines = [
     `Selector gate calibration (${r.selector})`,
-    `  records with a full run:  ${d.records} (${r.withoutFullRun} without one)`,
+    `  records with a full run:  ${d.records} (${r.withoutFullRun} without one, ${r.superseded} superseded by a later run on the same head)`,
     `  real failures:            ${d.realFailures}`,
     `  current gate:             ${g(d.current.gate)} → selected ${d.current.selected}, missed ${d.current.missed}`,
     `  decision:                 ${d.decision} → ${g(d.gate)} (selected ${d.adopted.selected}, missed ${d.adopted.missed})`,
@@ -4205,6 +4415,7 @@ async function selectorCalibrateAction(opts: CalibrateCliOpts): Promise<void> {
         calibrated_at: result.calibratedAt,
         decision: result.decision,
         without_full_run: result.withoutFullRun,
+        superseded: result.superseded,
         unmatched: result.unmatched,
         written: result.written,
       }, null, 2));
@@ -4267,7 +4478,7 @@ function input(over: Partial<JevContextInput> = {}): JevContextInput {
     ],
     quarantine: [{ test_key: "q" }],
     flaky: [{ test_key: "flaky", is_flaky: true }, { test_key: "init", is_flaky: false }],
-    misses: [{ test_key: "init", selector_run_id: "s1" }, { test_key: "init", selector_run_id: "s2" }],
+    misses: [{ test_key: "init", selector_run_id: "s1", head_sha: "h1" }, { test_key: "init", selector_run_id: "s2", head_sha: "h2" }],
     co_failures: [
       ...["a", "b", "c", "d", "e", "f"].map((f, i) => ({ changed_file: `src/${f}.ts`, test_key: "init", co_failures: 2 + i, strength: 0.5 })),
       { changed_file: "src/cli/config.ts", test_key: "init", co_failures: 3, strength: 0.9 },
@@ -4319,6 +4530,54 @@ describe("buildJevContext", () => {
     expect(a.digest).toMatch(/^sha256:[0-9a-f]{64}$/);
     const c = buildJevContext(input({ quarantine: [] }));
     expect(c.digest).not.toBe(a.digest);
+  });
+
+  it("counts misses per head, not per selector run", () => {
+    const ctx = buildJevContext(input({
+      misses: [{ test_key: "init", selector_run_id: "s1", head_sha: "h1" }, { test_key: "init", selector_run_id: "s2", head_sha: "h1" }],
+    }));
+    expect(ctx.tests.find((x) => x.file === "tests/cli/init.test.ts")?.missed).toBe(1);
+  });
+
+  it("merges test_keys that share a name before ranking, whatever the row order", () => {
+    const variants = [
+      { test_key: "v1", file: "tests/v.test.ts", title_path: ["v"], variant: { shard: "1" } },
+      { test_key: "v2", file: "tests/v.test.ts", title_path: ["v"], variant: { shard: "2" } },
+    ];
+    const over = {
+      misses: [{ test_key: "v1", selector_run_id: "s1", head_sha: "h1" }, { test_key: "v2", selector_run_id: "s2", head_sha: "h2" }],
+      co_failures: [
+        { changed_file: "src/v.ts", test_key: "v1", co_failures: 2, strength: 0.4 },
+        { changed_file: "src/v.ts", test_key: "v2", co_failures: 3, strength: 0.8 },
+        { changed_file: "src/w.ts", test_key: "v2", co_failures: 2, strength: 0.5 },
+      ],
+    };
+    const a = buildJevContext(input({ ...over, tests: [...input().tests, ...variants] }));
+    const b = buildJevContext(input({
+      misses: [...over.misses].reverse(), co_failures: [...over.co_failures].reverse(),
+      tests: [...variants].reverse().concat(input().tests),
+    }));
+    const entries = a.tests.filter((x) => x.file === "tests/v.test.ts");
+    expect(entries).toEqual([{ file: "tests/v.test.ts", title_path: ["v"], missed: 2, failed_with: ["src/v.ts", "src/w.ts"] }]);
+    expect(b.digest).toBe(a.digest);
+    expect(b.tests).toEqual(a.tests);
+  });
+
+  it("a merged name counts the commits it was missed on: two variants missing on one commit give 1", () => {
+    const variants = [
+      { test_key: "v1", file: "tests/v.test.ts", title_path: ["v"], variant: { shard: "1" } },
+      { test_key: "v2", file: "tests/v.test.ts", title_path: ["v"], variant: { shard: "2" } },
+    ];
+    const sameCommit = buildJevContext(input({
+      tests: [...input().tests, ...variants],
+      misses: [{ test_key: "v1", selector_run_id: "s1", head_sha: "h1" }, { test_key: "v2", selector_run_id: "s1", head_sha: "h1" }],
+    }));
+    expect(sameCommit.tests.find((x) => x.file === "tests/v.test.ts")?.missed).toBe(1);
+    const twoCommits = buildJevContext(input({
+      tests: [...input().tests, ...variants],
+      misses: [{ test_key: "v1", selector_run_id: "s1", head_sha: "h1" }, { test_key: "v2", selector_run_id: "s2", head_sha: "h2" }],
+    }));
+    expect(twoCommits.tests.find((x) => x.file === "tests/v.test.ts")?.missed).toBe(2);
   });
 });
 ```
@@ -4423,7 +4682,8 @@ export interface JevContextInput {
   tests: Array<{ test_key: string; file: string; title_path: string[]; variant: Record<string, string> | null }>;
   quarantine: Array<{ test_key: string }>;
   flaky: Array<{ test_key: string; is_flaky: boolean }>;
-  misses: Array<{ test_key: string; selector_run_id: string }>;
+  /** flaker_v1.misses: already one row per (latest real selector run on a head, test). */
+  misses: Array<{ test_key: string; selector_run_id: string; head_sha: string }>;
   co_failures: Array<{ changed_file: string; test_key: string; co_failures: number; strength: number }>;
   gate: {
     cutoff: number; unsure_below: number; unsure_margin: number;
@@ -4449,17 +4709,18 @@ export function buildJevContext(input: JevContextInput): JevContextV1 {
   const quarantined = new Set(input.quarantine.map((q) => q.test_key));
   const flaky = new Set(input.flaky.filter((f) => f.is_flaky).map((f) => f.test_key));
 
-  const skip: JevContextSkipV1[] = [...quarantined]
-    .flatMap((key) => {
-      const n = names.get(key);
-      return n ? [{ ...n, reason: "quarantined" as const }] : [];
-    })
-    .sort((a, b) => cmp(nameKey(a), nameKey(b)));
+  const skipByName = new Map<string, JevContextSkipV1>();
+  for (const key of quarantined) {
+    const n = names.get(key);
+    if (n) skipByName.set(nameKey(n), { ...n, reason: "quarantined" });
+  }
+  const skip: JevContextSkipV1[] = [...skipByName.values()].sort((a, b) => cmp(nameKey(a), nameKey(b)));
 
+  // Misses count per head: one commit is one piece of evidence.
   const missed = new Map<string, Set<string>>();
   for (const m of input.misses) {
     const set = missed.get(m.test_key) ?? new Set<string>();
-    set.add(m.selector_run_id);
+    set.add(m.head_sha);
     missed.set(m.test_key, set);
   }
   const hints = new Map<string, Array<{ file: string; co: number; strength: number }>>();
@@ -4470,15 +4731,37 @@ export function buildJevContext(input: JevContextInput): JevContextV1 {
     hints.set(c.test_key, list);
   }
 
-  const candidates = [...new Set([...missed.keys(), ...hints.keys()])]
-    .filter((key) => !quarantined.has(key) && !flaky.has(key) && names.has(key))
-    .map((key) => {
-      const files = (hints.get(key) ?? [])
+  // jev names a test by file + title_path (+ project), so test_keys that share
+  // a name (other variant keys) merge into one entry before ranking: missed is
+  // the number of distinct commits any of them was missed on, failed_with keeps each file once at its strongest. A name with a
+  // quarantined key is in skip already; flaky keys contribute nothing.
+  const quarantinedNames = new Set([...quarantined].flatMap((key) => {
+    const n = names.get(key);
+    return n ? [nameKey(n)] : [];
+  }));
+  const merged = new Map<string, { name: JevContextNameV1; heads: Set<string>; files: Map<string, { co: number; strength: number }> }>();
+  for (const key of [...new Set([...missed.keys(), ...hints.keys()])].sort(cmp)) {
+    const name = names.get(key);
+    if (!name || flaky.has(key) || quarantined.has(key) || quarantinedNames.has(nameKey(name))) continue;
+    const entry = merged.get(nameKey(name)) ?? { name, heads: new Set<string>(), files: new Map() };
+    for (const head of missed.get(key) ?? []) entry.heads.add(head);
+    for (const h of hints.get(key) ?? []) {
+      const prev = entry.files.get(h.file);
+      if (!prev || h.strength > prev.strength || (h.strength === prev.strength && h.co > prev.co)) {
+        entry.files.set(h.file, { co: h.co, strength: h.strength });
+      }
+    }
+    merged.set(nameKey(name), entry);
+  }
+
+  const candidates = [...merged.values()]
+    .map((entry) => {
+      const files = [...entry.files.entries()]
+        .map(([file, v]) => ({ file, ...v }))
         .sort((a, b) => b.strength - a.strength || b.co - a.co || cmp(a.file, b.file));
       return {
-        key,
-        name: names.get(key)!,
-        missed: missed.get(key)?.size ?? 0,
+        name: entry.name,
+        missed: entry.heads.size,
         best: files[0]?.strength ?? 0,
         failedWith: files.slice(0, maxFiles).map((f) => f.file),
       };
@@ -4508,6 +4791,8 @@ export function buildJevContext(input: JevContextInput): JevContextV1 {
   };
 }
 ```
+
+Same-name merge: test_keys that share file + title_path (+ project) merge into one entry before ranking. `missed` is the number of distinct commits any of them was missed on, and `failed_with` keeps each file once at its strongest. `misses` rows are already one per (latest real selector run on a head, test), without record-quarantined verdicts.
 
 Order check for the test: init's co-failures are config.ts (0.9, 3) and then a–f (all strength 0.5, co 2..7). They sort by co desc, giving f(7), e(6), d(5), c(4), b(3), a(2). Top 5: config, f, e, d, c. That matches the expected array. Key order in the expected objects does not matter for `toEqual`.
 
@@ -4713,15 +4998,18 @@ The spec suggests the `dev eval-fixture` tooling for this. That generator target
 ```ts
 // tests/integration-test-db.test.ts
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { loadRecord, replay } from "jev-test-filter";
 import { gateOptions } from "jev-test-filter/gate";
+import type { MetricStore } from "../src/cli/storage/types.js";
 import type { DuckDBStore } from "../src/cli/storage/duckdb.js";
-import { DEFAULT_SELECTOR } from "../src/cli/config.js";
+import { DEFAULT_SELECTOR, loadConfig } from "../src/cli/config.js";
+import { openDatasetStore } from "../src/cli/datasets/open.js";
 import { runImport } from "../src/cli/commands/import/report.js";
-import { runImportSelector } from "../src/cli/commands/import/selector.js";
+import { runImportSelector, type ImportSelectorResult } from "../src/cli/commands/import/selector.js";
 import { runSelectorCalibration } from "../src/cli/commands/calibrate/selector.js";
 import { runProjection } from "../src/cli/projections/index.js";
 import type { JevContextV1 } from "../src/cli/contracts/jev-context-v1.js";
@@ -4731,6 +5019,43 @@ import { memoryStore } from "./datasets/helpers.js";
 
 const REPORT = resolve(import.meta.dirname, "fixtures/vitest-init-report.json");
 const HEAD = "c0ffee0000000000000000000000000000000002";
+const FLAKER_CLI = resolve(import.meta.dirname, "../dist/cli/main.js");
+const JEV_CLI = resolve(import.meta.dirname, "../node_modules/jev-test-filter/dist/cli.js");
+
+/**
+ * Two full CI runs (an earlier commit and HEAD) where config.ts changed and
+ * `init writes toml` failed, and a jev record on HEAD that left the failing
+ * test out. Returns the record's path and the selector import result.
+ */
+async function seedLoop(store: MetricStore, dir: string): Promise<{ recordPath: string; imported: ImportSelectorResult }> {
+  for (const sha of ["b0000000000000000000000000000000000000001", HEAD]) {
+    await store.insertCommitChanges(sha, [{ filePath: "src/cli/config.ts", changeType: "modified", additions: 1, deletions: 0 }]);
+    await runImport({ store, filePath: REPORT, adapterType: "vitest", commitSha: sha, branch: "main", source: "ci", workflowName: "ci" });
+    // runImport uses Date.now() as the run id; keep the two runs distinct.
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  const record = {
+    version: 2, createdAt: new Date().toISOString(), base: "origin/main",
+    head_sha: HEAD, base_sha: null, context_digest: null,
+    gate: { cutoff: 2, unsure_below: 0.5, unsure_margin: 1 }, framework: "vitest",
+    tests: [
+      { file: "tests/init.test.ts", titlePath: ["init", "writes toml"], line: 3, endLine: 5, framework: "vitest", dynamic: false },
+      { file: "tests/init.test.ts", titlePath: ["init", "reads toml"], line: 7, endLine: 9, framework: "vitest", dynamic: false },
+    ],
+    touched: [], quarantined: [],
+    answers: { q0000: { value: 1.2, confidence: 0.9 }, q0001: { value: 0.2, confidence: 0.9 } },
+    fallback: null,
+  };
+  const recordPath = join(dir, `${HEAD}.json`);
+  writeFileSync(recordPath, JSON.stringify(record));
+  const imported = await runImportSelector({ store, path: recordPath, adapter: "jev" });
+  return { recordPath, imported };
+}
+
+/** The environment without GIT_*: a pre-push hook exports GIT_DIR, which would point git at this repository. */
+function scrubbedEnv(): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
+}
 
 describe("test-db loop", () => {
   let store: DuckDBStore;
@@ -4744,30 +5069,7 @@ describe("test-db loop", () => {
   });
 
   it("a miss tightens the gate, the context carries it, and jev's replay then selects the test", async () => {
-    // Two full CI runs (earlier commit and HEAD) where config.ts changed and `init writes toml` failed.
-    for (const sha of ["b0000000000000000000000000000000000000001", HEAD]) {
-      await store.insertCommitChanges(sha, [{ filePath: "src/cli/config.ts", changeType: "modified", additions: 1, deletions: 0 }]);
-      await runImport({ store, filePath: REPORT, adapterType: "vitest", commitSha: sha, branch: "main", source: "ci", workflowName: "ci" });
-      // runImport uses Date.now() as the run id; keep the two runs distinct.
-      await new Promise((r) => setTimeout(r, 5));
-    }
-    // jev judged HEAD and left the failing test out.
-    const record = {
-      version: 2, createdAt: new Date().toISOString(), base: "origin/main",
-      head_sha: HEAD, base_sha: null, context_digest: null,
-      gate: { cutoff: 2, unsure_below: 0.5, unsure_margin: 1 }, framework: "vitest",
-      tests: [
-        { file: "tests/init.test.ts", titlePath: ["init", "writes toml"], line: 3, endLine: 5, framework: "vitest", dynamic: false },
-        { file: "tests/init.test.ts", titlePath: ["init", "reads toml"], line: 7, endLine: 9, framework: "vitest", dynamic: false },
-      ],
-      touched: [], quarantined: [],
-      answers: { q0000: { value: 1.2, confidence: 0.9 }, q0001: { value: 0.2, confidence: 0.9 } },
-      fallback: null,
-    };
-    const recordPath = join(dir, `${HEAD}.json`);
-    writeFileSync(recordPath, JSON.stringify(record));
-
-    const imported = await runImportSelector({ store, path: recordPath, adapter: "jev" });
+    const { recordPath, imported } = await seedLoop(store, dir);
     expect(imported).toMatchObject({ imported: 1, resolved: 2, unresolved: 0 });
 
     const misses = await store.raw<{ n: number }>(`SELECT COUNT(*)::INTEGER AS n FROM flaker_v1.misses`);
@@ -4789,7 +5091,66 @@ describe("test-db loop", () => {
     expect(again.verdicts.find((v) => v.test.titlePath[1] === "writes toml")?.selected).toBe(true);
   });
 });
+
+describe("jev-test-filter's own CLI reads the exported context", () => {
+  it("accepts `flaker export --projection jev-context` output and rejects a tampered version", async () => {
+    const project = mkdtempSync(join(tmpdir(), "flaker-jev-cli-"));
+    writeFileSync(
+      join(project, "flaker.toml"),
+      `[repo]\nowner = "a"\nname = "b"\n[storage]\npath = ".flaker/data"\n[affected]\nresolver = "git"\nconfig = ""\n`,
+    );
+    // The duckdb binding keeps a closed database's file lock until the
+    // instance is garbage-collected, so a child process could not open it.
+    // Seed a scratch database, checkpoint it, and copy it into place.
+    const scratch = mkdtempSync(join(tmpdir(), "flaker-jev-seed-"));
+    writeFileSync(join(scratch, "flaker.toml"), readFileSync(join(project, "flaker.toml"), "utf8"));
+    const store = await openDatasetStore(scratch, loadConfig(scratch));
+    try {
+      await seedLoop(store, scratch);
+      await store.addQuarantine({ suite: "tests/init.test.ts", testName: "init reads toml" }, "manual");
+      await runSelectorCalibration({ store, selector: DEFAULT_SELECTOR, windowDays: 90, dryRun: false });
+      await store.raw("CHECKPOINT");
+    } finally {
+      await store.close();
+    }
+    mkdirSync(join(project, ".flaker"));
+    copyFileSync(join(scratch, ".flaker/data"), join(project, ".flaker/data"));
+    expect(existsSync(join(scratch, ".flaker/data.wal"))).toBe(false);
+
+    const env = scrubbedEnv();
+    const exported = spawnSync("node", [FLAKER_CLI, "export", "--projection", "jev-context", "-o", "context.json"], { cwd: project, env, encoding: "utf8" });
+    expect(exported.status, exported.stderr).toBe(0);
+    const contextPath = join(project, "context.json");
+    const ctx = JSON.parse(readFileSync(contextPath, "utf8")) as JevContextV1;
+    expect(ctx.skip.length).toBeGreaterThan(0);
+    expect(ctx.tests.length).toBeGreaterThan(0);
+
+    // A git repository holding a test file, for jev to extract from.
+    const repo = mkdtempSync(join(tmpdir(), "flaker-jev-repo-"));
+    mkdirSync(join(repo, "tests"));
+    writeFileSync(join(repo, "tests/init.test.ts"), `import { it } from "vitest";\nit("writes toml", () => {});\n`);
+    const git = (...args: string[]) => {
+      const res = spawnSync("git", ["-c", "user.email=t@example.com", "-c", "user.name=t", ...args], { cwd: repo, env, encoding: "utf8" });
+      expect(res.status, res.stderr).toBe(0);
+    };
+    git("init", "-q");
+    git("add", ".");
+    git("commit", "-qm", "init");
+
+    const jev = (path: string) => spawnSync("node", [JEV_CLI, "--dry-run", "--context", path], { cwd: repo, env, encoding: "utf8" });
+    const ok = jev(contextPath);
+    expect(ok.status, ok.stderr).toBe(0);
+
+    const tamperedPath = join(project, "context-v2.json");
+    writeFileSync(tamperedPath, JSON.stringify({ ...ctx, version: 2 }));
+    const bad = jev(tamperedPath);
+    expect(bad.status).toBe(2);
+    expect(bad.stderr).toMatch(/unsupported context version 2; expected 1/);
+  });
+});
 ```
+
+The second test runs jev-test-filter's own CLI (`dist/cli.js --dry-run --context <file>`) on the file `flaker export --projection jev-context` wrote: exit 0, and exit 2 for a tampered `version`. The duckdb binding holds a closed database's lock until GC, so the test seeds a scratch database, checkpoints it and copies it into place before spawning the CLI. GIT_* variables are scrubbed from the child environment.
 
 `gateOptions(ctx.gate)` receives a `JevContextGateV1`. It only reads `cutoff`, `unsure_below` and `unsure_margin`, which is the same shape jev's `RecordGate` uses.
 
@@ -4819,7 +5180,7 @@ flaker calibrate --selector                              # appends to gate_calib
 flaker export --projection jev-context -o .flaker/context.json
 ```
 
-State the adoption rule in one paragraph. Put the numbers from open question 2 in the docs as they are: with the defaults, loosening needs about 189 real failures. Document `[selector]`, and say that gate values are never kept in `flaker.toml`.
+State the adoption rule in one paragraph. Put the numbers from open question 2 in the docs: a loosening needs zero misses, so the default `recall_target = 0.90` needs at least 35 real failures (more than `min_failures = 20`), and 0.98 would need 189. Document `[selector]`, and say that gate values are never kept in `flaker.toml`.
 - [ ] **Step 3:** CHANGELOG `### Added`: `flaker calibrate --selector [name]`, `flaker export --projection jev-context`, `[selector]` (`recall_target`, `min_failures`, `max_hinted_tests`), `@mizchi/flaker/contracts/jev-context-v1`. Add a `### Requires` line saying jev-test-filter 0.1.3 or later is needed to read the context.
 - [ ] **Step 4:** Verify and commit:
 

@@ -677,6 +677,7 @@ skip_flaky_tagged = true
 - [Operations Guide (ja)](https://github.com/mizchi/flaker/blob/main/docs/operations-guide.ja.md)
 - [Operations Guide](https://github.com/mizchi/flaker/blob/main/docs/operations-guide.md)
 - [Detailed Command Reference](https://github.com/mizchi/flaker/blob/main/docs/how-to-use.md)
+- [Using flaker with jev-test-filter](https://github.com/mizchi/flaker/blob/main/docs/jev-test-filter-integration.md) / [(ja)](https://github.com/mizchi/flaker/blob/main/docs/jev-test-filter-integration.ja.md)
 - [Migrating from 0.12.x to 0.13.0 (ja)](https://github.com/mizchi/flaker/blob/main/docs/migration-0.12-to-0.13.ja.md)
 - [Migrating from 0.12.x to 0.13.0](https://github.com/mizchi/flaker/blob/main/docs/migration-0.12-to-0.13.md)
 - [Why flaker](https://github.com/mizchi/flaker/blob/main/docs/why-flaker.md)

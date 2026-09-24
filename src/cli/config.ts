@@ -115,6 +115,32 @@ export interface FlakerConfig {
   sampling?: SamplingConfig;
   gate?: Partial<Record<GateName, GateConfig>>;
   promotion: PromotionThresholds;
+  selector?: Partial<SelectorConfig>;
+}
+
+export interface SelectorConfig {
+  type: "jev";
+  /** Loosening needs the Wilson 95% lower bound of recall to reach this. */
+  recall_target: number;
+  /** Loosening needs at least this many real (non-mutation) failures. */
+  min_failures: number;
+  /** jev-context carries hints for at most this many tests. */
+  max_hinted_tests: number;
+}
+
+export const DEFAULT_SELECTOR: SelectorConfig = {
+  type: "jev",
+  recall_target: 0.9,
+  min_failures: 20,
+  max_hinted_tests: 200,
+};
+
+export function resolveSelectorConfig(config: FlakerConfig): SelectorConfig {
+  const merged = { ...DEFAULT_SELECTOR, ...(config.selector ?? {}) };
+  if (merged.type !== "jev") {
+    throw new FlakerUsageError(`[selector] type "${String(merged.type)}" is not supported; the only selector is "jev"`);
+  }
+  return merged;
 }
 
 export type ConfigWarningCode =
@@ -300,6 +326,17 @@ function checkLegacyKeys(parsed: Record<string, unknown>): void {
       errors.map((e) => `  ${e}`).join("\n")
     );
   }
+
+  const selector = parsed.selector;
+  if (isTable(selector)) {
+    const gateKeys = ["cutoff", "unsure_below", "unsure_margin"].filter((key) => key in selector);
+    if (gateKeys.length > 0) {
+      throw new FlakerUsageError(
+        `flaker.toml sets values that belong in the database:\n` +
+        gateKeys.map((key) => `  [selector] ${key} is not kept in flaker.toml; gate values live in the gate_calibration dataset (run \`flaker calibrate --selector\`)`).join("\n")
+      );
+    }
+  }
 }
 
 export function loadConfig(dir: string): FlakerConfig {
@@ -384,6 +421,18 @@ export function validateConfigRanges(config: FlakerConfig): ConfigRangeError[] {
   check("promotion.false_negative_rate_max_percentage", config.promotion.false_negative_rate_max_percentage, 0, 100, "0-100");
   check("promotion.pass_correlation_min_percentage", config.promotion.pass_correlation_min_percentage, 0, 100, "0-100");
   check("promotion.holdout_fnr_max_percentage", config.promotion.holdout_fnr_max_percentage, 0, 100, "0-100");
+
+  if (config.selector) {
+    check("selector.recall_target", config.selector.recall_target, 0, 1, "0.0-1.0");
+    for (const key of ["min_failures", "max_hinted_tests"] as const) {
+      const value = config.selector[key];
+      if (typeof value === "number" && !Number.isInteger(value)) {
+        errors.push({ path: `selector.${key}`, value, expected: "an integer >=0" });
+      } else {
+        check(`selector.${key}`, value, 0, Number.MAX_SAFE_INTEGER, ">=0");
+      }
+    }
+  }
 
   try {
     normalizeWorkflowLanes(config.workflow_lanes);
