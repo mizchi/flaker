@@ -17,9 +17,10 @@ flaker が jev を起動したりモデルを呼んだりすることはあり�
 
 ## 前提
 
-- flaker 0.14.0 以降と jev-test-filter 0.1.3 以降。
+- flaker 0.14.0 以降と jev-test-filter 0.1.3 以降 (`pnpm add -D jev-test-filter`)。jev が問い合わせるには `TYPESAFE_API_KEY` が必要です。ないと全テストを走らせるだけで record を書かないので、flaker が取り込むものがありません。
 - jev が採点したコミットの一部に full run があること。full run はテストスイート全体を走らせた run です。何が落ちたかを確定できるのは full run だけなので、flaker は full run のあるコミットでしか jev の選択を比較しません。どの run が full かは `[workflow_lanes]` で指定するか、テスト件数から推定させます ([`runs.is_full`](how-to-use.ja.md#workflow_lanes-と-runsis_full) を参照)。
-- その full run の結果が flaker に入っていること (`flaker import --ci` か `flaker import <report>`)。
+- その full run の結果が、走ったコミットに紐づいて flaker に入っていること。`flaker import --ci` ならそうなります。report を手で取り込むときは `--commit <sha>` が必要です。付けないとどのコミットにも一致しないローカル id で保存されます。full と数えさせるには、`[workflow_lanes]` で `full = true` にした lane を `--lane` で付けます (または `--workflow-name` を付けて、同じ workflow のほかの run と件数で比べさせます): `flaker import report.json --commit $(git rev-parse HEAD) --lane full-batch`。
+- hint を出すには、各コミットで変わったファイルが必要です。`flaker import --ci` と `flaker run` は記録しますが、`flaker import <report>` は記録しません。ない場合、context には gate と `skip` だけが入り、テスト別の hint は入りません。
 
 ## 設定
 
@@ -64,11 +65,13 @@ flaker import --ci
 flaker calibrate --selector
 ```
 
-1〜3 は変更ごとに走らせます。4〜5 は、jev が採点したコミットのどれかに full run があって初めて意味を持ちます。それまでは `calibrate --selector` は gate を維持し、`no selector record has a full run on its head commit yet` と表示します。
+1〜3 は変更ごとに走らせます。4〜5 は、jev が採点したコミットのどれかに full run があって初めて意味を持ちます。それまでは `calibrate --selector` は gate を維持し、`no selector record has a full run on its head commit yet` と表示します。calibration が見るのは直近 90 日分の record で、`--window-days` で変えられます。
 
 3 と 4 の順番は問いません。flaker がまだ知らないテストはテストキーなしで保存され、結果が入った後の次の selector import か `calibrate --selector` で照合されます。
 
 ### CI で使う
+
+calibration は多くのコミットの record と full run を比べるので、flaker の DB は 1 つの job より長く残す必要があります。CI が run をまたいで状態を残せる場所 (cache、次の run の最初に復元する artifact、永続的な runner 上の定期 job など) に置いてください。
 
 jev と flaker はたいてい別の job で動きます。2 つのファイルを artifact で受け渡してください。
 
@@ -118,7 +121,7 @@ dataset の一覧は [flaker_v1](how-to-use.ja.md#flaker-export--公開-dataset-
 | 症状 | 原因 |
 |---|---|
 | `calibrate --selector` が "no selector record has a full run on its head commit yet" で維持する | jev が採点したコミットに full run がない。`flaker_v1.runs.is_full` と `[workflow_lanes]` を確認する。 |
-| `unmatched` にテストが多い | その結果がまだ flaker にない、または jev と reporter でファイルパスや title が違う。`flaker_v1.tests.file` / `title_path` を record と見比べる。 |
-| `flaker import --adapter jev` が record を skip する | その record は全件実行に fallback しており (`fallback` が設定されている)、判定を持たない。 |
+| `unmatched` にテストが多い | jev の record のどの判定にも対応しない full run の失敗。jev と reporter でファイルパスや title が違うか、jev がそのテストを見つけていない。`flaker_v1.tests.file` / `title_path` を record の `tests` と見比べる。 |
+| `flaker import --adapter jev` で record が見つからない | jev は run が完了したときだけ record を書く。全件実行に fallback した run (API key がない、API エラー) は何も書かない。`fallback` が設定された record も flaker は skip するが、そういう record は手作りか古いものに限られる。 |
 | jev が `--context` で exit 2 になる | version 1 の context でないか、形式が合っていない。同じ版の flaker で作り直す。 |
 | gate が変わっても jev の record の `context_digest` が変わらない | 想定どおり。digest は hint と `skip` だけを対象にし、gate は含まない。 |

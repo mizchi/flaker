@@ -320,19 +320,22 @@ function checkLegacyKeys(parsed: Record<string, unknown>): void {
     }
   }
 
-  if (isTable(parsed.selector)) {
-    for (const key of ["cutoff", "unsure_below", "unsure_margin"]) {
-      if (key in parsed.selector) {
-        errors.push(`[selector] ${key} is not kept in flaker.toml; gate values live in the gate_calibration dataset (run \`flaker calibrate --selector\`)`);
-      }
-    }
-  }
-
   if (errors.length > 0) {
     throw new FlakerUsageError(
       `flaker.toml uses removed or renamed keys (see docs/migration-0.12-to-0.13.md and docs/how-to-use.md#config-migration):\n` +
       errors.map((e) => `  ${e}`).join("\n")
     );
+  }
+
+  const selector = parsed.selector;
+  if (isTable(selector)) {
+    const gateKeys = ["cutoff", "unsure_below", "unsure_margin"].filter((key) => key in selector);
+    if (gateKeys.length > 0) {
+      throw new FlakerUsageError(
+        `flaker.toml sets values that belong in the database:\n` +
+        gateKeys.map((key) => `  [selector] ${key} is not kept in flaker.toml; gate values live in the gate_calibration dataset (run \`flaker calibrate --selector\`)`).join("\n")
+      );
+    }
   }
 }
 

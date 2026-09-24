@@ -31,6 +31,11 @@ describe("[selector]", () => {
     expect(() => loadConfig(withToml(`[selector]\ncutoff = 1.5`))).toThrow(/gate_calibration/);
   });
 
+  it("does not call a gate value in [selector] a removed or renamed key", () => {
+    expect(() => loadConfig(withToml(`[selector]\ncutoff = 1.5`))).toThrow(/^flaker\.toml sets values that belong in the database:/);
+    expect(() => loadConfig(withToml(`[selector]\ncutoff = 1.5`))).not.toThrow(/removed or renamed/);
+  });
+
   it("range-checks recall_target", () => {
     const errors = validateConfigRanges(loadConfig(withToml(`[selector]\nrecall_target = 1.5`)));
     expect(errors.map((e) => e.path)).toContain("selector.recall_target");

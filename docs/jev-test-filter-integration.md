@@ -17,9 +17,10 @@ flaker never runs jev and never calls a model. Calibration replays stored answer
 
 ## Requirements
 
-- flaker 0.14.0 or later, and jev-test-filter 0.1.3 or later.
+- flaker 0.14.0 or later, and jev-test-filter 0.1.3 or later (`pnpm add -D jev-test-filter`). jev needs `TYPESAFE_API_KEY` to ask its questions; without it, it runs every test and writes no record, so there is nothing for flaker to import.
 - Full runs on some of the commits jev scored. A full run is one where the whole suite ran. flaker only compares jev's choices on a commit that also has a full run, because only a full run proves what failed. Tell flaker which runs are full with `[workflow_lanes]`, or let it infer them from the test count (see [`runs.is_full`](how-to-use.md#workflow_lanes-and-runsis_full)).
-- The results of those full runs in flaker (`flaker import --ci`, or `flaker import <report>`).
+- The results of those full runs in flaker, stored under the commit they ran on. `flaker import --ci` does this. A report imported by hand needs `--commit <sha>`, otherwise it is stored under a local id that matches no commit, and a lane marked `full = true` in `[workflow_lanes]` (or a `--workflow-name`, so its size can be compared with that workflow's other runs): `flaker import report.json --commit $(git rev-parse HEAD) --lane full-batch`.
+- For hints, the files each commit changed. `flaker import --ci` and `flaker run` record them; `flaker import <report>` does not. Without them the context has a gate and `skip`, but no per-test hints.
 
 ## Setup
 
@@ -64,11 +65,13 @@ flaker import --ci
 flaker calibrate --selector
 ```
 
-Steps 1–3 run for every change. Steps 4–5 need a full run on at least one of the commits jev scored; until then `calibrate --selector` keeps the gate and says `no selector record has a full run on its head commit yet`.
+Steps 1–3 run for every change. Steps 4–5 need a full run on at least one of the commits jev scored; until then `calibrate --selector` keeps the gate and says `no selector record has a full run on its head commit yet`. Calibration looks at the last 90 days of records; change that with `--window-days`.
 
 The order of 3 and 4 does not matter. A jev test that flaker has not seen yet is stored without a test key and is matched on the next selector import, or by `calibrate --selector`, once its results are in.
 
 ### In CI
+
+The flaker database has to outlive a single job, because calibration compares records and full runs from many commits. Keep it where your CI keeps state between runs (a cache, an artifact restored at the start of the next run, or a scheduled job on a persistent runner).
 
 jev and flaker usually run in different jobs. Carry the two files between them as artifacts:
 
@@ -118,7 +121,7 @@ The datasets are listed in [flaker_v1](how-to-use.md#flaker-export--public-datas
 | Symptom | Cause |
 |---|---|
 | `calibrate --selector` keeps with "no selector record has a full run on its head commit yet" | No full run on any commit jev scored. Check `flaker_v1.runs.is_full` and `[workflow_lanes]`. |
-| Many tests in `unmatched` | Their results are not in flaker yet, or the file path or title differs between jev and your reporter. Compare `flaker_v1.tests.file` / `title_path` with the record. |
-| `flaker import --adapter jev` skips a record | The record fell back to running everything (`fallback` set), so it holds no decisions. |
+| Many tests in `unmatched` | These are full-run failures that no verdict in jev's record names: the file path or title differs between jev and your reporter, or jev did not find the test. Compare `flaker_v1.tests.file` / `title_path` with the record's `tests`. |
+| `flaker import --adapter jev` finds no records | jev writes a record only when its run completed. A run that fell back to running everything (no API key, an API error) writes none. flaker also skips a record whose `fallback` is set, which only a hand-made or older record has. |
 | jev exits 2 on `--context` | The file is not a version 1 context, or does not validate. Regenerate it with the same flaker version. |
 | A new gate did not change `context_digest` in jev's records | Expected: the digest covers hints and `skip`, not the gate. |
