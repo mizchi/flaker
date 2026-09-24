@@ -12,6 +12,7 @@ import { registerOpsCommands } from "./categories/ops.js";
 import { registerDebugCommands, debugDoctorAction } from "./categories/debug.js";
 import { registerDevCommands } from "./categories/dev.js";
 import { registerApplyCommands } from "./categories/apply.js";
+import { registerCalibrateCommand } from "./categories/calibrate.js";
 
 function isDirectCliExecution(): boolean {
   if (process.argv[1] == null) return false;
@@ -30,6 +31,7 @@ function isDirectCliExecution(): boolean {
 export function createProgram(): Command {
   const program = new Command();
   registerApplyCommands(program);
+  registerCalibrateCommand(program);
   registerImportCommands(program);
   registerReportCommands(program);
   registerOpsCommands(program);
