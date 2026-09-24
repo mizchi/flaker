@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "smol-toml";
-import { LEGACY_PROFILE_TO_GATE, normalizeGateName, type GateName } from "./gate.js";
+import { LEGACY_PROFILE_TO_GATE, VALID_GATE_NAMES, type GateName } from "./gate.js";
 
 export interface CoverageConfig {
   format: string; // istanbul | v8 | playwright
@@ -176,12 +176,20 @@ const LEGACY_GATE_KEYS: LegacyKeyEntry[] = [
   { section: "gate.*", oldKey: "adaptive_fnr_high", newKey: "adaptive_fnr_high_ratio", unitNote: "0.0-1.0" },
 ];
 
+function isTable(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function checkLegacyKeys(parsed: Record<string, unknown>): void {
   const errors: string[] = [];
 
-  const legacyProfiles = parsed.profile as Record<string, unknown> | undefined;
-  if (legacyProfiles && typeof legacyProfiles === "object") {
-    for (const name of Object.keys(legacyProfiles)) {
+  if ("profile" in parsed) {
+    const legacyProfiles = parsed.profile;
+    const names = isTable(legacyProfiles) ? Object.keys(legacyProfiles) : [];
+    if (names.length === 0) {
+      errors.push("[profile] is no longer supported; use [gate.iteration], [gate.merge], [gate.release]");
+    }
+    for (const name of names) {
       const gate = LEGACY_PROFILE_TO_GATE[name];
       errors.push(
         gate
@@ -190,11 +198,17 @@ function checkLegacyKeys(parsed: Record<string, unknown>): void {
       );
     }
   }
-  const gates = parsed.gate as Record<string, unknown> | undefined;
-  if (gates && typeof gates === "object") {
-    for (const name of Object.keys(gates)) {
-      if (!normalizeGateName(name)) {
-        errors.push(`[gate.${name}] is not a gate; use one of iteration, merge, release`);
+  if ("gate" in parsed) {
+    const gates = parsed.gate;
+    if (!isTable(gates)) {
+      errors.push("`gate` must be a table ([gate.iteration], [gate.merge], [gate.release])");
+    } else {
+      for (const [name, value] of Object.entries(gates)) {
+        if (!(VALID_GATE_NAMES as readonly string[]).includes(name)) {
+          errors.push(`[gate.${name}] is not a gate; use one of iteration, merge, release`);
+        } else if (!isTable(value)) {
+          errors.push(`\`gate.${name}\` must be a table ([gate.${name}])`);
+        }
       }
     }
   }

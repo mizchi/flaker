@@ -23,6 +23,11 @@ export interface ResolvedGate {
 
 type Env = Record<string, string | undefined>;
 
+function nonBlank(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
 export function resolveFallbackSamplingMode(
   gate: Pick<ResolvedGate, "fallback_strategy">,
 ): SamplingMode | undefined {
@@ -32,17 +37,18 @@ export function resolveFallbackSamplingMode(
 }
 
 export function resolveGateName(explicit: string | undefined, env: Env = process.env): GateName {
-  if (env["FLAKER_PROFILE"]) {
-    const mapped = LEGACY_PROFILE_TO_GATE[env["FLAKER_PROFILE"]];
+  const legacyProfile = nonBlank(env["FLAKER_PROFILE"]);
+  if (legacyProfile) {
+    const mapped = LEGACY_PROFILE_TO_GATE[legacyProfile];
     throw new Error(
       `FLAKER_PROFILE was replaced by FLAKER_GATE in 0.13.0` +
-        (mapped ? ` (${env["FLAKER_PROFILE"]} → ${mapped})` : "") +
+        (mapped ? ` (${legacyProfile} → ${mapped})` : "") +
         `. See docs/migration-0.12-to-0.13.md.`,
     );
   }
   const raw =
     explicit ??
-    env["FLAKER_GATE"] ??
+    nonBlank(env["FLAKER_GATE"]) ??
     (env["CI"] === "true" || env["GITHUB_ACTIONS"] === "true" ? "merge" : "iteration");
   const gate = normalizeGateName(raw);
   if (!gate) {
@@ -72,6 +78,7 @@ export function resolveGate(
     merged.sample_percentage = 100;
     merged.holdout_ratio = 0;
   }
+  // Built field by field so GateConfig-only keys (adaptive*) do not leak into ResolvedGate.
   return {
     name,
     strategy: merged.strategy,
