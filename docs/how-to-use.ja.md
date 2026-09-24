@@ -259,6 +259,48 @@ flaker 上での identity mapping:
 
 同じドメインの initial 画像と interaction scenario が同じ suite の下にぶら下がるため、suite ベースの集計・affected-suites の扱いが自然になる。producer/consumer 双方が `schemaVersion` を明示できるので過去データとの整合も保たれる。
 
+### `flaker export` — 公開 dataset (flaker_v1)
+
+ストレージのテーブルは内部実装で、どのリリースでも変わりえます。バージョン付きで公開しているのは DuckDB の `flaker_v1` スキーマにある 9 つの dataset で、それぞれの JSON Schema を `@mizchi/flaker/contracts/flaker-v1-datasets` から export しています。全 dataset の共通キーは安定テスト ID の `test_key` です。
+
+| dataset | 内容 |
+|---|---|
+| `tests` | テストの identity。`suite`, `test_name`, `task_id`, `variant`, `file`, `title_path` (JSON 配列), 初出と最終観測。`file` + `title_path` は selector との突き合わせに使う |
+| `runs` | 実行単位。`source` (`ci` / `local` / `mutation`), `workflow_name`, `lane`, `commit_sha`, `branch`, `event`, `is_full` (全テストを実行したランか) |
+| `results` | テスト単位の結果。`run_id`, `test_key`, `status`, `retry_count`, `duration_ms` |
+| `flaky` | flaky 判定。`window_days`, `runs`, `failures`, `flaky_rate`, `is_flaky` |
+| `quarantine` | 隔離中のテスト。`reason`, `since`, `source` (`auto` / `manual`) |
+| `co_failures` | 「このファイルが変わったときにこのテストが落ちた」の集計。`changed_file`, `co_failures`, `changes`, `strength` |
+| `selector_verdicts` | selector のテストごとの判定。`score`, `confidence`, `reason`, `selected` |
+| `misses` | selector が選ばなかったのに full run で実際に失敗したテスト |
+| `gate_calibration` | selector gate の calibrate 結果の履歴。最新行が現行値 |
+
+安定性のルール: `flaker_v1` の中では列の追加だけを行います。列の削除・改名・意味の変更は `flaker_v2` を新設して行います。外部ツールが `.duckdb` ファイルを直接開くのは構いませんが、読むのは `flaker_v1.*` だけにして、ストレージのテーブルは読まないでください。
+
+```bash
+flaker export tests --format jsonl
+flaker export runs --since 2026-09-01 --format csv -o runs.csv
+flaker export results --format parquet -o .flaker/export/results.parquet
+flaker query "SELECT * FROM flaker_v1.flaky WHERE is_flaky"
+```
+
+- `--format` は `json` (既定、配列), `jsonl`, `csv` (ヘッダは schema の列順、配列とオブジェクトは JSON 文字列), `parquet` (`-o` が必須) のいずれかです。
+- `--since <date>` は ISO 日付以降の行だけを残します。使えるのは `tests` (`last_seen_at`), `runs` と `results` (`created_at`), `quarantine` (`since`), `selector_verdicts` (`created_at`), `gate_calibration` (`calibrated_at`) で、それ以外の dataset ではエラーになります。
+- `--where <expr>` は dataset 自身の列に対する追加条件で、たとえば `--where "status = 'failed'"` です。行単位の式 1 つに限り、サブクエリ・`;`・コメント・ファイルシステム関数は拒否します。
+- 不正な入力 (未知の dataset や format、時刻列のない dataset への `--since`、安全でない `--where`) は終了コード 2 で終わります。
+
+#### `[workflow_lanes]` と `runs.is_full`
+
+`[workflow_lanes]` は workflow の名前またはパスを lane に対応づけます。値をテーブルにすると、その lane が全テストを実行するかどうかも書けます:
+
+```toml
+[workflow_lanes]
+"ci.yml" = "sampled"
+"nightly.yml" = { lane = "full-batch", full = true }
+```
+
+`full = true` の lane のランは `runs.is_full = true` になり、`full = false` なら常に `false` です。`full` の指定がない lane では、同じ workflow が `[flaky].window_days` の間に実行した異なるテストのうち 95% 以上の結果があるランを full とみなします。
+
 ### flaky テスト一覧 — `flaker status --list flaky`
 
 0.7.0 以前の `flaker analyze flaky` は 0.8.0 で削除。flaky テスト一覧は `flaker status --list flaky` に統合済み。

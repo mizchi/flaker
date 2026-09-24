@@ -27,6 +27,7 @@
     "src/cli/reporting/flaker-config-task.ts",
     "src/cli/reporting/flaker-config-summary-core.ts",
     "src/cli/reporting/flaker-config-selection-core.ts",
-    "src/cli/reporting/flaker-config-report.ts"
+    "src/cli/reporting/flaker-config-report.ts",
+    "src/cli/contracts/flaker-v1-datasets.ts"
   ]
 }

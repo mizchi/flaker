@@ -259,6 +259,48 @@ Identity mapping on the flaker side:
 
 Because both the initial image and interaction scenarios for the same domain live under the same suite, suite-based aggregation and affected-suites handling stay natural. Both producer and consumer can declare `schemaVersion`, so historical data stays consistent.
 
+### `flaker export` — public datasets (flaker_v1)
+
+The storage tables are internal and may change in any release. The public, versioned view of the data is the DuckDB schema `flaker_v1`: nine datasets, each with a JSON Schema exported from `@mizchi/flaker/contracts/flaker-v1-datasets`. Every dataset shares the key `test_key`, the stable test ID.
+
+| Dataset | Content |
+|---|---|
+| `tests` | Test identity: `suite`, `test_name`, `task_id`, `variant`, `file`, `title_path` (JSON array), first and last seen. `file` + `title_path` is what selectors are matched on |
+| `runs` | One execution: `source` (`ci` / `local` / `mutation`), `workflow_name`, `lane`, `commit_sha`, `branch`, `event`, `is_full` (whether the whole suite ran) |
+| `results` | Per-test results: `run_id`, `test_key`, `status`, `retry_count`, `duration_ms` |
+| `flaky` | Flaky verdicts: `window_days`, `runs`, `failures`, `flaky_rate`, `is_flaky` |
+| `quarantine` | Quarantined tests: `reason`, `since`, `source` (`auto` / `manual`) |
+| `co_failures` | "This test failed when this file changed", aggregated: `changed_file`, `co_failures`, `changes`, `strength` |
+| `selector_verdicts` | A selector's per-test decisions: `score`, `confidence`, `reason`, `selected` |
+| `misses` | Tests the selector did not select that really failed in a full run |
+| `gate_calibration` | History of selector gate calibrations. The latest row is the current value |
+
+Stability rule: within `flaker_v1`, columns are only added. Removing, renaming or changing the meaning of a column means a new `flaker_v2`. External tools may open the `.duckdb` file directly, but they should read `flaker_v1.*` only, never the storage tables.
+
+```bash
+flaker export tests --format jsonl
+flaker export runs --since 2026-09-01 --format csv -o runs.csv
+flaker export results --format parquet -o .flaker/export/results.parquet
+flaker query "SELECT * FROM flaker_v1.flaky WHERE is_flaky"
+```
+
+- `--format` is `json` (default, an array), `jsonl`, `csv` (header in schema order; arrays and objects are JSON-encoded) or `parquet` (requires `-o`).
+- `--since <date>` keeps rows at or after an ISO date. It applies to `tests` (`last_seen_at`), `runs` and `results` (`created_at`), `quarantine` (`since`), `selector_verdicts` (`created_at`) and `gate_calibration` (`calibrated_at`); the other datasets reject it.
+- `--where <expr>` is an extra condition over the dataset's own columns, for example `--where "status = 'failed'"`. It must be a single row-level expression: subqueries, `;`, comments and filesystem functions are rejected.
+- Invalid input (unknown dataset or format, `--since` on a dataset without a time column, an unsafe `--where`) exits with code 2.
+
+#### `[workflow_lanes]` and `runs.is_full`
+
+`[workflow_lanes]` maps a workflow name or path to a lane. An entry may also be a table that says whether the lane runs the whole suite:
+
+```toml
+[workflow_lanes]
+"ci.yml" = "sampled"
+"nightly.yml" = { lane = "full-batch", full = true }
+```
+
+Runs in a lane with `full = true` have `runs.is_full = true`, and `full = false` forces `false`. For a lane without `full`, a run counts as full when it has results for at least 95% of the distinct tests its workflow ran within `[flaky].window_days`.
+
 ### Flaky test listing — `flaker status --list flaky`
 
 `flaker analyze flaky` was removed in 0.8.0. Flaky test listing is now part of `flaker status`:

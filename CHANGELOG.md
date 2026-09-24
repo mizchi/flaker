@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Added
+
+- Public datasets: nine views in the DuckDB schema `flaker_v1` (`tests`, `runs`, `results`, `flaky`, `quarantine`, `co_failures`, `selector_verdicts`, `misses`, `gate_calibration`), each with a JSON Schema exported as `@mizchi/flaker/contracts/flaker-v1-datasets`. Within v1 only columns are added.
+- `flaker export <dataset> [--format json|jsonl|csv|parquet] [--since <date>] [--where <expr>] [-o <file>]`.
+- `[workflow_lanes]` entries may be `{ lane = "…", full = true }` to mark lanes that run the whole suite (`runs.is_full`).
+- Vitest and Playwright results keep their title path (`test_results.title_path`), which is how selectors name a test.
+
 ### Changed
 
 - MoonBit dependencies move to their latest releases: `moonbitlang/async` 0.22.4, `bobzhang/toml` 0.4.3, `mizchi/github` 0.1.5, `mizchi/parquet` 0.2.2, `mizchi/zlib` 0.4.9. `f4ah6o/duckdb` 0.6.0 is replaced by `mizchi/duckdb` 0.6.4, a fork that builds on current MoonBit toolchains, until the fix lands upstream. The native CLI builds again and its CI steps are required once more (#92).

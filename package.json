@@ -90,6 +90,10 @@
     "./reporting/flaker-config-report": {
       "types": "./dist/cli/reporting/flaker-config-report.d.ts",
       "default": "./dist/cli/reporting/flaker-config-report.js"
+    },
+    "./contracts/flaker-v1-datasets": {
+      "types": "./dist/cli/contracts/flaker-v1-datasets.d.ts",
+      "default": "./dist/cli/contracts/flaker-v1-datasets.js"
     }
   },
   "scripts": {
