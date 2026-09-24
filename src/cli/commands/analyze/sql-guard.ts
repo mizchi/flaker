@@ -1,8 +1,14 @@
 import { FlakerUsageError } from "../../errors.js";
 
-/** DuckDB table functions that read or write the filesystem or network. */
+/**
+ * DuckDB table functions that read or write files or the network, caught
+ * lexically for a clear message. Not a sandbox: replacement scans
+ * (`FROM 'file.csv'`) and PIVOT_* read files without any of these names, so
+ * callers that run user SQL also turn off external access
+ * (`DuckDBStore.disableExternalAccess`).
+ */
 export const FILESYSTEM_FUNCTIONS =
-  /\b(READ_CSV_AUTO|READ_CSV|READ_PARQUET|READ_JSON_AUTO|READ_JSON|READ_BLOB|READ_TEXT|WRITE_CSV|HTTPFS|GLOB)\s*\(/i;
+  /\b(READ_\w+|WRITE_\w+|SNIFF_CSV|PARQUET_\w+|ICEBERG_\w+|DELTA_SCAN|GLOB|HTTPFS|SQLITE_\w+|POSTGRES_\w+|MYSQL_\w+)\s*\(/i;
 
 /**
  * Words that start a statement, a subquery or a set operation, or that name a

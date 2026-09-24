@@ -249,7 +249,8 @@ export async function analyzeContextAction(opts: { json?: boolean }): Promise<vo
 }
 
 export async function analyzeQueryAction(sql: string): Promise<void> {
-  // Reject write operations and dangerous DuckDB functions
+  // Early, readable rejections. The real barrier to file access is
+  // disableExternalAccess below; this is not a sandbox for the database itself.
   const stripped = sql.replace(/--[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "").trim();
   const normalized = stripped.toUpperCase();
   const writePatterns = /^(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|COPY\s|ATTACH|LOAD|INSTALL)/;
@@ -259,7 +260,7 @@ export async function analyzeQueryAction(sql: string): Promise<void> {
   }
   // Block DuckDB filesystem functions
   if (FILESYSTEM_FUNCTIONS.test(stripped)) {
-    console.error("Error: filesystem/network functions are not allowed in query command.");
+    console.error("Error: flaker query does not run file or network table functions (read_*, parquet_*, glob, ...); it queries the flaker database only.");
     process.exit(1);
   }
   const config = loadConfig(process.cwd());
@@ -267,6 +268,8 @@ export async function analyzeQueryAction(sql: string): Promise<void> {
   await store.initialize();
 
   try {
+    // Replacement scans and PIVOT_* read files without a named function.
+    await store.disableExternalAccess();
     const rows = await runQuery(store, sql);
     console.log(formatQueryResult(rows as Record<string, unknown>[]));
   } finally {
