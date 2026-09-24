@@ -73,25 +73,9 @@ jobs:
       - name: Native CLI build
         run: |
           C_INCLUDE_PATH=/usr/local/include LIBRARY_PATH=/usr/local/lib \
-          moon build --target native src/cmd/flaker_native || true
-          # Manual link (moon doesn't pass cc-link-flags for deps)
-          cc -O2 -o dist/flaker \
-            -I"$HOME/.moon/include" \
-            "$HOME/.moon/lib/libmoonbitrun.o" \
-            _build/native/debug/build/cmd/flaker_native/flaker_native.c \
-            _build/native/debug/build/cmd/flaker_native/shell_native.o \
-            _build/native/debug/build/runtime.o \
-            _build/native/debug/build/.mooncakes/mizchi/duckdb/libduckdb.a \
-            _build/native/debug/build/.mooncakes/moonbitlang/async/internal/*/lib*.a \
-            _build/native/debug/build/.mooncakes/moonbitlang/async/os_error/lib*.a \
-            _build/native/debug/build/.mooncakes/moonbitlang/async/socket/lib*.a \
-            _build/native/debug/build/.mooncakes/moonbitlang/async/tls/lib*.a \
-            _build/native/debug/build/.mooncakes/moonbitlang/async/fs/lib*.a \
-            _build/native/debug/build/.mooncakes/moonbitlang/x/fs/lib*.a \
-            _build/native/debug/build/.mooncakes/mizchi/zlib/lib*.a \
-            -L/usr/local/lib -lduckdb -lz -lm \
-            "$HOME/.moon/lib/libbacktrace.a" \
-            -Wl,-rpath,/usr/local/lib
+          moon build --target native src/cmd/flaker_native
+          mkdir -p dist
+          cp _build/native/debug/build/cmd/flaker_native/flaker_native.exe dist/flaker
 
       - name: Native CLI smoke
         run: |
