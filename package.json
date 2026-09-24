@@ -98,6 +98,10 @@
     "./contracts/selector-record-v1": {
       "types": "./dist/cli/contracts/selector-record-v1.d.ts",
       "default": "./dist/cli/contracts/selector-record-v1.js"
+    },
+    "./contracts/jev-context-v1": {
+      "types": "./dist/cli/contracts/jev-context-v1.d.ts",
+      "default": "./dist/cli/contracts/jev-context-v1.js"
     }
   },
   "scripts": {

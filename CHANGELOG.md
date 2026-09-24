@@ -10,6 +10,14 @@
 - Vitest and Playwright results keep their title path (`test_results.title_path`), which is how selectors name a test.
 - `flaker import --adapter selector-record|jev <file|dir>` stores a selector's per-test decisions in `selector_verdicts`. `jev` converts jev-test-filter's run records with jev's own gate; a directory imports `*.json` and `records/*.json`, and re-importing a record is a no-op.
 - `selector-record` v1, the format selectors hand their decisions to flaker in, with its JSON Schema exported as `@mizchi/flaker/contracts/selector-record-v1`.
+- `flaker calibrate --selector [name]` calibrates the selector's gate from its records and full runs on the same commits. It replays every record through jev's gate over a grid, tightens at once on any miss, and loosens only with at least `min_failures` real failures and a Wilson 95% recall lower bound of at least `recall_target`. Each run appends one row to `gate_calibration` (`--dry-run` appends nothing). Bare `flaker calibrate` still recommends `[sampling]` and is unchanged.
+- `flaker export --projection jev-context [-o <file>]` writes the context jev-test-filter reads with `--context`: the latest calibrated gate, quarantined tests as `skip`, and per-test hints from `misses` and `co_failures`.
+- `[selector]` in `flaker.toml`: `type` (`"jev"`), `recall_target` (default 0.90), `min_failures` (default 20) and `max_hinted_tests` (default 200). Gate values are not kept there; `cutoff`, `unsure_below` or `unsure_margin` under `[selector]` is an error.
+- `jev-context` v1, with its type and JSON Schema exported as `@mizchi/flaker/contracts/jev-context-v1`.
+
+### Requires
+
+- jev-test-filter 0.1.3 or later to read the context that `flaker export --projection jev-context` writes. jev's gate is bundled into flaker, so flaker itself has no runtime dependency on jev-test-filter.
 
 ### Changed
 

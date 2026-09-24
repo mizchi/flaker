@@ -322,6 +322,34 @@ flaker query "SELECT * FROM flaker_v1.flaky WHERE is_flaky"
 
 Runs in a lane with `full = true` have `runs.is_full = true`, and `full = false` forces `false`. For a lane without `full`, a run counts as full when it has results for at least 95% as many tests as the largest run of the same workflow within the preceding `[flaky].window_days` (the run itself included). Renamed or deleted tests therefore do not make a later full run look partial.
 
+### Selector calibration with jev-test-filter
+
+flaker compares a selector's decisions with what a full run on the same commit really proved, and tunes the selector's gate from that evidence. With [jev-test-filter](https://github.com/mizchi/jev-test-filter) the loop is:
+
+```bash
+jev-test-filter --context .flaker/context.json …        # writes .jev-test-filter/records/<sha>.json
+flaker import .jev-test-filter --adapter jev
+flaker import --ci                                       # full runs on the same commits
+flaker calibrate --selector                              # appends to gate_calibration
+flaker export --projection jev-context -o .flaker/context.json
+```
+
+`flaker calibrate --selector [name]` joins each selector record to a full run on its `head_sha`. The ground truth is the tests that failed there, minus flaky and quarantined tests. It then replays every record offline through jev's own gate (bundled from `jev-test-filter/gate`, no API calls) over a grid of `cutoff × unsure_below × unsure_margin`. The adoption rule is "tighten at once, loosen with care". A candidate that misses any observed failure is rejected. If the current gate missed a failure, calibrate switches at once to the candidate that catches every failure with the fewest selected tests (`tighten`). Selecting fewer tests (`loosen`) needs at least `min_failures` real failures, and the Wilson 95% lower bound of recall must reach `recall_target`. Mutation failures can justify tightening but never loosening. Otherwise the gate is kept, and the reason goes into `rationale` (`keep`). Ties go to the candidate nearest jev's defaults. Each run appends one row to `gate_calibration`; `--dry-run` appends nothing and `--json` prints the result. Failures that match no verdict are listed as `unmatched` and not counted as misses, and the report is split by context digest.
+
+The bound is stricter than it looks. When every real failure is caught, the Wilson 95% lower bound over n failures is n / (n + 3.8415): 20 failures give 0.839, 35 give 0.901 and 50 give 0.929. With the default `recall_target = 0.90`, loosening therefore needs at least 35 real failures, all caught, so `min_failures = 20` does not bind. `recall_target = 0.98` would need 189 (0.9801 at 189; 188 gives 0.9800 and falls short).
+
+`flaker export --projection jev-context` writes the context jev-test-filter reads with `--context`. It holds the latest gate from `gate_calibration` with its basis, `skip` (quarantined tests) and `tests` (hints: how often the selector missed a test, and up to five files it failed with, taken from `co_failures` with at least 2 co-failures). Flaky and quarantined tests get no hints. `digest` is the sha256 of `skip` and `tests` only, so a new gate does not change it. The type and JSON Schema are exported from `@mizchi/flaker/contracts/jev-context-v1`. Reading the context needs jev-test-filter 0.1.3 or later. A projection is always JSON; `--format`, `--since`, `--where` and a dataset argument are rejected with exit code 2.
+
+```toml
+[selector]
+type = "jev"             # the only selector
+recall_target = 0.90     # Wilson 95% lower bound of recall needed to loosen
+min_failures = 20        # real failures needed to loosen
+max_hinted_tests = 200   # cap on tests[] in jev-context
+```
+
+Gate values (`cutoff`, `unsure_below`, `unsure_margin`) are never kept in `flaker.toml`, and a `[selector]` that sets one is rejected. The source of truth is `gate_calibration` in the database: its latest row is the current gate.
+
 ### Flaky test listing — `flaker status --list flaky`
 
 `flaker analyze flaky` was removed in 0.8.0. Flaky test listing is now part of `flaker status`:
