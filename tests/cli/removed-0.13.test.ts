@@ -69,7 +69,15 @@ describe("strategies removed in 0.13.0", () => {
 });
 
 describe("adaptive sampling removed in 0.13.0", () => {
-  for (const key of ["adaptive", "adaptive_fnr_low_ratio", "adaptive_fnr_high_ratio", "adaptive_min_percentage", "adaptive_step"]) {
+  for (const key of [
+    "adaptive",
+    "adaptive_fnr_low_ratio",
+    "adaptive_fnr_high_ratio",
+    "adaptive_min_percentage",
+    "adaptive_step",
+    "adaptive_fnr_low",
+    "adaptive_fnr_high",
+  ]) {
     it(`rejects [gate.merge] ${key}`, () => {
       const value = key === "adaptive" ? "true" : "1";
       expect(() => loadConfig(configDir(`[gate.merge]\n${key} = ${value}\n`))).toThrow(

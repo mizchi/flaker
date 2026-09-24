@@ -166,6 +166,8 @@ const REMOVED_IN_0_13 = [
   "adaptive_fnr_high_ratio",
   "adaptive_min_percentage",
   "adaptive_step",
+  "adaptive_fnr_low",
+  "adaptive_fnr_high",
 ] as const;
 const REMOVED_STRATEGIES = new Set(["random", "gbdt", "coverage-guided"]);
 
