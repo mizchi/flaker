@@ -324,6 +324,8 @@ flaker query "SELECT * FROM flaker_v1.flaky WHERE is_flaky"
 
 ### jev-test-filter による selector の calibration
 
+手順を追った導入は [flaker と jev-test-filter を組み合わせる](jev-test-filter-integration.ja.md) を見てください。この節はリファレンスです。
+
 flaker は selector の判定を、同じコミットの full run で実際に分かった結果と突き合わせ、その証拠から selector の gate を調整します。[jev-test-filter](https://github.com/mizchi/jev-test-filter) との流れは次のとおりです。
 
 ```bash

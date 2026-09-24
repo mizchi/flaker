@@ -324,6 +324,8 @@ Runs in a lane with `full = true` have `runs.is_full = true`, and `full = false`
 
 ### Selector calibration with jev-test-filter
 
+For a step-by-step setup, see [Using flaker with jev-test-filter](jev-test-filter-integration.md). This section is the reference.
+
 flaker compares a selector's decisions with what a full run on the same commit really proved, and tunes the selector's gate from that evidence. With [jev-test-filter](https://github.com/mizchi/jev-test-filter) the loop is:
 
 ```bash
