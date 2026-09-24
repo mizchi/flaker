@@ -37,6 +37,20 @@ function parseOptionalInteger(raw: string | undefined, flag: string): number | u
   return value;
 }
 
+/**
+ * Parses a required positive-integer CLI option, returning null (and printing
+ * an error to stderr) instead of throwing, so callers can set process.exitCode
+ * and return without a stack trace.
+ */
+export function parsePositiveIntOption(flag: string, raw: string): number | null {
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value <= 0) {
+    console.error(`Invalid ${flag} value: ${raw}. Expected a positive integer.`);
+    return null;
+  }
+  return value;
+}
+
 function isSamplingMode(raw: string): raw is SamplingMode {
   return SAMPLING_MODES.includes(raw as SamplingMode);
 }

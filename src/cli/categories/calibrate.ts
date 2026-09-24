@@ -6,6 +6,7 @@ import {
   calibrateSampling,
   formatCalibrationReport,
 } from "../commands/collect/calibrate.js";
+import { parsePositiveIntOption } from "../commands/exec/sampling-options.js";
 
 export interface CalibrateCliOpts {
   windowDays: string;
@@ -13,18 +14,8 @@ export interface CalibrateCliOpts {
   json?: boolean;
 }
 
-/** Parses `--window-days`, returning null (and printing an error) if invalid. */
-function parseWindowDays(raw: string): number | null {
-  const windowDays = Number(raw);
-  if (!Number.isInteger(windowDays) || windowDays <= 0) {
-    console.error(`Invalid --window-days value: ${raw}. Expected a positive integer.`);
-    return null;
-  }
-  return windowDays;
-}
-
 export async function calibrateAction(opts: CalibrateCliOpts): Promise<void> {
-  const windowDays = parseWindowDays(opts.windowDays);
+  const windowDays = parsePositiveIntOption("--window-days", opts.windowDays);
   if (windowDays == null) {
     process.exitCode = 2;
     return;
