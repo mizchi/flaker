@@ -73,7 +73,7 @@ Removed flags and commands do not name their replacement: commander prints its g
 | `[flaky] detection_threshold` (pre-0.2.0) | `detection_threshold_ratio`, same value |
 | `[quarantine] flaky_rate_threshold` (pre-0.2.0) | `flaky_rate_threshold_percentage`, **and convert the value**: the old key treated `0.3` as 30%, the new key is a literal percentage, so `0.3` → `30` (a value already above 1, such as `30`, stays `30`) |
 
-Only `flaky_rate_threshold` changes its value; every other rename keeps the number as it is.
+Only `flaky_rate_threshold` changes its value; every other rename keeps the number as it is. `co_failure_window_days` is valid in a `[gate.*]` section, but a pure `affected` gate does not use it (it only ranks `weighted`/`hybrid` selections), so keeping it after a rename is harmless.
 
 Keys inside a renamed section follow the same renames: `[profile.ci]` with `percentage = 30` becomes `[gate.merge]` with `sample_percentage = 30`. The loader reports a section rename before the keys inside it, so after renaming sections run `flaker doctor` again until it is clean.
 

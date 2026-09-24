@@ -841,6 +841,8 @@ Rename the keys in your `flaker.toml` per the table below:
 | `[profile.*]` (pre-0.13.0) | `percentage` | `sample_percentage` | 0–100 |
 | `[profile.*]` (pre-0.13.0) | `co_failure_days` | `co_failure_window_days` | days (int) |
 
+`co_failure_window_days` (in `[sampling]` or a `[gate.*]` section) sets how far back co-failure history is read. It only changes ranking for `weighted` and `hybrid`, and only when there are changed files; a pure `affected` gate ignores it, except when its `fallback_strategy` is `weighted` or `hybrid`.
+
 The unit interpretation of `flaky_rate_threshold` also changed. Previously a bare `30.0` was treated as 30% and a bare `0.3` was silently auto-normalized. Now the value is taken literally as a percentage. If your old config had `flaky_rate_threshold = 0.3`, rename to `flaky_rate_threshold_percentage = 30`.
 
 Range validation is enforced by `flaker doctor`: `*_ratio` must be in [0.0, 1.0]; `*_percentage` must be in [0, 100]; `*_days` / `*_seconds` / `*_count` must be non-negative integers.

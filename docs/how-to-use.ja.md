@@ -821,6 +821,8 @@ flaker debug bisect --test "問題のテスト名"
 | `[profile.*]` (0.13.0 より前) | `percentage` | `sample_percentage` | 0–100 |
 | `[profile.*]` (0.13.0 より前) | `co_failure_days` | `co_failure_window_days` | 日数 (整数) |
 
+`co_failure_window_days` (`[sampling]` または `[gate.*]`) は co-failure 履歴をどこまで遡って読むかを決める。効くのは `weighted` と `hybrid` の並び順だけで、変更ファイルがあるときに限る。純粋な `affected` gate では使われない (ただし `fallback_strategy` が `weighted` / `hybrid` なら、その fallback で使われる)。
+
 `flaky_rate_threshold` の単位解釈も変わりました。以前は `30.0` を「30%」、`0.3` を自動正規化して扱っていましたが、現在はそのまま percentage として解釈します。旧設定が `flaky_rate_threshold = 0.3` だった場合は `flaky_rate_threshold_percentage = 30` にリネームしてください。
 
 範囲検証は `flaker doctor` が担当します: `*_ratio` は [0.0, 1.0]、`*_percentage` は [0, 100]、`*_days` / `*_seconds` / `*_count` は非負整数でなければなりません。
