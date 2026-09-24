@@ -1,11 +1,17 @@
 ---
 name: flaker-setup
-description: Set up @mizchi/flaker on a new repository. Use when the user asks to introduce flaker, configure flaker.toml, integrate flaker into GitHub Actions, or "start using flaker on this project". Encodes the declarative apply-based onboarding flow for @mizchi/flaker 0.13.0+ (gate-based declarative apply model).
+description: Set up @mizchi/flaker on a new repository, or bring an existing flaker setup up to date. Use when the user asks to introduce flaker, configure flaker.toml, integrate flaker into GitHub Actions, "start using flaker on this project", or upgrade flaker — including when flaker fails after an upgrade with errors like "[profile.ci] was renamed to [gate.merge]", "was removed in 0.13.0", "unknown option '--profile'" or "unknown command 'ops'". Targets @mizchi/flaker 0.13.0+ (gate-based declarative apply model).
 ---
 
 # flaker setup skill
 
-`@mizchi/flaker` (0.7.0+) is a test-intelligence CLI with a declarative apply model: `flaker.toml` describes the desired state, and `flaker apply` reconciles the repo to that state by running `collect` / `calibrate` / `cold-start run` / `quarantine apply` in the right order based on current DB state and repo probe. Callers do not memorize the sequence.
+`@mizchi/flaker` (0.13.0) is a test-intelligence CLI with a declarative apply model: `flaker.toml` describes the desired state, and `flaker apply` reconciles the repo to that state by running its `collect_ci` / `calibrate` / `cold_start_run` / `quarantine_apply` actions in the right order based on current DB state and repo probe. Callers do not memorize the sequence.
+
+## Existing flaker setup? Upgrade first
+
+If the repository already has `flaker.toml`, or its CI already calls `flaker`, this is an upgrade, not a setup. Signs of a pre-0.13.0 setup: `[profile.*]` sections, `run --profile`, `FLAKER_PROFILE`, `apply --target` / `--emit`, `flaker ops|collect|analyze|policy|gate …`, `adaptive = true`, `strategy = "random"|"gbdt"|"coverage-guided"`.
+
+Read `${CLAUDE_PLUGIN_ROOT}/docs/agent-changelog.md` (GitHub: <https://github.com/mizchi/flaker/blob/main/docs/agent-changelog.md>) and follow it: it has a one-shot grep for every old form, the exact error lines with fixes, a rewrite map resolved to the current command, and a verify checklist. Fix config, env vars, workflows and `package.json` scripts together; a config that loads can still leave CI calling removed commands.
 
 **Always read the canonical checklist first.** It lives next to this skill in the plugin:
 
@@ -29,7 +35,7 @@ If both are unreachable, fall back to the procedure below.
 3. `flaker apply` executes the plan (idempotent; safe to re-run).
 4. `flaker status` shows drift vs `[promotion]` thresholds.
 
-The Day 1 flow is `flaker init → flaker doctor → flaker apply → flaker status`. The deprecated imperative chain (`init → collect → calibrate → run`) still works via compat shims but is a migration-only concern — do not use it in new projects.
+The Day 1 flow is `flaker init → flaker doctor → flaker apply → flaker status`. The old imperative chain (`init → collect → calibrate → run`) no longer exists: `collect` was removed, one-off collection is `flaker import --ci`, and one-off calibration is `flaker calibrate`.
 
 ### Minimal declarative `flaker.toml`
 
@@ -200,7 +206,9 @@ If the user wants to gate sooner, push back: empirically less than 20 matched co
 
 | Symptom | Cause | Fix |
 |---|---|---|
+| `flaker.toml uses removed or renamed keys` (exit 2) | Config from 0.12.x or earlier (`[profile.*]`, `adaptive*`, removed strategies) | Follow `docs/agent-changelog.md` → "Errors you will see"; each error line names the key |
 | `flaker.toml uses deprecated keys` | Config from 0.1.x or earlier | Apply rename table from `docs/how-to-use.md#config-migration` |
+| `unknown option '--profile'` / `unknown command 'ops'` in CI | Workflow written for 0.12.x or earlier | Rewrite with the Commands table in `docs/agent-changelog.md` |
 | `Config file not found` | Wrong cwd | `cd` to repo root containing `flaker.toml` |
 | `flaker apply` aborts with `GITHUB_TOKEN` missing | Planner included `collect_ci` but env var absent | `export GITHUB_TOKEN=$(gh auth token)` and re-run |
 | `actrun runner requires [runner.actrun] workflow` | Missing actrun config | Add `[runner.actrun] workflow = ".github/workflows/<file>.yml"` |
@@ -229,4 +237,5 @@ All paths relative to `${CLAUDE_PLUGIN_ROOT}` of the installed plugin, or in the
 - `docs/operations-guide.ja.md` / `docs/operations-guide.md` — maintainer / CI owner entrypoint
 - `docs/how-to-use.md` / `docs/how-to-use.ja.md` — full command reference including the `flaker plan` / `flaker apply` chapter and `#config-migration` table
 - `docs/contributing.md` — sibling dogfood, MoonBit/TS fallback, build internals
+- `docs/agent-changelog.md` — upgrade guide for agents: old form → current form, error → fix, verify checklist
 - `CHANGELOG.md` — version history, breaking changes per release

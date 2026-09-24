@@ -220,11 +220,11 @@ flaker status
 アップグレード前に repo root で実行する:
 
 ```bash
-grep -rn -- "--profile\|\[profile\.\|FLAKER_PROFILE\|flaker ops\|apply --target\|apply --emit\|cluster_mode\|model_path\|adaptive\|strategy = \"random\"\|strategy = \"gbdt\"\|coverage-guided\|dev train" \
-  .github/ package.json flaker.toml scripts/ docs/ 2>/dev/null
+grep -rnE -- '--profile|\[profile\.|FLAKER_PROFILE|flaker (ops|collect|analyze|policy|gate|quarantine|setup|exec|kpi)\b|apply --(target|emit|incident)|--cluster-mode|--model-path|cluster_mode|model_path|adaptive|\[coverage\]|strategy *= *"(random|gbdt|coverage-guided)"|dev train|debug doctor|import (report|parquet) ' \
+  flaker.toml .github package.json Makefile justfile Taskfile.pkl scripts docs 2>/dev/null
 ```
 
-マッチした script / workflow / config は上表に従って更新する。
+マッチした script / workflow / config は上表に従って更新する。0.13.0 より前に消えた書き方 (`flaker collect`、`analyze`、`policy`、`gate` など) も拾う。それらの現在の書き方は [docs/agent-changelog.md](agent-changelog.md) の対応表にある。
 
 ## 関連ドキュメント
 

@@ -485,7 +485,7 @@ This creates a reviewed plan first, then applies it and optionally opens GitHub 
 The repo now ships two GitHub-native self-host lanes:
 
 - [ci.yml](https://github.com/mizchi/flaker/blob/main/.github/workflows/ci.yml): a `self-host-advisory` job runs on pull requests, executes `flaker run --gate merge`, snapshots `kpi` / `eval`, and updates a sticky PR comment.
-- [nightly-self-host.yml](https://github.com/mizchi/flaker/blob/main/.github/workflows/nightly-self-host.yml): a scheduled job rebuilds recent CI history with `flaker collect`, runs `flaker run --gate release`, and updates a rolling issue labeled `flaker-self-host`.
+- [nightly-self-host.yml](https://github.com/mizchi/flaker/blob/main/.github/workflows/nightly-self-host.yml): a scheduled job rebuilds recent CI history with `flaker import --ci`, runs `flaker run --gate release`, and updates a rolling issue labeled `flaker-self-host`.
 
 Both lanes render the same promotion-readiness summary from `scripts/self-host-review.mjs`. The current default is still advisory: the PR job is non-blocking, and the nightly workflow carries the long-form trend.
 

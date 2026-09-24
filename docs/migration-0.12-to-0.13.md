@@ -220,11 +220,11 @@ flaker status
 Run this in your repository root before upgrading:
 
 ```bash
-grep -rn -- "--profile\|\[profile\.\|FLAKER_PROFILE\|flaker ops\|apply --target\|apply --emit\|cluster_mode\|model_path\|adaptive\|strategy = \"random\"\|strategy = \"gbdt\"\|coverage-guided\|dev train" \
-  .github/ package.json flaker.toml scripts/ docs/ 2>/dev/null
+grep -rnE -- '--profile|\[profile\.|FLAKER_PROFILE|flaker (ops|collect|analyze|policy|gate|quarantine|setup|exec|kpi)\b|apply --(target|emit|incident)|--cluster-mode|--model-path|cluster_mode|model_path|adaptive|\[coverage\]|strategy *= *"(random|gbdt|coverage-guided)"|dev train|debug doctor|import (report|parquet) ' \
+  flaker.toml .github package.json Makefile justfile Taskfile.pkl scripts docs 2>/dev/null
 ```
 
-Every match is a script, workflow, or config that needs updating per the tables above.
+Every match is a script, workflow, or config that needs updating per the tables above. This also catches forms removed before 0.13.0 (`flaker collect`, `analyze`, `policy`, `gate`, …); their current replacements are in [docs/agent-changelog.md](agent-changelog.md).
 
 ## Related reading
 

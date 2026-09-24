@@ -1,6 +1,6 @@
 ---
 name: flaker-management
-description: Operate @mizchi/flaker after setup. Use when the user asks how to run flaker day-to-day, review sampling and flaky metrics, design advisory vs required CI gates, promote or demote Playwright E2E or VRT checks, tune PR time budgets, run nightly review, or manage quarantine and `@flaky` tags in an OSS repository. Targets @mizchi/flaker 0.13.0+ (gate-based declarative apply model).
+description: Operate @mizchi/flaker after setup. Use when the user asks how to run flaker day-to-day, review sampling and flaky metrics, design advisory vs required CI gates, promote or demote Playwright E2E or VRT checks, tune PR time budgets, run nightly review, or manage quarantine and `@flaky` tags in an OSS repository. Also use when existing flaker CI or scripts break after upgrading flaker (e.g. `unknown command 'ops'`, `unknown option '--target'`, `[profile.ci] was renamed to [gate.merge]`). Targets @mizchi/flaker 0.13.0+ (gate-based declarative apply model).
 ---
 
 # flaker management skill
@@ -13,6 +13,12 @@ description: Operate @mizchi/flaker after setup. Use when the user asks how to r
   Run the lane over time, review health via drift, promote or demote checks, and keep flaky tests from eroding trust.
 
 If the repository does not have `flaker.toml` and no CI lane yet, use `flaker-setup` first.
+
+## Upgrading an existing setup comes first
+
+If the existing setup predates 0.13.0, migrate it before giving any operating advice. Signs: `[profile.*]` sections, `run --profile`, `FLAKER_PROFILE`, `apply --target|--emit`, `flaker ops …`, `analyze`/`collect`/`policy`/`gate` subcommands, `adaptive = true`, or an error such as `flaker.toml uses removed or renamed keys`, `unknown option '--profile'`, `unknown command 'ops'`.
+
+Read `../../docs/agent-changelog.md` (GitHub: <https://github.com/mizchi/flaker/blob/main/docs/agent-changelog.md>). It has a one-shot grep for every old form, the exact error lines with fixes, a rewrite map resolved to the current command, and a verify checklist. Apply it to `flaker.toml`, workflows and scripts together, then run the checklist.
 
 ## When this skill applies
 
