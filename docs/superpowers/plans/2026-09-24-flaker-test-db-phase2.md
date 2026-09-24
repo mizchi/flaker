@@ -3275,8 +3275,8 @@ describe("[selector]", () => {
   });
 
   it("reads overrides", () => {
-    const config = loadConfig(withToml(`[selector]\ntype = "jev"\nrecall_target = 0.9\nmin_failures = 5\nmax_hinted_tests = 50`));
-    expect(resolveSelectorConfig(config)).toEqual({ type: "jev", recall_target: 0.9, min_failures: 5, max_hinted_tests: 50 });
+    const config = loadConfig(withToml(`[selector]\ntype = "jev"\nrecall_target = 0.95\nmin_failures = 5\nmax_hinted_tests = 50`));
+    expect(resolveSelectorConfig(config)).toEqual({ type: "jev", recall_target: 0.95, min_failures: 5, max_hinted_tests: 50 });
   });
 
   it("rejects an unknown selector type", () => {
@@ -4806,7 +4806,7 @@ flaker export --projection jev-context -o .flaker/context.json
 ```
 
 State the adoption rule in one paragraph. Put the numbers from open question 2 in the docs as they are: with the defaults, loosening needs about 189 real failures. Document `[selector]`, and say that gate values are never kept in `flaker.toml`.
-- [ ] **Step 3:** CHANGELOG `### Added`: `flaker calibrate --selector [name]`, `flaker export --projection jev-context`, `[selector]` (`recall_target`, `min_failures`, `max_hinted_tests`), `@mizchi/flaker/contracts/jev-context-v1`. Add a `### Requires` line saying jev-test-filter 0.2.0 or later is needed to read the context.
+- [ ] **Step 3:** CHANGELOG `### Added`: `flaker calibrate --selector [name]`, `flaker export --projection jev-context`, `[selector]` (`recall_target`, `min_failures`, `max_hinted_tests`), `@mizchi/flaker/contracts/jev-context-v1`. Add a `### Requires` line saying jev-test-filter 0.1.3 or later is needed to read the context.
 - [ ] **Step 4:** Verify and commit:
 
 ```bash
