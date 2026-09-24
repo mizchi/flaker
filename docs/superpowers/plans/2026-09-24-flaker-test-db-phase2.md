@@ -2746,6 +2746,17 @@ describe("matchTestKey", () => {
     expect(matchTestKey(index, { file: "tests/a.test.ts", title_path: ["A", "works"], project: "" })).toBe("k-vitest-new");
   });
 
+  it("never falls back to tiers 2 and 3 for a row that has a real title path", () => {
+    const strict = buildTestIndex([
+      { test_key: "k-a", file: "a.spec.ts", title_path: ["suite", "redirects"], test_name: "redirects", task_id: "suite", project: null },
+      { test_key: "k-b", file: "b.test.ts", title_path: ["A", "works"], test_name: "A works", task_id: "b.test.ts", project: null },
+      { test_key: "k-c", file: "c.spec.ts", title_path: ["outer", "inner", "leaf"], test_name: "leaf", task_id: "inner", project: null },
+    ]);
+    expect(matchTestKey(strict, { file: "a.spec.ts", title_path: ["redirects"] })).toBeNull();
+    expect(matchTestKey(strict, { file: "b.test.ts", title_path: ["A works"] })).toBeNull();
+    expect(matchTestKey(strict, { file: "c.spec.ts", title_path: ["OTHER", "inner", "leaf"] })).toBeNull();
+  });
+
   it("returns null when ambiguous or unknown", () => {
     expect(matchTestKey(index, { file: "tests/dup.test.ts", title_path: ["same"] })).toBeNull();
     expect(matchTestKey(index, { file: "e2e/login.spec.ts", title_path: ["login", "shows form"] })).toBeNull();
@@ -2792,6 +2803,8 @@ const normProject = (p: string | null | undefined) => (p ? p : null);
 const bucket = (file: string, project: string | null) => `${normFile(file)}\u001e${project ?? ""}`;
 const samePath = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && a.every((s, i) => s === b[i]);
+/** A row stored before title paths were kept: no path, or just its test_name. */
+const isLegacy = (t: KnownTest) => t.title_path.length === 0 || samePath(t.title_path, [t.test_name]);
 
 export function buildTestIndex(tests: KnownTest[]): TestIndex {
   const index: TestIndex = new Map();
@@ -2812,8 +2825,9 @@ export function matchTestKey(index: TestIndex, name: SelectorTestName): string |
   const parent = path.length >= 2 ? path[path.length - 2] : null;
   const tiers: Array<(t: KnownTest) => boolean> = [
     (t) => samePath(t.title_path, path),
-    (t) => t.test_name === path.join(" "),
-    (t) => t.test_name === path[path.length - 1] && (path.length === 1 || t.task_id === parent),
+    // Tiers 2 and 3 only reconstruct a path a legacy row never stored.
+    (t) => isLegacy(t) && t.test_name === path.join(" "),
+    (t) => isLegacy(t) && t.test_name === path[path.length - 1] && (path.length === 1 || t.task_id === parent),
   ];
   for (const tier of tiers) {
     const hits = [...new Set(candidates.filter(tier).map((t) => t.test_key))];

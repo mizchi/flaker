@@ -12,7 +12,7 @@
 import { gate, gateOptions, resolveGate } from "jev-test-filter/gate";
 import type { Answer, RunRecord, TestCase } from "jev-test-filter/types";
 import type { SelectorRecordV1 } from "../contracts/selector-record-v1.js";
-import { SELECTOR_RECORD_KIND } from "../contracts/selector-record-v1.js";
+import { SELECTOR_RECORD_KIND, parseSelectorRecord } from "../contracts/selector-record-v1.js";
 
 function fail(what: string): never {
   throw new Error(`invalid jev record: ${what}`);
@@ -36,6 +36,9 @@ function readTest(v: unknown, at: string): TestCase {
   if (typeof v.line !== "number" || typeof v.endLine !== "number") fail(`${at}.line/endLine must be numbers`);
   if (typeof v.framework !== "string") fail(`${at}.framework must be a string`);
   if (typeof v.dynamic !== "boolean") fail(`${at}.dynamic must be a boolean`);
+  for (const key of ["project", "runnerFile"] as const) {
+    if (v[key] !== undefined && typeof v[key] !== "string") fail(`${at}.${key} must be a string when present`);
+  }
   return {
     ...(v as unknown as TestCase),
     file: v.file,
@@ -51,7 +54,8 @@ function readAnswers(v: unknown): Record<string, Answer | null> {
   const out: Record<string, Answer | null> = {};
   for (const [id, a] of Object.entries(v)) {
     if (a === null) { out[id] = null; continue; }
-    if (!isObj(a) || typeof a.value !== "number" || !(a.confidence === null || typeof a.confidence === "number")) {
+    const finite = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n);
+    if (!isObj(a) || !finite(a.value) || !(a.confidence === null || finite(a.confidence))) {
       fail(`answers.${id} must be null or { value: number, confidence: number | null }`);
     }
     out[id] = { value: a.value, confidence: a.confidence as number | null };
@@ -97,7 +101,11 @@ export function parseJevRecord(raw: unknown): RunRecord {
   } as RunRecord;
 }
 
-/** Null for a record that fell back: it holds no decisions. */
+/**
+ * Null for a record that fell back: it holds no decisions. The result goes
+ * through parseSelectorRecord, so it never holds what the importer of a
+ * selector-record file would reject.
+ */
 export function jevRecordToSelectorRecord(record: RunRecord): SelectorRecordV1 | null {
   if (record.fallback !== null) return null;
   const selection = gate(
@@ -107,7 +115,7 @@ export function jevRecordToSelectorRecord(record: RunRecord): SelectorRecordV1 |
     gateOptions(record.gate),
     new Set(record.quarantined),
   );
-  return {
+  return parseSelectorRecord({
     version: 1,
     kind: SELECTOR_RECORD_KIND,
     selector: "jev",
@@ -128,5 +136,5 @@ export function jevRecordToSelectorRecord(record: RunRecord): SelectorRecordV1 |
       reason: v.reason,
       selected: v.selected,
     })),
-  };
+  });
 }

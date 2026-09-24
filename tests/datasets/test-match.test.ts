@@ -35,6 +35,24 @@ describe("matchTestKey", () => {
     expect(matchTestKey(index, { file: "tests/a.test.ts", title_path: ["A", "works"], project: "" })).toBe("k-vitest-new");
   });
 
+  it("never falls back to tiers 2 and 3 for a row that has a real title path", () => {
+    const strict = buildTestIndex([
+      { test_key: "k-a", file: "a.spec.ts", title_path: ["suite", "redirects"], test_name: "redirects", task_id: "suite", project: null },
+      { test_key: "k-b", file: "b.test.ts", title_path: ["A", "works"], test_name: "A works", task_id: "b.test.ts", project: null },
+      { test_key: "k-c", file: "c.spec.ts", title_path: ["outer", "inner", "leaf"], test_name: "leaf", task_id: "inner", project: null },
+    ]);
+    expect(matchTestKey(strict, { file: "a.spec.ts", title_path: ["redirects"] })).toBeNull();
+    expect(matchTestKey(strict, { file: "b.test.ts", title_path: ["A works"] })).toBeNull();
+    expect(matchTestKey(strict, { file: "c.spec.ts", title_path: ["OTHER", "inner", "leaf"] })).toBeNull();
+  });
+
+  it("treats an empty title path as a legacy row", () => {
+    const legacy = buildTestIndex([
+      { test_key: "k-e", file: "e.test.ts", title_path: [], test_name: "E works", task_id: "e.test.ts", project: null },
+    ]);
+    expect(matchTestKey(legacy, { file: "e.test.ts", title_path: ["E", "works"] })).toBe("k-e");
+  });
+
   it("returns null when ambiguous or unknown", () => {
     expect(matchTestKey(index, { file: "tests/dup.test.ts", title_path: ["same"] })).toBeNull();
     expect(matchTestKey(index, { file: "e2e/login.spec.ts", title_path: ["login", "shows form"] })).toBeNull();

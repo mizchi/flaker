@@ -77,13 +77,16 @@ export const SELECTOR_RECORD_V1_SCHEMA: JsonSchema = {
         type: "object",
         required: ["file", "title_path", "score", "confidence", "reason", "selected"],
         properties: {
-          file: STR, title_path: STRINGS, project: STR, runner_file: STR,
+          file: STR, title_path: { ...STRINGS, minItems: 1 }, project: STR, runner_file: STR,
           score: NUM_OR_NULL, confidence: NUM_OR_NULL, reason: STR, selected: BOOL,
         },
       },
     },
   },
 };
+
+/** JSON Schema's `date-time`: RFC 3339, with a `Z` or a numeric offset. */
+const RFC3339 = /^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(\.\d+)?([Zz]|[+-]\d{2}:\d{2})$/;
 
 function fail(what: string): never {
   throw new Error(`invalid selector-record: ${what}`);
@@ -121,12 +124,13 @@ function parseGate(v: unknown): SelectorGateValues | null {
 function parseTest(v: unknown, at: string): SelectorRecordTestV1 {
   if (!isObj(v)) fail(`${at} must be an object`);
   if (typeof v.file !== "string" || v.file === "") fail(`${at}.file must be a non-empty string`);
-  if (!Array.isArray(v.title_path) || !v.title_path.every((s) => typeof s === "string")) {
-    fail(`${at}.title_path must be an array of strings`);
+  if (!Array.isArray(v.title_path) || v.title_path.length === 0 || !v.title_path.every((s) => typeof s === "string")) {
+    fail(`${at}.title_path must be a non-empty array of strings`);
   }
   if (typeof v.reason !== "string" || v.reason === "") fail(`${at}.reason must be a non-empty string`);
   if (typeof v.selected !== "boolean") fail(`${at}.selected must be a boolean`);
-  const project = optionalString(v.project, `${at}.project`);
+  // An empty project means none, as it does for the matcher and the jev converter.
+  const project = optionalString(v.project, `${at}.project`) || undefined;
   const runnerFile = optionalString(v.runner_file, `${at}.runner_file`);
   return {
     file: v.file,
@@ -145,8 +149,8 @@ export function parseSelectorRecord(raw: unknown): SelectorRecordV1 {
   if (raw.version !== 1) fail(`unsupported version ${String(raw.version)}; expected 1`);
   if (raw.kind !== SELECTOR_RECORD_KIND) fail(`kind must be "${SELECTOR_RECORD_KIND}"`);
   if (typeof raw.selector !== "string" || raw.selector === "") fail("selector must be a non-empty string");
-  if (typeof raw.created_at !== "string" || Number.isNaN(Date.parse(raw.created_at))) {
-    fail("created_at must be an ISO date-time");
+  if (typeof raw.created_at !== "string" || !RFC3339.test(raw.created_at) || Number.isNaN(Date.parse(raw.created_at))) {
+    fail("created_at must be an RFC 3339 date-time");
   }
   const source = raw.source ?? "real";
   if (source !== "real" && source !== "mutation") fail(`source must be "real" or "mutation"`);

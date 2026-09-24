@@ -35,6 +35,8 @@ describe("selector-record v1", () => {
     ["gate value not a number", (r) => { r.gate.cutoff = "2"; }],
     ["tests not an array", (r) => { r.tests = {}; }],
     ["title_path not strings", (r) => { r.tests[0].title_path = [1]; }],
+    ["empty title_path", (r) => { r.tests[0].title_path = []; }],
+    ["a created_at that is not RFC 3339", (r) => { r.created_at = "Sep 24 2026"; }],
     ["selected not boolean", (r) => { r.tests[0].selected = "no"; }],
     ["score not a number", (r) => { r.tests[0].score = "high"; }],
   ];
@@ -46,6 +48,15 @@ describe("selector-record v1", () => {
       expect(() => parseSelectorRecord(r)).toThrow(/invalid selector-record/);
     });
   }
+
+  it("accepts an RFC 3339 offset and reads an empty project as none", () => {
+    const r = structuredClone(valid);
+    r.created_at = "2026-09-20T19:00:00+09:00";
+    r.tests[1].project = "";
+    const parsed = parseSelectorRecord(r);
+    expect(parsed.created_at).toBe("2026-09-20T19:00:00+09:00");
+    expect(parsed.tests[1]).not.toHaveProperty("project");
+  });
 
   it("derives a stable run id from the content", () => {
     const a = selectorRunId(parseSelectorRecord(valid));

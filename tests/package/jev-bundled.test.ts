@@ -1,12 +1,33 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const MAIN = resolve(__filename, "../../../dist/cli/main.js");
 
+const SRC = resolve(__filename, "../../../src");
+
+function newestMtime(dir: string): number {
+  let newest = 0;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    newest = Math.max(newest, entry.isDirectory() ? newestMtime(path) : statSync(path).mtimeMs);
+  }
+  return newest;
+}
+
 describe("jev-test-filter is bundled, not a runtime dependency", () => {
+  // The checks below read the build output; a missing or stale bundle would
+  // make them pass or fail for the wrong reason.
+  it("dist/cli/main.js is built from the current src (run `pnpm build`)", () => {
+    expect(existsSync(MAIN), `${MAIN} is missing; run \`pnpm build\``).toBe(true);
+    expect(
+      statSync(MAIN).mtimeMs >= newestMtime(SRC),
+      `${MAIN} is older than src/; run \`pnpm build\``,
+    ).toBe(true);
+  });
+
   it("dist/cli/main.js does not import jev-test-filter", () => {
     const text = readFileSync(MAIN, "utf8");
     expect(text).not.toMatch(/from\s*["']jev-test-filter/);

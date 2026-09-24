@@ -46,6 +46,26 @@ describe("jev record → selector-record", () => {
     expect(jevRecordToSelectorRecord(parseJevRecord(r))).toBeNull();
   });
 
+  it("rejects project, runnerFile and answer values of the wrong type", () => {
+    const cases: Array<(r: any) => void> = [
+      (r) => { r.tests[0].runnerFile = null; },
+      (r) => { r.tests[0].project = 7; },
+      (r) => { r.answers[Object.keys(r.answers)[0]] = { value: Number.NaN, confidence: 0.5 }; },
+      (r) => { r.answers[Object.keys(r.answers)[0]] = { value: Number.POSITIVE_INFINITY, confidence: 0.5 }; },
+    ];
+    for (const mutate of cases) {
+      const r = read("record-v2.json");
+      mutate(r);
+      expect(() => parseJevRecord(r)).toThrow(/invalid jev record/);
+    }
+  });
+
+  it("converts only to records that parseSelectorRecord accepts", () => {
+    const r = read("record-v2.json");
+    r.tests[0].titlePath = [];
+    expect(() => jevRecordToSelectorRecord(parseJevRecord(r))).toThrow(/invalid selector-record/);
+  });
+
   it("rejects an unknown version and a malformed test", () => {
     expect(() => parseJevRecord({ ...read("record-v2.json"), version: 3 })).toThrow(/invalid jev record/);
     const bad = read("record-v2.json");
