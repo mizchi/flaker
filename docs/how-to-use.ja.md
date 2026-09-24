@@ -27,13 +27,12 @@ pnpm dlx @mizchi/flaker --help
 pnpm --dir ../flaker install
 
 # 利用側プロジェクトの root から
-node ../flaker/scripts/dev-cli.mjs affected --changed src/foo.ts
-node ../flaker/scripts/dev-cli.mjs run --dry-run --profile local --changed src/foo.ts
-node ../flaker/scripts/dev-cli.mjs run --profile local --changed src/foo.ts
-node ../flaker/scripts/dev-cli.mjs analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
+node ../flaker/scripts/dev-cli.mjs run --dry-run --gate iteration --changed src/foo.ts
+node ../flaker/scripts/dev-cli.mjs run --gate iteration --changed src/foo.ts
+node ../flaker/scripts/dev-cli.mjs status --markdown --output .artifacts/flaker-review.md
 
 # flaker 自体を触った直後に build を強制したいとき
-node ../flaker/scripts/dev-cli.mjs --rebuild run --profile local --changed src/foo.ts
+node ../flaker/scripts/dev-cli.mjs --rebuild run --gate iteration --changed src/foo.ts
 ```
 
 `scripts/dev-cli.mjs` は `dist/cli/main.js` と `dist/moonbit/flaker.js` が無ければ自動で build し、source が `dist` より新しい場合も自動で rebuild します。pnpm script を使いたい場合は `pnpm --dir ../flaker run dev:cli -- ...` でも `INIT_CWD` 経由で呼び出し元 repo を維持します。
@@ -56,7 +55,7 @@ GitHub Actions のテスト結果を収集:
 
 ```bash
 export GITHUB_TOKEN=$(gh auth token)
-flaker collect --days 30
+flaker import --ci --days 30
 ```
 
 またはローカルのテストレポートを直接取り込み:
@@ -90,13 +89,13 @@ flaker import ../vrt-harness/test-results/migration/migration-report.json \
 
 ```bash
 # flaky テスト一覧
-flaker analyze flaky
+flaker status --list flaky
 
 # AI が分析して推奨アクションを提示
-flaker analyze reason
+flaker explain reason
 
 # テストスイートの健全性スコア
-flaker analyze eval
+flaker status --markdown
 ```
 
 ### 4. テストを選んで実行する
@@ -162,49 +161,45 @@ flaker plan           # 現状との差分を表示 (dry-run)
 flaker plan --json
 flaker plan --output .artifacts/flaker-plan.json   # PlanArtifact を保存
 
-flaker apply          # 差分を埋めるために collect / calibrate / run / quarantine apply を自動実行
+flaker apply          # 差分を埋めるために import --ci / calibrate / cold-start run / quarantine apply を自動実行
 flaker apply --json
 flaker apply --output .artifacts/flaker-apply.json # ApplyArtifact を保存
 
-# 0.9.0 で ops daily を吸収。weekly は動作 / incident は 1.0.0 で stub 解消予定:
-flaker apply --emit daily   --output .artifacts/flaker-daily.md
-flaker apply --emit weekly  --output .artifacts/flaker-weekly.md
-flaker apply --emit incident  # 現在は flaker ops incident へ誘導する stub
+flaker apply --refresh-only          # probe + diff + plan のみ実行 (execution はしない)
+flaker apply --plan-file plan.json   # 保存済み PlanArtifact を実行
 ```
 
 `flaker.toml` を **desired state** とみなし、現在の DB 状態を見て「何をすべきか」を planner が組み立てる。履歴ゼロの新規 repo なら `collect_ci` + `cold_start_run` が、十分な履歴があれば `collect_ci` + `calibrate` + `quarantine_apply` が選ばれる。ユーザー側が順序を覚える必要はない。
 
 `[promotion]` セクションの閾値と現状の KPI を突き合わせて `flaker status` がドリフトを表示する。
 
-#### 0.9.0 の `--json` 出力シェイプ
+#### `--json` 出力シェイプ
 
 `flaker apply --json`:
 
-- `executed[*].status`: `"ok" | "failed" | "skipped"` (旧 `.ok: boolean` + トップレベル `aborted` は削除)
+- `executed[*].status`: `"ok" | "failed" | "skipped"`
 - `executed[*].skippedReason?: string`: dependency 失敗で skip されたときの理由
 - exit code は `status === "failed"` のみ 1、skipped は 0
+- 0.13.0 で `ApplyArtifact` JSON のトップレベル `emitted` フィールドは削除
 
-`flaker status --json` の `drift.unmet[*]` も同様に `{ field, threshold }` → `{ kind, desired }` へ変更。
+`flaker status --json` の `drift.unmet[*]` は `{ kind, desired }` 形式。
 
-#### `--emit` と `ops` の棲み分け
+#### 週次 / インシデント対応 (0.13.0)
 
-- `apply --emit daily`: 旧 `flaker ops daily` と同じ cadence artifact を出力 (0.9.0 で統合、`ops daily` は deprecated)。
-- `apply --emit weekly`: 同じく weekly 集計を出力。ただし `flaker ops weekly` は operator 向け narrative (quarantine 提案, flaky-tag triage 等) を別途 carry するため first-class 継続。
-- `apply --emit incident`: 現状 stub。インシデント調査は `flaker ops incident --run <id>` または `flaker debug retry / confirm / diagnose` を使う。1.0.0 で `--incident-*` フラグを取って完全統合予定。
+旧 cadence artifact 用サブコマンド群は 0.13.0 で全廃されました (詳細は [docs/migration-0.12-to-0.13.ja.md](migration-0.12-to-0.13.ja.md))。代わりに:
 
-### `flaker collect` — CI からデータ収集
+- 日次/週次レビュー: `flaker apply && flaker status --markdown > .artifacts/flaker-review.md`、閾値ドリフトの narrative は `flaker explain insights`
+- インシデント調査: `flaker debug retry` / `flaker debug confirm` / `flaker debug diagnose`
+
+### `flaker import --ci` — CI からデータ収集
 
 ```bash
-flaker collect                                           # 直近 30 日分
-flaker collect --days 90                                 # 直近 90 日分
-flaker collect --branch main                             # main ブランチのみ
-flaker collect --json --output .artifacts/collect.json   # 機械可読 summary を保存
-flaker collect --json --output .artifacts/collect.json --fail-on-errors
+flaker import --ci                                           # 直近 30 日分
+flaker import --ci --days 90                                 # 直近 90 日分
+flaker import --ci --branch-filter main                      # main ブランチのみ
 ```
 
 GitHub Actions の artifact からテストレポートを自動抽出します。既定の artifact 名は `playwright` が `playwright-report`、`junit` が `junit-report`、`vrt-migration` が `migration-report`、`vrt-bench` が `bench-report` です。workflow 側で別名を使う場合は `[adapter].artifact_name` で上書きします。`GITHUB_TOKEN` 環境変数が必要です。
-
-`--json` は機械可読 summary が欲しいとき、`--output <file>` は summary を artifact に残したいとき、`--fail-on-errors` は partial failure を CI failure として扱いたいときに使います。JSON summary では、実際に取り込めた run (`runsCollected`)、まだ matching artifact が見つかっていない run (`pendingArtifactRuns`)、収集中に失敗した run (`failedRuns`) を分けて確認できます。
 
 GitHub Actions の完全な例は [examples/github-actions/collect-summary.yml](../examples/github-actions/collect-summary.yml) を参照してください。
 
@@ -264,15 +259,6 @@ flaker 上での identity mapping:
 
 同じドメインの initial 画像と interaction scenario が同じ suite の下にぶら下がるため、suite ベースの集計・affected-suites の扱いが自然になる。producer/consumer 双方が `schemaVersion` を明示できるので過去データとの整合も保たれる。
 
-### `flaker collect local` — actrun 実行履歴の取り込み
-
-```bash
-flaker collect local              # actrun の全実行履歴を取り込み
-flaker collect local --last 10    # 直近 10 run のみ
-```
-
-actrun (GitHub Actions 互換ローカルランナー) の実行結果を自動取り込みします。artifact ディレクトリに Playwright/JUnit レポートがあれば、それも解析します。
-
 ### flaky テスト一覧 — `flaker status --list flaky`
 
 0.7.0 以前の `flaker analyze flaky` は 0.8.0 で削除。flaky テスト一覧は `flaker status --list flaky` に統合済み。
@@ -324,7 +310,7 @@ sampling effectiveness / false negative rate の変動から、閾値の見直�
 
 #### `explain cluster` — 同時失敗クラスタ
 
-co-failure クラスタ検出。詳細は [co-failure クラスタリング](#co-failure-クラスタリング-samplingcluster_mode) 節を参照。
+co-failure クラスタ検出。詳細は [co-failure クラスタリング](#co-failure-クラスタリング-flaker-explain-cluster) 節を参照。
 
 ```bash
 flaker explain cluster --min-co-rate 0.9
@@ -352,11 +338,10 @@ flaker explain context --test "handles timeout"
 ### `flaker run --dry-run` — テストサンプリング（dry run）
 
 ```bash
-flaker run --dry-run --strategy random --count 20        # ランダム 20 件
 flaker run --dry-run --strategy weighted --count 20      # flaky 優先
 flaker run --dry-run --strategy affected                 # 変更影響のみ
 flaker run --dry-run --strategy hybrid --count 50        # ハイブリッド（推奨）
-flaker run --dry-run --profile local --changed src/foo.ts
+flaker run --dry-run --gate iteration --changed src/foo.ts
 flaker run --dry-run --percentage 30                     # 全テストの 30%
 flaker run --dry-run --skip-quarantined                  # quarantine 除外
 ```
@@ -365,17 +350,19 @@ flaker run --dry-run --skip-quarantined                  # quarantine 除外
 
 | 戦略 | 説明 |
 |------|------|
-| `random` | 均等ランダム |
 | `weighted` | flaky rate で重み付け (flaky なテストほど選ばれやすい) |
 | `affected` | `git diff` から変更影響テストを特定 |
 | `hybrid` | affected + 前回失敗 + 新規テスト + weighted random (Microsoft TIA 方式) |
+| `full` | 全件実行 |
+
+`random` / `gbdt` / `coverage-guided` 戦略は 0.13.0 で削除されました。詳細は [docs/migration-0.12-to-0.13.ja.md](migration-0.12-to-0.13.ja.md)。
 
 ### `flaker run` — サンプリング + 実行
 
 ```bash
 flaker run --strategy hybrid --count 50
 flaker run --strategy affected
-flaker run --profile local --changed src/foo.ts
+flaker run --gate iteration --changed src/foo.ts
 flaker run --skip-quarantined
 flaker run --runner actrun                        # actrun 経由で実行
 flaker run --runner actrun --retry                # 失敗箇所のみリトライ
@@ -397,20 +384,19 @@ trust = true
 
 実行結果は自動的に DB に格納されます。
 
-### Execution Profiles
+### Execution Gates
 
-`flaker run` は execution profile から設定を継承できます（実行せずサンプリングのみ行う場合は `--dry-run` を使用）:
+`flaker run` は `[gate.<name>]` から設定を継承します（実行せずサンプリングのみ行う場合は `--dry-run` を使用）。`[profile.*]` / `--profile` / `FLAKER_PROFILE` は 0.13.0 で削除されました — 詳細は [docs/migration-0.12-to-0.13.ja.md](migration-0.12-to-0.13.ja.md)。
 
 ```toml
-[profile.scheduled]
+[gate.release]
 strategy = "full"
 
-[profile.ci]
+[gate.merge]
 strategy = "hybrid"
 sample_percentage = 30
-adaptive = true
 
-[profile.local]
+[gate.iteration]
 strategy = "affected"
 max_duration_seconds = 60
 fallback_strategy = "weighted"
@@ -419,19 +405,20 @@ fallback_strategy = "weighted"
 ローカルでは次のループが扱いやすいです:
 
 ```bash
-flaker exec affected --changed src/foo.ts
-flaker run --dry-run --profile local --changed src/foo.ts
-flaker run --profile local --changed src/foo.ts
+flaker run --dry-run --gate iteration --changed src/foo.ts
+flaker run --gate iteration --changed src/foo.ts
 ```
 
-`profile.local` で `affected` 選択、`weighted` への fallback、time budget 制御をまとめて扱うのが、dogfood と日常開発の両方で実用的です。
+`gate.iteration` で `affected` 選択、`weighted` への fallback、time budget 制御をまとめて扱うのが、dogfood と日常開発の両方で実用的です。
+
+`adaptive` (自動チューニング) キーは 0.13.0 で削除されました。代わりに `flaker calibrate` を定期実行してください。
 
 ### フラグの優先順位
 
 ```
 Resolution order (highest to lowest):
   1. Explicit CLI flag          (--strategy, --percentage, --count)
-  2. [profile.<name>] in flaker.toml   (via --profile or auto-detection)
+  2. [gate.<name>] in flaker.toml      (via --gate or auto-detection)
   3. [sampling] in flaker.toml         (project default)
   4. Built-in defaults
 
@@ -444,25 +431,9 @@ Notes:
 
 `--count` と `--percentage` を同時に指定した場合は `--count` が優先されます。`--changed` は git の自動検出を上書きします。`--dry-run` は実行を抑制しますが、選択結果はテレメトリに記録されます。`--explain` は dry-run でも実際の実行でも併用できます。
 
-### co-failure クラスタリング (`[sampling].cluster_mode`)
+### co-failure クラスタリング (`flaker explain cluster`)
 
-同じ run で同時に失敗するテスト群をクラスタとして扱い、sampling 時に**代表 1 本**だけ選ぶことで多様な失敗パターンを少ない枠でカバーする仕組み。VRT で数万の scenario をサンプリングするような用途向け。
-
-#### 設定
-
-```toml
-[sampling]
-cluster_mode = "spread"   # "off" (既定) | "spread" | "pack"
-co_failure_window_days = 90
-```
-
-| mode | 挙動 |
-|---|---|
-| `off` | クラスタを無視。通常の `weighted` / `hybrid` sampling。 |
-| `spread` | 各クラスタから **1 本だけ** 選び、残りの枠は通常 weighted で埋める。多様性優先。 |
-| `pack` | 同一クラスタ内のテストを**まとめて**取る。同根原因の確認を深堀りしたいとき。 |
-
-`cluster_mode` は `weighted` / `hybrid` strategy に対してのみ有効。`affected` / `full` では無視される。
+> **0.13.0 の変更点:** sampling 時に代表 1 本を選ぶ `[sampling].cluster_mode` (`spread` / `pack`) は `model_path` と共に削除されました。以下の co-failure クラスタ**分析** (`flaker explain cluster`) は影響を受けません — これは sampling の挙動ではなく read-only なレポートです。
 
 #### クラスタ検出の閾値
 
@@ -481,26 +452,9 @@ flaker explain cluster --window-days 30 --top 50         # 直近 30 日、上�
 flaker explain cluster --json                            # 機械可読出力
 ```
 
-#### 既存の `co_failure_boost` との違い
+### Coverage-guided sampling (0.13.0 で削除)
 
-| | `co_failure_boost` | cluster_mode |
-|---|---|---|
-| 相関 | ファイル変更 ↔ テスト失敗 | テスト失敗 ↔ テスト失敗 |
-| 用途 | affected sampling で「変更に関連するテスト」を優先 | sampling 枠に多様性を持たせる / 深堀りする |
-| データ | `commit_changes` + `test_results` | `test_results` のみ |
-
-両方を同時に設定しても矛盾せず、cluster_mode は `weighted` / `hybrid` の最終段で適用される (boost で並べ替え後にクラスタ代表を選ぶ)。
-
-### `flaker collect coverage` — Coverage edge の取り込み
-
-```bash
-flaker collect coverage --format istanbul --input coverage/coverage-final.json
-flaker collect coverage --format playwright --input .artifacts/coverage
-```
-
-`coverage-guided` sampling 用に、テストごとの coverage edge を DuckDB へ取り込みます。directory input も受け付け、重複 edge は insert 前に dedupe されます。
-
-(メンテナ用コマンドは末尾の Advanced / Maintainer tools 節を参照)
+`[coverage]`、`flaker collect coverage`、`coverage-guided` 戦略は 0.13.0 で削除されました。[Coverage-Guided Test Sampling](coverage-guided-sampling.md) (歴史的資料として保持) と [docs/migration-0.12-to-0.13.ja.md](migration-0.12-to-0.13.ja.md) を参照。
 
 ### quarantine の管理 — `flaker apply` + `[quarantine].auto`
 
@@ -702,7 +656,7 @@ trust = true
 | `jest` | 現状対応なし | 同上。`describe.skip` / `it.skip` で個別スキップ |
 | `custom` | runner 次第 | 任意のフィルタを `execute` コマンド側で実装 |
 
-`flaker ops weekly` / `flaker analyze flaky-tag` が出す `@flaky` add/remove 提案は Playwright 前提。Vitest / Jest で同じ自動化が欲しい場合は提案 JSON をパースして自前で適用する必要がある (0.7.x では自動適用なし)。
+flaky-tag の add/remove 提案機能 (旧 `ops` コマンド群が出力していたもの) は `ops` と共に 0.13.0 で削除されました。`flaker status --list flaky` で候補を確認し、手動でタグ付けしてください。
 
 ---
 
@@ -788,9 +742,6 @@ flaker run --runner actrun
 
 # 失敗テストだけリトライ
 flaker run --runner actrun --retry
-
-# actrun の過去の実行履歴を一括取り込み
-flaker collect local
 ```
 
 workflow path は `[runner.actrun].workflow` から解決されます。.github/workflows/ci.yml のような repo 相対 path を明示し、git worktree を使わないローカル実行では `local = true` を付けてください。
@@ -803,31 +754,29 @@ workflow path は `[runner.actrun].workflow` から解決されます。.github/
 
 ```bash
 # 朝: CI データを最新化
-flaker collect
+flaker import --ci --days 7
 
-# コード変更後: inspect → sample → run を local profile で回す
-flaker exec affected --changed src/foo.ts
-flaker run --dry-run --profile local --changed src/foo.ts
-flaker run --profile local --changed src/foo.ts
+# コード変更後: inspect → sample → run を iteration gate で回す
+flaker run --dry-run --gate iteration --changed src/foo.ts
+flaker run --gate iteration --changed src/foo.ts
 
 # 全体の状態確認
-flaker analyze eval
+flaker status --markdown
 ```
 
 ### flaky テスト対応
 
 ```bash
 # 問題のあるテストを特定
-flaker analyze reason
+flaker explain reason
 
-# 重症なものを隔離
-flaker policy quarantine --auto
+# 重症なものを隔離 (apply は [quarantine].auto を尊重する)
+flaker apply
 
 # 原因コミットを特定
 flaker debug bisect --test "問題のテスト名"
 
-# 修正後、隔離解除
-flaker policy quarantine --remove "suite>testName"
+# 修正後、.flaker/quarantine-manifest.toml を編集して該当行を削除
 ```
 
 ### CI での活用
@@ -836,9 +785,9 @@ flaker policy quarantine --remove "suite>testName"
 # .github/workflows/flaker.yml
 - name: Collect & Analyze
   run: |
-    flaker collect --days 7
-    flaker analyze eval --json --output flaker-report.json
-    flaker analyze reason --json > flaker-reason.json
+    flaker import --ci --days 7
+    flaker status --json --output flaker-report.json
+    flaker explain reason --json > flaker-reason.json
 
 - name: Upload analysis
   uses: actions/upload-artifact@v6
@@ -869,26 +818,38 @@ flaker policy quarantine --remove "suite>testName"
 | `[sampling]` | `detected_co_failure_strength` | `detected_co_failure_strength_ratio` | 0.0–1.0 |
 | `[flaky]` | `detection_threshold` | `detection_threshold_ratio` | 0.0–1.0 |
 | `[quarantine]` | `flaky_rate_threshold` | `flaky_rate_threshold_percentage` | 0–100 |
-| `[profile.*]` | `percentage` | `sample_percentage` | 0–100 |
-| `[profile.*]` | `co_failure_days` | `co_failure_window_days` | 日数 (整数) |
-| `[profile.*]` | `adaptive_fnr_low` | `adaptive_fnr_low_ratio` | 0.0–1.0 |
-| `[profile.*]` | `adaptive_fnr_high` | `adaptive_fnr_high_ratio` | 0.0–1.0 |
+| `[profile.*]` (0.13.0 より前) | `percentage` | `sample_percentage` | 0–100 |
+| `[profile.*]` (0.13.0 より前) | `co_failure_days` | `co_failure_window_days` | 日数 (整数) |
 
 `flaky_rate_threshold` の単位解釈も変わりました。以前は `30.0` を「30%」、`0.3` を自動正規化して扱っていましたが、現在はそのまま percentage として解釈します。旧設定が `flaky_rate_threshold = 0.3` だった場合は `flaky_rate_threshold_percentage = 30` にリネームしてください。
 
-範囲検証は `flaker debug doctor` と `flaker policy check` が担当します: `*_ratio` は [0.0, 1.0]、`*_percentage` は [0, 100]、`*_days` / `*_seconds` / `*_count` は非負整数でなければなりません。
+範囲検証は `flaker doctor` が担当します: `*_ratio` は [0.0, 1.0]、`*_percentage` は [0, 100]、`*_days` / `*_seconds` / `*_count` は非負整数でなければなりません。
+
+### 0.13.0 のリネームと削除
+
+`0.13.0` で `[profile.*]` セクションは `[gate.*]` にリネームされ、adaptive sampling は全廃されました。カスタム profile 名 (`local` / `ci` / `scheduled` 以外) に対応する gate はありません。
+
+| 旧 (0.12.x) | 新 (0.13.0) |
+|---|---|
+| `[profile.local]` | `[gate.iteration]` |
+| `[profile.ci]` | `[gate.merge]` |
+| `[profile.scheduled]` | `[gate.release]` |
+| `run --profile <name>` | `run --gate <name>` |
+| `FLAKER_PROFILE=<name>` | `FLAKER_GATE=<name>` |
+
+`0.13.0` で完全に削除 (リネーム先なし。キー自体を削除する):
+
+- `adaptive`, `adaptive_fnr_low_ratio`, `adaptive_fnr_high_ratio`, `adaptive_min_percentage`, `adaptive_step` — 代わりに `flaker calibrate` を定期実行する
+- `cluster_mode`, `model_path`
+- `[coverage]` (セクションごと)
+- `strategy = "random"`, `strategy = "gbdt"`, `strategy = "coverage-guided"` (および対応する `fallback_strategy` の値) — `weighted` / `affected` / `hybrid` / `full` を使う
+
+これらのキーを含む `flaker.toml` は、該当キー名と置き換え先 (または削除指示) を明示したエラーで起動を拒否します。詳細とエラー文の実例は [docs/migration-0.12-to-0.13.ja.md](migration-0.12-to-0.13.ja.md) を参照。
 
 ---
 
 ## Advanced / Maintainer tools
 
-通常の日常利用では不要なメンテナ向けコマンド群。ML モデルのチューニングや内部評価に使う。
+通常の日常利用では不要なメンテナ向けコマンド群。`dev` は `--help` からは隠れていますが実行は可能です。
 
-### `flaker dev train` — GBDT モデル学習
-
-```bash
-flaker dev train
-flaker dev train --window-days 30 --num-trees 10 --learning-rate 0.3
-```
-
-蓄積済みの CI / local history から `.flaker/models/gbdt.json` を生成します。local run も低い重みで学習に含め、保存される model には `gbdt` sampling で使う feature 名も入ります。
+`flaker dev train` (GBDT モデル学習) は `gbdt` 戦略と共に 0.13.0 で削除され、代替コマンドはありません。`flaker dev tune` (co-failure alpha の自動チューニング) と `flaker dev eval-co-failure` は影響を受けません。

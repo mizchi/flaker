@@ -1,10 +1,25 @@
 # Changelog
 
-## Unreleased
+## 0.13.0 (unreleased)
+
+### Breaking
+
+- `run --profile`, `[profile.*]` and `FLAKER_PROFILE` are replaced by `run --gate`, `[gate.iteration|merge|release]` and `FLAKER_GATE`.
+- Removed the `random`, `gbdt` and `coverage-guided` strategies, `cluster_mode`, `model_path`, `[coverage]` and `dev train`.
+- Removed adaptive sampling (`adaptive*` keys).
+- `apply` only reconciles: `--emit`, `--target` and `--incident-*` are gone, and so is the `ops` group.
+- `dev` is hidden from the help.
+- `flaker calibrate` now recommends `hybrid` when `[affected].resolver` is configured and `weighted` otherwise; it no longer recommends `random` for small suites or `gbdt` for large ones.
+- `flaker explain context --json` no longer lists the `random` / `coverage-guided` / `gbdt` strategies in its `strategies` map and drops `environment.gbdtModelAvailable`.
+- `ApplyArtifact` JSON no longer has a top-level `emitted` field.
 
 ### Added
 
+- `flaker calibrate` (was `apply --target calibrate`).
+- `flaker import --ci [--days <n>]` (was `apply --target collect_ci`).
 - `flaker explain cluster --workflow <name> | --lane <name> | --tag k=v` (#74). Co-failure clustering can now be narrowed to a specific GitHub Actions workflow, lane, or arbitrary tag, reducing the same-batch / same-workflow bias that inflates clusters when tests are always observed together in fixed cohorts. Three new optional columns on `workflow_runs` (`workflow_name`, `lane`, `tags JSON`) are populated automatically from the GitHub API at `flaker apply --target collect_ci` time. A new optional `[workflow_lanes]` map in `flaker.toml` resolves `workflow_name → lane`. `flaker import` gains symmetric `--workflow-name <name>`, `--lane <name>`, and repeatable `--tag k=v` flags so locally-imported reports can also be tagged. Filters are AND-combined; backwards compatible (no filter = previous behaviour).
+
+See docs/migration-0.12-to-0.13.md.
 
 ## 0.12.0
 

@@ -1,5 +1,7 @@
 # Sampling Strategy Evaluation Report
 
+> **Historical document.** The `random`, `gbdt`, and `coverage-guided` strategies evaluated below were removed in flaker 0.13.0 (see [migration-0.12-to-0.13.md](migration-0.12-to-0.13.md)). This report is kept for historical reference; current strategies are `weighted`, `affected`, `hybrid`, and `full`.
+
 ## Overview
 
 We evaluated six sampling strategies provided by flaker using synthetic fixture data.

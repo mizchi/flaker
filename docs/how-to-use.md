@@ -27,13 +27,12 @@ pnpm dlx @mizchi/flaker --help
 pnpm --dir ../flaker install
 
 # from your project root
-node ../flaker/scripts/dev-cli.mjs affected --changed src/foo.ts
-node ../flaker/scripts/dev-cli.mjs run --dry-run --profile local --changed src/foo.ts
-node ../flaker/scripts/dev-cli.mjs run --profile local --changed src/foo.ts
-node ../flaker/scripts/dev-cli.mjs analyze eval --markdown --window 7 --output .artifacts/flaker-review.md
+node ../flaker/scripts/dev-cli.mjs run --dry-run --gate iteration --changed src/foo.ts
+node ../flaker/scripts/dev-cli.mjs run --gate iteration --changed src/foo.ts
+node ../flaker/scripts/dev-cli.mjs status --markdown --output .artifacts/flaker-review.md
 
 # optional: force rebuild after editing flaker itself
-node ../flaker/scripts/dev-cli.mjs --rebuild run --profile local --changed src/foo.ts
+node ../flaker/scripts/dev-cli.mjs --rebuild run --gate iteration --changed src/foo.ts
 ```
 
 `scripts/dev-cli.mjs` auto-builds `dist/cli/main.js` and `dist/moonbit/flaker.js` when they are missing, and also rebuilds when source files are newer than `dist`. If you prefer pnpm scripts, `pnpm --dir ../flaker run dev:cli -- ...` also preserves the caller repo through `INIT_CWD`.
@@ -56,7 +55,7 @@ Fetch test results from GitHub Actions:
 
 ```bash
 export GITHUB_TOKEN=$(gh auth token)
-flaker collect --days 30
+flaker import --ci --days 30
 ```
 
 Or import local test reports directly:
@@ -90,13 +89,13 @@ flaker import ../vrt-harness/test-results/migration/migration-report.json \
 
 ```bash
 # List flaky tests
-flaker analyze flaky
+flaker status --list flaky
 
 # AI-powered analysis with recommended actions
-flaker analyze reason
+flaker explain reason
 
 # Test suite health score
-flaker analyze eval
+flaker status --markdown
 ```
 
 ### 4. Select & Run Tests
@@ -162,49 +161,45 @@ flaker plan           # Show the diff against current state (dry-run)
 flaker plan --json
 flaker plan --output .artifacts/flaker-plan.json   # Persist PlanArtifact
 
-flaker apply          # Auto-run collect / calibrate / run / quarantine apply to close the gap
+flaker apply          # Auto-run import --ci / calibrate / cold-start run / quarantine apply to close the gap
 flaker apply --json
 flaker apply --output .artifacts/flaker-apply.json # Persist ApplyArtifact
 
-# 0.9.0 subsumed ops daily. weekly still works, incident is a stub until 1.0.0:
-flaker apply --emit daily   --output .artifacts/flaker-daily.md
-flaker apply --emit weekly  --output .artifacts/flaker-weekly.md
-flaker apply --emit incident  # Currently a stub that redirects to flaker ops incident
+flaker apply --refresh-only          # Probe + diff + plan, skip execution
+flaker apply --plan-file plan.json   # Execute a previously-saved PlanArtifact
 ```
 
 `flaker.toml` is treated as the **desired state**, and the planner inspects the current DB state to decide what to do. A brand-new repo with no history gets `collect_ci` + `cold_start_run`; a repo with enough history gets `collect_ci` + `calibrate` + `quarantine_apply`. The user does not have to memorize the ordering.
 
 `flaker status` compares the `[promotion]` thresholds against the current KPIs and reports drift.
 
-#### `--json` output shape in 0.9.0
+#### `--json` output shape
 
 `flaker apply --json`:
 
-- `executed[*].status`: `"ok" | "failed" | "skipped"` (the old `.ok: boolean` + top-level `aborted` are removed)
+- `executed[*].status`: `"ok" | "failed" | "skipped"`
 - `executed[*].skippedReason?: string`: reason why a step was skipped due to a dependency failure
 - Exit code is 1 only when `status === "failed"`; skipped is 0
+- 0.13.0 removed the top-level `emitted` field from `ApplyArtifact` JSON
 
-`flaker status --json`'s `drift.unmet[*]` similarly moved from `{ field, threshold }` to `{ kind, desired }`.
+`flaker status --json`'s `drift.unmet[*]` uses `{ kind, desired }`.
 
-#### How `--emit` and `ops` divide up
+#### Weekly / incident cadence (0.13.0)
 
-- `apply --emit daily`: emits the same cadence artifact as the old `flaker ops daily` (merged in 0.9.0; `ops daily` is deprecated).
-- `apply --emit weekly`: emits the weekly rollup. `flaker ops weekly` stays first-class because it also carries operator-oriented narrative (quarantine proposals, flaky-tag triage, etc.).
-- `apply --emit incident`: currently a stub. For incident investigation use `flaker ops incident --run <id>` or `flaker debug retry / confirm / diagnose`. In 1.0.0 the `--incident-*` flags will be absorbed here.
+The old cadence-artifact subcommands are gone as of 0.13.0 (see [docs/migration-0.12-to-0.13.md](docs/migration-0.12-to-0.13.md) for the full mapping). Use instead:
 
-### `flaker collect` — Collect from CI
+- Daily/weekly review: `flaker apply && flaker status --markdown > .artifacts/flaker-review.md`, plus `flaker explain insights` for threshold-drift narrative
+- Incident investigation: `flaker debug retry` / `flaker debug confirm` / `flaker debug diagnose`
+
+### `flaker import --ci` — Collect from CI
 
 ```bash
-flaker collect                                           # Last 30 days
-flaker collect --days 90                                 # Last 90 days
-flaker collect --branch main                             # main branch only
-flaker collect --json --output .artifacts/collect.json   # Machine-readable summary
-flaker collect --json --output .artifacts/collect.json --fail-on-errors
+flaker import --ci                                           # Last 30 days
+flaker import --ci --days 90                                 # Last 90 days
+flaker import --ci --branch-filter main                      # main branch only
 ```
 
 Auto-extracts test reports from GitHub Actions artifacts. The default artifact name is `playwright-report` for `playwright`, `junit-report` for `junit`, `migration-report` for `vrt-migration`, and `bench-report` for `vrt-bench`. Override it with `[adapter].artifact_name` when your workflow uses a different artifact name. Requires `GITHUB_TOKEN` environment variable.
-
-Use `--json` when you want a machine-readable summary, `--output <file>` when you want to persist that summary as a workflow artifact, and `--fail-on-errors` when partial collection failures should fail CI. The JSON summary separates successfully imported runs (`runsCollected`) from runs that finished without a matching artifact yet (`pendingArtifactRuns`) and runs that errored during collection (`failedRuns`).
 
 A complete GitHub Actions example is available at [examples/github-actions/collect-summary.yml](../examples/github-actions/collect-summary.yml).
 
@@ -264,15 +259,6 @@ Identity mapping on the flaker side:
 
 Because both the initial image and interaction scenarios for the same domain live under the same suite, suite-based aggregation and affected-suites handling stay natural. Both producer and consumer can declare `schemaVersion`, so historical data stays consistent.
 
-### `flaker collect local` — Import actrun History
-
-```bash
-flaker collect local              # Import all actrun run history
-flaker collect local --last 10    # Last 10 runs only
-```
-
-Imports results from [actrun](https://github.com/mizchi/actrun) (GitHub Actions-compatible local runner). Automatically detects and parses Playwright/JUnit reports in artifact directories.
-
 ### Flaky test listing — `flaker status --list flaky`
 
 `flaker analyze flaky` was removed in 0.8.0. Flaky test listing is now part of `flaker status`:
@@ -323,7 +309,7 @@ Surfaces threshold-adjustment candidates based on fluctuations in sampling effec
 
 #### `explain cluster` — co-failure clusters
 
-Co-failure cluster detection. See the [co-failure clustering](#co-failure-clustering-samplingcluster_mode) section below for the full configuration reference.
+Co-failure cluster detection. See the [co-failure clustering](#co-failure-clustering-flaker-explain-cluster) section below for the full configuration reference.
 
 ```bash
 flaker explain cluster --min-co-rate 0.9
@@ -351,11 +337,10 @@ flaker explain context --test "handles timeout"
 ### `flaker run --dry-run` — Test Sampling (dry run)
 
 ```bash
-flaker run --dry-run --strategy random --count 20        # Uniform random
 flaker run --dry-run --strategy weighted --count 20      # Flaky-weighted
 flaker run --dry-run --strategy affected                 # Change-affected only
 flaker run --dry-run --strategy hybrid --count 50        # Hybrid (recommended)
-flaker run --dry-run --profile local --changed src/foo.ts
+flaker run --dry-run --gate iteration --changed src/foo.ts
 flaker run --dry-run --percentage 30                     # 30% of all tests
 flaker run --dry-run --skip-quarantined                  # Exclude quarantined
 ```
@@ -364,17 +349,19 @@ flaker run --dry-run --skip-quarantined                  # Exclude quarantined
 
 | Strategy | Description |
 |----------|------------|
-| `random` | Uniform random selection |
 | `weighted` | Weighted by flaky rate (flakier tests more likely selected) |
 | `affected` | Tests affected by `git diff` changes |
 | `hybrid` | affected + previously failed + new tests + weighted random (Microsoft TIA method) |
+| `full` | Run everything |
+
+The `random`, `gbdt`, and `coverage-guided` strategies were removed in 0.13.0; see [docs/migration-0.12-to-0.13.md](docs/migration-0.12-to-0.13.md).
 
 ### `flaker run` — Sample & Execute
 
 ```bash
 flaker run --strategy hybrid --count 50
 flaker run --strategy affected
-flaker run --profile local --changed src/foo.ts
+flaker run --gate iteration --changed src/foo.ts
 flaker run --skip-quarantined
 flaker run --runner actrun                        # Execute via actrun
 flaker run --runner actrun --retry                # Retry failed tests only
@@ -396,20 +383,19 @@ trust = true
 
 Results are automatically stored in the database.
 
-### Execution Profiles
+### Execution Gates
 
-`flaker run` can inherit settings from execution profiles (use `--dry-run` for sampling without execution):
+`flaker run` inherits settings from `[gate.<name>]` (use `--dry-run` for sampling without execution). `[profile.*]`, `--profile`, and `FLAKER_PROFILE` were removed in 0.13.0 — see [docs/migration-0.12-to-0.13.md](docs/migration-0.12-to-0.13.md).
 
 ```toml
-[profile.scheduled]
+[gate.release]
 strategy = "full"
 
-[profile.ci]
+[gate.merge]
 strategy = "hybrid"
 sample_percentage = 30
-adaptive = true
 
-[profile.local]
+[gate.iteration]
 strategy = "affected"
 max_duration_seconds = 60
 fallback_strategy = "weighted"
@@ -418,19 +404,20 @@ fallback_strategy = "weighted"
 The practical local loop is:
 
 ```bash
-flaker exec affected --changed src/foo.ts
-flaker run --dry-run --profile local --changed src/foo.ts
-flaker run --profile local --changed src/foo.ts
+flaker run --dry-run --gate iteration --changed src/foo.ts
+flaker run --gate iteration --changed src/foo.ts
 ```
 
-`profile.local` is where `affected` selection, fallback to `weighted`, and time-budget control come together for dogfooding and day-to-day development.
+`gate.iteration` is where `affected` selection, fallback to `weighted`, and time-budget control come together for dogfooding and day-to-day development.
+
+The `adaptive` auto-tuning flag (and the other `adaptive_*` keys) were removed in 0.13.0; run `flaker calibrate` periodically instead.
 
 ### Flag precedence
 
 ```
 Resolution order (highest to lowest):
   1. Explicit CLI flag          (--strategy, --percentage, --count)
-  2. [profile.<name>] in flaker.toml   (via --profile or auto-detection)
+  2. [gate.<name>] in flaker.toml      (via --gate or auto-detection)
   3. [sampling] in flaker.toml         (project default)
   4. Built-in defaults
 
@@ -441,25 +428,9 @@ Notes:
   --explain can be combined with --dry-run or a real run
 ```
 
-### Co-failure clustering (`[sampling].cluster_mode`)
+### Co-failure clustering (`flaker explain cluster`)
 
-Treats tests that fail together in the same run as a cluster and picks **one representative** from each cluster during sampling, so a small budget still covers diverse failure patterns. Useful when sampling tens of thousands of VRT scenarios.
-
-#### Configuration
-
-```toml
-[sampling]
-cluster_mode = "spread"   # "off" (default) | "spread" | "pack"
-co_failure_window_days = 90
-```
-
-| mode | Behavior |
-|---|---|
-| `off` | Ignore clusters. Plain `weighted` / `hybrid` sampling. |
-| `spread` | Pick **only one** test from each cluster and fill the remaining budget with normal weighted sampling. Prioritizes diversity. |
-| `pack` | Pick tests from the same cluster **together**. Use when you want to drill down into a common root cause. |
-
-`cluster_mode` only applies to the `weighted` / `hybrid` strategies. It is ignored for `affected` / `full`.
+> **0.13.0 change:** the `[sampling].cluster_mode` knob (`spread` / `pack` representative-picking during sampling) was removed, along with `model_path`. Co-failure cluster *analysis* below (`flaker explain cluster`) is unaffected — it is a read-only report, not a sampling-time behavior.
 
 #### Cluster detection thresholds
 
@@ -478,26 +449,9 @@ flaker explain cluster --window-days 30 --top 50         # Last 30 days, top 50 
 flaker explain cluster --json                            # Machine-readable output
 ```
 
-#### Difference from existing `co_failure_boost`
+### Coverage-guided sampling (removed in 0.13.0)
 
-| | `co_failure_boost` | cluster_mode |
-|---|---|---|
-| Correlation | file change ↔ test failure | test failure ↔ test failure |
-| Purpose | Prioritize "tests related to a change" in affected sampling | Add diversity to the sample budget / drill deeper |
-| Data | `commit_changes` + `test_results` | `test_results` only |
-
-The two settings do not conflict. `cluster_mode` is applied as the final step of `weighted` / `hybrid` (after boost-driven reordering, the cluster representative is picked).
-
-### `flaker collect coverage` — Import Coverage Edges
-
-```bash
-flaker collect coverage --format istanbul --input coverage/coverage-final.json
-flaker collect coverage --format playwright --input .artifacts/coverage
-```
-
-Imports per-test coverage edges into DuckDB for `coverage-guided` sampling. Directory input is supported and duplicate edges are deduped before insertion.
-
-(Maintainer-only commands are consolidated in the Advanced / Maintainer tools section below.)
+`[coverage]`, `flaker collect coverage`, and the `coverage-guided` strategy were removed in 0.13.0. See [docs/coverage-guided-sampling.md](coverage-guided-sampling.md) (kept for history) and [docs/migration-0.12-to-0.13.md](migration-0.12-to-0.13.md).
 
 ### Quarantine management — `flaker apply` + `[quarantine].auto`
 
@@ -699,7 +653,7 @@ trust = true
 | `jest` | Not currently supported | Same as above. Use `describe.skip` / `it.skip` for individual skips |
 | `custom` | Up to the runner | Implement arbitrary filtering inside the `execute` command |
 
-The `@flaky` add/remove proposals emitted by `flaker ops weekly` / `flaker analyze flaky-tag` assume Playwright. For Vitest / Jest you have to parse the proposal JSON and apply it yourself (no automatic apply in 0.7.x).
+Flaky-tag add/remove triage (formerly emitted by the `ops` command group) was removed in 0.13.0 along with `ops`. Use `flaker status --list flaky` to find candidates and tag them by hand.
 
 ---
 
@@ -781,9 +735,6 @@ flaker run --runner actrun
 
 # Retry only failed tests
 flaker run --runner actrun --retry
-
-# Bulk import past actrun history
-flaker collect local
 ```
 
 Set `[runner.actrun].workflow` to a repo-relative workflow path such as `.github/workflows/ci.yml`. Use `local = true` when the repository is not available as a git worktree to `actrun`.
@@ -796,31 +747,29 @@ Set `[runner.actrun].workflow` to a repo-relative workflow path such as `.github
 
 ```bash
 # Morning: sync CI data
-flaker collect
+flaker import --ci --days 7
 
-# After code changes: inspect, sample, then run with the local profile
-flaker exec affected --changed src/foo.ts
-flaker run --dry-run --profile local --changed src/foo.ts
-flaker run --profile local --changed src/foo.ts
+# After code changes: inspect, sample, then run with the iteration gate
+flaker run --dry-run --gate iteration --changed src/foo.ts
+flaker run --gate iteration --changed src/foo.ts
 
 # Check overall status
-flaker analyze eval
+flaker status --markdown
 ```
 
 ### Flaky Test Triage
 
 ```bash
 # Identify problematic tests
-flaker analyze reason
+flaker explain reason
 
-# Quarantine severe cases
-flaker policy quarantine --auto
+# Quarantine severe cases (apply respects [quarantine].auto)
+flaker apply
 
 # Find culprit commit
 flaker debug bisect --test "problematic test name"
 
-# After fixing, remove quarantine
-flaker policy quarantine --remove "suite>testName"
+# After fixing, edit .flaker/quarantine-manifest.toml to remove the entry
 ```
 
 ### CI Integration
@@ -829,9 +778,9 @@ flaker policy quarantine --remove "suite>testName"
 # .github/workflows/flaker.yml
 - name: Collect & Analyze
   run: |
-    flaker collect --days 7
-    flaker analyze eval --json --output flaker-report.json
-    flaker analyze reason --json > flaker-reason.json
+    flaker import --ci --days 7
+    flaker status --json --output flaker-report.json
+    flaker explain reason --json > flaker-reason.json
 
 - name: Upload analysis
   uses: actions/upload-artifact@v6
@@ -848,17 +797,9 @@ flaker policy quarantine --remove "suite>testName"
     flaker run --strategy hybrid --count 50 --skip-quarantined
 ```
 
-### Coverage-Guided Sampling
+### Coverage-Guided Sampling (removed in 0.13.0)
 
-```bash
-# Collect coverage data
-flaker collect coverage --format istanbul --input coverage/coverage-final.json
-
-# Sample using coverage data
-flaker run --dry-run --strategy coverage-guided --changed src/auth.ts --percentage 20
-```
-
-詳細は [Coverage-Guided Test Sampling](coverage-guided-sampling.md) を参照。
+`flaker collect coverage`, `[coverage]`, and the `coverage-guided` strategy were removed in 0.13.0. See [Coverage-Guided Test Sampling](coverage-guided-sampling.md) (kept for history).
 
 ### Diagnose Flaky Tests
 
@@ -897,26 +838,38 @@ Rename the keys in your `flaker.toml` per the table below:
 | `[sampling]` | `detected_co_failure_strength` | `detected_co_failure_strength_ratio` | 0.0–1.0 |
 | `[flaky]` | `detection_threshold` | `detection_threshold_ratio` | 0.0–1.0 |
 | `[quarantine]` | `flaky_rate_threshold` | `flaky_rate_threshold_percentage` | 0–100 |
-| `[profile.*]` | `percentage` | `sample_percentage` | 0–100 |
-| `[profile.*]` | `co_failure_days` | `co_failure_window_days` | days (int) |
-| `[profile.*]` | `adaptive_fnr_low` | `adaptive_fnr_low_ratio` | 0.0–1.0 |
-| `[profile.*]` | `adaptive_fnr_high` | `adaptive_fnr_high_ratio` | 0.0–1.0 |
+| `[profile.*]` (pre-0.13.0) | `percentage` | `sample_percentage` | 0–100 |
+| `[profile.*]` (pre-0.13.0) | `co_failure_days` | `co_failure_window_days` | days (int) |
 
 The unit interpretation of `flaky_rate_threshold` also changed. Previously a bare `30.0` was treated as 30% and a bare `0.3` was silently auto-normalized. Now the value is taken literally as a percentage. If your old config had `flaky_rate_threshold = 0.3`, rename to `flaky_rate_threshold_percentage = 30`.
 
-Range validation is enforced by `flaker debug doctor` and `flaker policy check`: `*_ratio` must be in [0.0, 1.0]; `*_percentage` must be in [0, 100]; `*_days` / `*_seconds` / `*_count` must be non-negative integers.
+Range validation is enforced by `flaker doctor`: `*_ratio` must be in [0.0, 1.0]; `*_percentage` must be in [0, 100]; `*_days` / `*_seconds` / `*_count` must be non-negative integers.
+
+### 0.13.0 renames and removals
+
+`0.13.0` renamed the `[profile.*]` section to `[gate.*]` and removed adaptive sampling entirely. Custom profile names (anything other than `local` / `ci` / `scheduled`) have no gate equivalent.
+
+| Old (0.12.x) | New (0.13.0) |
+|---|---|
+| `[profile.local]` | `[gate.iteration]` |
+| `[profile.ci]` | `[gate.merge]` |
+| `[profile.scheduled]` | `[gate.release]` |
+| `run --profile <name>` | `run --gate <name>` |
+| `FLAKER_PROFILE=<name>` | `FLAKER_GATE=<name>` |
+
+Removed outright in `0.13.0` (no renamed replacement — delete the key):
+
+- `adaptive`, `adaptive_fnr_low_ratio`, `adaptive_fnr_high_ratio`, `adaptive_min_percentage`, `adaptive_step` — run `flaker calibrate` periodically instead
+- `cluster_mode`, `model_path`
+- `[coverage]` (the whole section)
+- `strategy = "random"`, `strategy = "gbdt"`, `strategy = "coverage-guided"` (and the matching `fallback_strategy` values) — use `weighted`, `affected`, `hybrid`, or `full`
+
+`flaker.toml` files using any of these fail to load with an error naming the exact key and its replacement (or telling you to delete it). See [docs/migration-0.12-to-0.13.md](migration-0.12-to-0.13.md) for full details and example error text.
 
 ---
 
 ## Advanced / Maintainer tools
 
-These commands are intended for flaker maintainers or advanced users tuning the ML model. Normal day-to-day usage does not require them.
+These commands are intended for flaker maintainers or advanced users. Normal day-to-day usage does not require them. `dev` is hidden from `--help` but still runs.
 
-### `flaker dev train` — Train the GBDT Model
-
-```bash
-flaker dev train
-flaker dev train --window-days 30 --num-trees 10 --learning-rate 0.3
-```
-
-Builds `.flaker/models/gbdt.json` from accumulated CI and local history. The local rows are included with reduced weight, and the saved model includes the feature names used by `gbdt` sampling.
+`flaker dev train` (GBDT model training) was removed in 0.13.0 along with the `gbdt` strategy — there is no replacement command. `flaker dev tune` (co-failure alpha auto-tuning) and `flaker dev eval-co-failure` are unaffected.

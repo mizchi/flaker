@@ -15,7 +15,7 @@ It does not cover:
 For those, see [operations-guide.md](operations-guide.md).
 
 If flaker is not installed or initialized yet, start with [new-project-checklist.md](new-project-checklist.md).
-If you are upgrading from `0.4.x`, read [migration-0.4-to-0.5.md](migration-0.4-to-0.5.md) first.
+If you are upgrading from `0.4.x`, read [migration-0.4-to-0.5.md](migration-0.4-to-0.5.md) first. If you are upgrading from `0.12.x`, read [migration-0.12-to-0.13.md](migration-0.12-to-0.13.md) — `--profile` / `[profile.*]` / `FLAKER_PROFILE` are gone.
 
 ## Audience
 
@@ -81,6 +81,6 @@ pnpm flaker status
 
 - detailed command reference: [how-to-use.md](how-to-use.md)
 - runner / adapter details: [runner-adapters.md](runner-adapters.md), [test-result-adapters.md](test-result-adapters.md)
-- failure investigation: [diagnose.md](diagnose.md), `flaker ops incident`, `flaker debug confirm`, `flaker debug retry`
+- failure investigation: [diagnose.md](diagnose.md), `flaker debug diagnose`, `flaker debug confirm`, `flaker debug retry`
 - initial onboarding: [new-project-checklist.md](new-project-checklist.md)
 - operations and rollout: [operations-guide.md](operations-guide.md)

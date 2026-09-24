@@ -1,5 +1,7 @@
 # Coverage-Guided Test Sampling
 
+> **0.13.0 で削除。** `coverage-guided` 戦略、`flaker collect coverage`、`[coverage]` セクションは flaker 0.13.0 で削除された。本ドキュメントは歴史的資料として保持している。現行の戦略は `weighted` / `affected` / `hybrid` / `full`。詳細は [migration-0.12-to-0.13.md](migration-0.12-to-0.13.md) を参照。
+
 Coverage-guided fuzzing の知見をテスト選択に応用した戦略。変更されたコードをカバーするテストを効率的に選択し、冗長なテスト選択を排除する。
 
 ## 仕組み

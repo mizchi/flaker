@@ -10,6 +10,8 @@ For normal day-to-day usage only, use [usage-guide.md](usage-guide.md).
 
 If you have not installed or initialized flaker yet, start with [new-project-checklist.md](new-project-checklist.md).
 
+If you operated flaker `0.12.x` before, read [migration-0.12-to-0.13.md](migration-0.12-to-0.13.md) first: `ops`, `profile`, and adaptive sampling are gone.
+
 This quick start has three goals:
 
 - fix what runs every day
@@ -21,9 +23,9 @@ This quick start has three goals:
 At minimum, you should already have:
 
 - `flaker.toml`
-- `profile.scheduled`
-- `profile.ci`
-- `profile.local`
+- `[gate.release]`
+- `[gate.merge]`
+- `[gate.iteration]`
 - GitHub Actions for `pull_request` and/or `push` / `schedule`
 
 Minimal Playwright-oriented config:
@@ -39,15 +41,15 @@ auto = true
 flaky_rate_threshold_percentage = 30
 min_runs = 10
 
-[profile.scheduled]
+[gate.release]
 strategy = "full"
 
-[profile.ci]
+[gate.merge]
 strategy = "hybrid"
 sample_percentage = 30
 skip_flaky_tagged = true
 
-[profile.local]
+[gate.iteration]
 strategy = "affected"
 max_duration_seconds = 90
 fallback_strategy = "weighted"
@@ -61,8 +63,8 @@ Run this at the repo root:
 ```bash
 mkdir -p .artifacts
 pnpm flaker status
-pnpm flaker gate review merge --json --output .artifacts/gate-review-merge.json
-pnpm flaker ops weekly --output .artifacts/flaker-weekly.md
+pnpm flaker status --gate merge --detail --json > .artifacts/gate-review-merge.json
+pnpm flaker status --markdown > .artifacts/flaker-weekly.md
 ```
 
 Look at:
@@ -83,22 +85,17 @@ Run this nightly or once per day:
 ```bash
 mkdir -p .artifacts
 export GITHUB_TOKEN=$(gh auth token)
-pnpm flaker collect ci --days 1
-pnpm flaker ops daily --output .artifacts/flaker-daily.md
-pnpm flaker quarantine suggest --json --output .artifacts/quarantine-plan.json
-```
-
-Update quarantine too when needed:
-
-```bash
-pnpm flaker quarantine apply --from .artifacts/quarantine-plan.json --create-issues
+pnpm flaker apply --json --output .artifacts/flaker-daily.json
+pnpm flaker status --markdown > .artifacts/flaker-daily.md
 ```
 
 This loop does three things:
 
-- grows history via full execution
-- leaves a reviewed quarantine plan artifact
-- leaves a daily release snapshot artifact
+- grows history via `import --ci` (run internally by `apply`)
+- auto-quarantines flaky tests declaratively via `[quarantine].auto`
+- leaves a daily reconciliation artifact
+
+For manual quarantine overrides, edit `.flaker/quarantine-manifest.toml` directly and commit — `apply` respects an existing manifest.
 
 ## 3. Weekly review
 
@@ -106,8 +103,9 @@ First refresh the weekly artifacts:
 
 ```bash
 mkdir -p .artifacts
-pnpm flaker gate review merge --json --output .artifacts/gate-review-merge.json
-pnpm flaker ops weekly --output .artifacts/flaker-weekly.md
+pnpm flaker status --gate merge --detail --json > .artifacts/gate-review-merge.json
+pnpm flaker status --markdown > .artifacts/flaker-weekly.md
+pnpm flaker explain insights --json > .artifacts/flaker-insights.json
 ```
 
 Then fill this once a week:
@@ -169,19 +167,7 @@ For per-test contracts, use [skills/flaker-management/assets/test-contract-templ
 
 ## 7. When something breaks
 
-Re-check a CI failure:
-
-```bash
-pnpm flaker ops incident --run <workflow-run-id> --output .artifacts/flaker-incident.md
-```
-
-Confirm a specific test:
-
-```bash
-pnpm flaker ops incident --suite path/to/spec.ts --test "test name" --output .artifacts/flaker-incident.md
-```
-
-If you need finer control, drop to the raw debug primitives:
+Re-check a CI failure and confirm a specific test with the debug primitives directly (the `ops incident` wrapper was removed in 0.13.0):
 
 ```bash
 pnpm flaker debug retry --run <workflow-run-id>
