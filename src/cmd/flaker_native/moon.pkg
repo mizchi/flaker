@@ -2,7 +2,7 @@ import {
   "bobzhang/toml" @toml,
   "mizchi/github/client" @github_client,
   "mizchi/github/actions" @github_actions,
-  "f4ah6o/duckdb" @duckdb,
+  "mizchi/duckdb" @duckdb,
   "mizchi/zlib" @zlib,
   "mizchi/flaker/contracts" @types,
   "mizchi/flaker/sampling" @sampler,
@@ -20,4 +20,11 @@ options(
   "is-main": true,
   "native-stub": ["shell_native.c"],
   "warn-list": "-0055",
+  link: {
+    "native": {
+      // moon does not forward a dependency's cc-link-flags when linking an
+      // executable, so libduckdb has to be named here.
+      "cc-link-flags": "-L/opt/homebrew/lib -Wl,-rpath,/opt/homebrew/lib -L/usr/local/lib -Wl,-rpath,/usr/local/lib -lduckdb",
+    },
+  },
 )

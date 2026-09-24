@@ -117,7 +117,7 @@ Every dataset shares the key `test_key`, the stable ID from MoonBit `create_stab
 
 - `--context <file>` reads the projection above.
 - Every successful run is saved to `.jev-test-filter/records/<head_sha>.json`. `last.json` is still written, so the default `--replay` keeps working.
-- `RunRecord` moves to `version: 2` and gains `head_sha`, `base_sha`, `context_digest` (`null` without a context) and `gate` (the values actually used). Reading v1 stays supported.
+- `RunRecord` moves to `version: 2` and gains `head_sha`, `base_sha`, `context_digest` (`null` without a context) and `gate` (the values actually used). Reading v1 stays supported. It also records `quarantined` (the `testId`s the context's `skip` removed), so a replay reproduces the quarantine.
 - A run that fell back (`fallback !== null`) is still not saved.
 - `unsure_below` and `unsure_margin` become settable from the command line.
 
