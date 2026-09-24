@@ -13,6 +13,7 @@ import { registerDevCommands } from "./categories/dev.js";
 import { registerApplyCommands } from "./categories/apply.js";
 import { registerCalibrateCommand } from "./categories/calibrate.js";
 import { registerExportCommand } from "./categories/export.js";
+import { registerPruneCommand } from "./categories/prune.js";
 import { FlakerUsageError } from "./errors.js";
 import { loadIdentityCore } from "./identity.js";
 
@@ -41,6 +42,7 @@ export function createProgram(): Command {
   registerApplyCommands(program);
   registerCalibrateCommand(program);
   registerExportCommand(program);
+  registerPruneCommand(program);
   registerImportCommands(program);
   registerReportCommands(program);
   registerExplainCommands(program);

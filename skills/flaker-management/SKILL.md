@@ -70,7 +70,7 @@ When the repository runs jev-test-filter with flaker (`[selector]` in `flaker.to
 - The rule: any miss tightens at once, to a gate that keeps every test the current one selects. Loosening needs zero misses, `min_failures` real failures and a Wilson 95% recall lower bound ≥ `recall_target`; at the default 0.90 that is 35 real failures. A `keep` whose rationale starts `only N real failures observed` or `recall lower bound … is below the target` is expected for weeks on a new setup. Do not lower `recall_target` to get past it: the target is the recall the loosened gate promises, and 0.8 accepts that selection may skip one regression in five.
 - Many `unmatched` failures mean jev and the reporter name tests differently (file path or title), not that jev missed them.
 - Read progress from `flaker calibrate --selector --dry-run --json`: `decision.real_failures` (evidence so far), `decision.rationale`, and `without_full_run` (records with no full run on their commit). A high `without_full_run` means jev and the full runs are on different commits — fix the CI layout (see the guide), not the thresholds.
-- flaker has no retention command. Do not suggest `flaker query` for cleanup: it is read-only.
+- For retention use `flaker prune --older-than <days>` (preview with `--dry-run`); it refuses windows shorter than the flaky + calibration windows need (104 days by default). Do not suggest `flaker query` for cleanup: it is read-only.
 
 ## Giving flaker's data to other tools
 
@@ -107,6 +107,10 @@ flaker status
 flaker status --markdown > .artifacts/status-weekly.md
 flaker explain insights > .artifacts/flaker-weekly-insights.md
 flaker status --gate merge --detail --json > .artifacts/merge-gate.json
+
+# Retention (e.g. monthly, in the job that owns the database)
+flaker prune --older-than 180 --dry-run
+flaker prune --older-than 180
 
 # Incident (replaces the removed `flaker ops incident` bundle)
 flaker debug retry

@@ -322,6 +322,17 @@ flaker query "SELECT * FROM flaker_v1.flaky WHERE is_flaky"
 
 `full = true` の lane のランは `runs.is_full = true` になり、`full = false` なら常に `false` です。`full` の指定がない lane では、同じ workflow の直近 `[flaky].window_days` のランのうち最大のもの (そのラン自身を含む) と比べて、テスト数が 95% 以上あるランを full とみなします。テストの改名や削除があっても、その後の full run が partial に見えることはありません。
 
+### `flaker prune` — 保持期間
+
+```bash
+flaker prune --older-than 180 --dry-run   # 消える量を確認
+flaker prune --older-than 180             # 削除して CHECKPOINT
+```
+
+`flaker prune` は `--older-than <days>` より古い履歴を、テーブル間の整合を保って削除します。workflow run はその結果と collected artifact ごと、selector record はその verdict ごと、sampling run はそのテストごと消し、commit changes は残る run や selector record がそのコミットを参照しなくなったものだけを消します。gate calibration は selector ごとの最新行を残します。quarantine・coverage・設定は状態なので残します。削除後に CHECKPOINT し、テーブルごとの削除件数を表示します (`--dry-run` は何も消さずに削除予定件数を表示、`--json` は同じ内容を JSON で出力)。
+
+`<days>` は `max(90, [sampling].co_failure_window_days) + [flaky].window_days` 以上 (既定で 104) が必要です。90 日は既定の窓で最長のもの (`calibrate --window-days`, `calibrate --selector --window-days`, `explain insights`) で、run の `is_full` は同じ workflow の flaky window 分さかのぼった run と比べて決まるためです。短い値は終了コード 2 になります。`calibrate` に長めの `--window-days` を渡している場合は、その日数 + flaky window 以上を残してください。DuckDB はシングルライターなので、他の flaker コマンドがデータベースを開いていない場所 (データベースを持っている定期ジョブなど) で実行してください。
+
 ### jev-test-filter による selector の calibration
 
 手順を追った導入は [flaker と jev-test-filter を組み合わせる](jev-test-filter-integration.ja.md) を見てください。この節はリファレンスです。
