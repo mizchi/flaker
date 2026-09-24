@@ -33,7 +33,6 @@ export function createProgram(): Command {
   registerImportCommands(program);
   registerReportCommands(program);
   registerOpsCommands(program);
-  // registerAnalyzeCommands: all analyze subcommands removed in 0.8.0; parent dropped.
   registerExplainCommands(program);
   registerDebugCommands(program);
   registerDevCommands(program);
