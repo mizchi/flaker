@@ -61,7 +61,7 @@ flaker の表面 API は肥大化している。
 | `quarantine` | `test_key`, `reason`, `since`, `source` (`auto` / `manual`) | 隔離中のテスト |
 | `co_failures` | `changed_file`, `test_key`, `co_failures`, `changes`, `strength`, `window_days` | 「このファイルが変わったときにこのテストが落ちた」の集計 |
 | `selector_verdicts` | `selector_run_id`, `selector`, `selector_version`, `head_sha`, `base_sha`, `context_digest`, `source` (`real` / `mutation`), `test_key`, `score`, `confidence`, `reason`, `selected` | selector の判定結果 |
-| `misses` | `selector_run_id`, `test_key`, `head_sha`, `ci_run_id`, `reason`, `changed_files` (JSON 配列) | selector が選ばなかったのに full run で真に失敗したテスト |
+| `misses` | `selector_run_id`, `test_key`, `head_sha`, `ci_run_id`, `reason`, `changed_files` (JSON 配列) | selector が選ばなかったのに同じ commit の full run で真に失敗したテスト。`head_sha` ごとに最新の real な selector run だけを数え、record 自身が quarantine した判定は miss に含めない |
 | `gate_calibration` | `selector`, `calibrated_at`, `cutoff`, `unsure_below`, `unsure_margin`, `records`, `real_failures`, `recall_lb95`, `decision` (`tighten` / `loosen` / `keep`), `rationale` | calibrate の結果の履歴。最新行が現行値 |
 
 `runs.is_full` は `[workflow_lanes]` の lane 定義に `full = true` を書いて決める。未設定の lane は、そのランの結果件数が直近の `tests` 件数の 95% 以上なら full とみなす。

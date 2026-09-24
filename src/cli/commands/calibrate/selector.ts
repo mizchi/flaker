@@ -30,8 +30,9 @@ export async function latestGateCalibration(
 /** Same-instant collisions on (selector, calibrated_at) are retried this many times, 1 ms apart. */
 const APPEND_ATTEMPTS = 5;
 
-const isKeyCollision = (error: unknown) =>
-  error instanceof Error && /primary key|duplicate key|constraint/i.test(error.message);
+/** A same-instant collision on the (selector, calibrated_at) key; other constraint errors are not retried. */
+export const isKeyCollision = (error: unknown) =>
+  error instanceof Error && /primary key|duplicate key/i.test(error.message);
 
 /** Append one row; on a same-instant key collision retry at +1 ms. Returns the instant written. */
 async function appendGateCalibration(

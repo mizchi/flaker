@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { DuckDBStore } from "../../src/cli/storage/duckdb.js";
 import { DEFAULT_SELECTOR } from "../../src/cli/config.js";
-import { latestGateCalibration, runSelectorCalibration } from "../../src/cli/commands/calibrate/selector.js";
+import { isKeyCollision, latestGateCalibration, runSelectorCalibration } from "../../src/cli/commands/calibrate/selector.js";
 import { keyFor, memoryStore, seedRun, seedSelectorRun } from "../datasets/helpers.js";
 
 const S = "tests/c.test.ts";
@@ -50,5 +50,11 @@ describe("runSelectorCalibration", () => {
     expect(second.calibratedAt).toBe("2026-09-24T00:00:00.001Z");
     const [row] = await store.raw<{ n: number }>(`SELECT COUNT(*)::INTEGER AS n FROM gate_calibrations`);
     expect(row.n).toBe(2);
+  });
+
+  it("retries only primary-key or duplicate-key errors, not other constraint errors", () => {
+    expect(isKeyCollision(new Error('Constraint Error: Duplicate key "selector: jev" violates primary key constraint'))).toBe(true);
+    expect(isKeyCollision(new Error("Constraint Error: NOT NULL constraint failed: gate_calibrations.cutoff"))).toBe(false);
+    expect(isKeyCollision(new Error("CHECK constraint failed"))).toBe(false);
   });
 });

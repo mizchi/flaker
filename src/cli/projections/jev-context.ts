@@ -13,7 +13,8 @@ export interface JevContextInput {
   tests: Array<{ test_key: string; file: string; title_path: string[]; variant: Record<string, string> | null }>;
   quarantine: Array<{ test_key: string }>;
   flaky: Array<{ test_key: string; is_flaky: boolean }>;
-  misses: Array<{ test_key: string; selector_run_id: string }>;
+  /** flaker_v1.misses: already one row per (latest real selector run on a head, test). */
+  misses: Array<{ test_key: string; selector_run_id: string; head_sha: string }>;
   co_failures: Array<{ changed_file: string; test_key: string; co_failures: number; strength: number }>;
   gate: {
     cutoff: number; unsure_below: number; unsure_margin: number;
@@ -39,17 +40,18 @@ export function buildJevContext(input: JevContextInput): JevContextV1 {
   const quarantined = new Set(input.quarantine.map((q) => q.test_key));
   const flaky = new Set(input.flaky.filter((f) => f.is_flaky).map((f) => f.test_key));
 
-  const skip: JevContextSkipV1[] = [...quarantined]
-    .flatMap((key) => {
-      const n = names.get(key);
-      return n ? [{ ...n, reason: "quarantined" as const }] : [];
-    })
-    .sort((a, b) => cmp(nameKey(a), nameKey(b)));
+  const skipByName = new Map<string, JevContextSkipV1>();
+  for (const key of quarantined) {
+    const n = names.get(key);
+    if (n) skipByName.set(nameKey(n), { ...n, reason: "quarantined" });
+  }
+  const skip: JevContextSkipV1[] = [...skipByName.values()].sort((a, b) => cmp(nameKey(a), nameKey(b)));
 
+  // Misses count per head: one commit is one piece of evidence.
   const missed = new Map<string, Set<string>>();
   for (const m of input.misses) {
     const set = missed.get(m.test_key) ?? new Set<string>();
-    set.add(m.selector_run_id);
+    set.add(m.head_sha);
     missed.set(m.test_key, set);
   }
   const hints = new Map<string, Array<{ file: string; co: number; strength: number }>>();
@@ -60,15 +62,37 @@ export function buildJevContext(input: JevContextInput): JevContextV1 {
     hints.set(c.test_key, list);
   }
 
-  const candidates = [...new Set([...missed.keys(), ...hints.keys()])]
-    .filter((key) => !quarantined.has(key) && !flaky.has(key) && names.has(key))
-    .map((key) => {
-      const files = (hints.get(key) ?? [])
+  // jev names a test by file + title_path (+ project), so test_keys that share
+  // a name (other variant keys) merge into one entry before ranking: misses
+  // add up, failed_with keeps each file once at its strongest. A name with a
+  // quarantined key is in skip already; flaky keys contribute nothing.
+  const quarantinedNames = new Set([...quarantined].flatMap((key) => {
+    const n = names.get(key);
+    return n ? [nameKey(n)] : [];
+  }));
+  const merged = new Map<string, { name: JevContextNameV1; missed: number; files: Map<string, { co: number; strength: number }> }>();
+  for (const key of [...new Set([...missed.keys(), ...hints.keys()])].sort(cmp)) {
+    const name = names.get(key);
+    if (!name || flaky.has(key) || quarantined.has(key) || quarantinedNames.has(nameKey(name))) continue;
+    const entry = merged.get(nameKey(name)) ?? { name, missed: 0, files: new Map() };
+    entry.missed += missed.get(key)?.size ?? 0;
+    for (const h of hints.get(key) ?? []) {
+      const prev = entry.files.get(h.file);
+      if (!prev || h.strength > prev.strength || (h.strength === prev.strength && h.co > prev.co)) {
+        entry.files.set(h.file, { co: h.co, strength: h.strength });
+      }
+    }
+    merged.set(nameKey(name), entry);
+  }
+
+  const candidates = [...merged.values()]
+    .map((entry) => {
+      const files = [...entry.files.entries()]
+        .map(([file, v]) => ({ file, ...v }))
         .sort((a, b) => b.strength - a.strength || b.co - a.co || cmp(a.file, b.file));
       return {
-        key,
-        name: names.get(key)!,
-        missed: missed.get(key)?.size ?? 0,
+        name: entry.name,
+        missed: entry.missed,
         best: files[0]?.strength ?? 0,
         failedWith: files.slice(0, maxFiles).map((f) => f.file),
       };

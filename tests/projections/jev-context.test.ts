@@ -18,7 +18,7 @@ function input(over: Partial<JevContextInput> = {}): JevContextInput {
     ],
     quarantine: [{ test_key: "q" }],
     flaky: [{ test_key: "flaky", is_flaky: true }, { test_key: "init", is_flaky: false }],
-    misses: [{ test_key: "init", selector_run_id: "s1" }, { test_key: "init", selector_run_id: "s2" }],
+    misses: [{ test_key: "init", selector_run_id: "s1", head_sha: "h1" }, { test_key: "init", selector_run_id: "s2", head_sha: "h2" }],
     co_failures: [
       ...["a", "b", "c", "d", "e", "f"].map((f, i) => ({ changed_file: `src/${f}.ts`, test_key: "init", co_failures: 2 + i, strength: 0.5 })),
       { changed_file: "src/cli/config.ts", test_key: "init", co_failures: 3, strength: 0.9 },
@@ -70,5 +70,36 @@ describe("buildJevContext", () => {
     expect(a.digest).toMatch(/^sha256:[0-9a-f]{64}$/);
     const c = buildJevContext(input({ quarantine: [] }));
     expect(c.digest).not.toBe(a.digest);
+  });
+
+  it("counts misses per head, not per selector run", () => {
+    const ctx = buildJevContext(input({
+      misses: [{ test_key: "init", selector_run_id: "s1", head_sha: "h1" }, { test_key: "init", selector_run_id: "s2", head_sha: "h1" }],
+    }));
+    expect(ctx.tests.find((x) => x.file === "tests/cli/init.test.ts")?.missed).toBe(1);
+  });
+
+  it("merges test_keys that share a name before ranking, whatever the row order", () => {
+    const variants = [
+      { test_key: "v1", file: "tests/v.test.ts", title_path: ["v"], variant: { shard: "1" } },
+      { test_key: "v2", file: "tests/v.test.ts", title_path: ["v"], variant: { shard: "2" } },
+    ];
+    const over = {
+      misses: [{ test_key: "v1", selector_run_id: "s1", head_sha: "h1" }, { test_key: "v2", selector_run_id: "s2", head_sha: "h2" }],
+      co_failures: [
+        { changed_file: "src/v.ts", test_key: "v1", co_failures: 2, strength: 0.4 },
+        { changed_file: "src/v.ts", test_key: "v2", co_failures: 3, strength: 0.8 },
+        { changed_file: "src/w.ts", test_key: "v2", co_failures: 2, strength: 0.5 },
+      ],
+    };
+    const a = buildJevContext(input({ ...over, tests: [...input().tests, ...variants] }));
+    const b = buildJevContext(input({
+      misses: [...over.misses].reverse(), co_failures: [...over.co_failures].reverse(),
+      tests: [...variants].reverse().concat(input().tests),
+    }));
+    const entries = a.tests.filter((x) => x.file === "tests/v.test.ts");
+    expect(entries).toEqual([{ file: "tests/v.test.ts", title_path: ["v"], missed: 2, failed_with: ["src/v.ts", "src/w.ts"] }]);
+    expect(b.digest).toBe(a.digest);
+    expect(b.tests).toEqual(a.tests);
   });
 });

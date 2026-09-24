@@ -421,8 +421,14 @@ export function validateConfigRanges(config: FlakerConfig): ConfigRangeError[] {
 
   if (config.selector) {
     check("selector.recall_target", config.selector.recall_target, 0, 1, "0.0-1.0");
-    check("selector.min_failures", config.selector.min_failures, 0, Number.MAX_SAFE_INTEGER, ">=0");
-    check("selector.max_hinted_tests", config.selector.max_hinted_tests, 0, Number.MAX_SAFE_INTEGER, ">=0");
+    for (const key of ["min_failures", "max_hinted_tests"] as const) {
+      const value = config.selector[key];
+      if (typeof value === "number" && !Number.isInteger(value)) {
+        errors.push({ path: `selector.${key}`, value, expected: "an integer >=0" });
+      } else {
+        check(`selector.${key}`, value, 0, Number.MAX_SAFE_INTEGER, ">=0");
+      }
+    }
   }
 
   try {

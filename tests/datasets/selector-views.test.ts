@@ -120,4 +120,21 @@ describe("flaker_v1 selector views", () => {
     await insert();
     await expect(insert()).rejects.toThrow(/constraint/i);
   });
+
+  it("misses: a verdict the record quarantined is not the selector's miss", async () => {
+    await seedSelectorRun(store, { id: "sq", headSha: "H", tests: [
+      { testKey: await keyFor(store, S, "missed"), file: S, titlePath: ["missed"], reason: "quarantined", selected: false },
+    ] });
+    expect(await store.raw(`SELECT * FROM flaker_v1.misses`)).toEqual([]);
+  });
+
+  it("misses: only the latest selector run on a head counts", async () => {
+    for (const [i, id] of ["earlier", "later"].entries()) {
+      await seedSelectorRun(store, { id, headSha: "H", createdAt: new Date(Date.now() - (2 - i) * 60_000), tests: [
+        { testKey: await keyFor(store, S, "missed"), file: S, titlePath: ["missed"], reason: "below", selected: false },
+      ] });
+    }
+    const rows = await store.raw<{ selector_run_id: string }>(`SELECT selector_run_id FROM flaker_v1.misses`);
+    expect(rows.map((r) => r.selector_run_id)).toEqual(["later"]);
+  });
 });

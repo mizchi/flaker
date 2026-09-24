@@ -230,8 +230,12 @@ WHERE ru.is_full
   AND r.test_key NOT IN (SELECT test_key FROM flaker_v1.quarantine)
 GROUP BY ru.commit_sha, r.test_key;
 
--- misses: only real selector runs are scored, against real full runs.
--- Scoring mutation verdicts against mutation runs comes with the mutation phase.
+-- misses: the selector's own misses, on the same evidence calibration uses.
+-- Only real selector runs are scored, against real full runs; scoring mutation
+-- verdicts against mutation runs comes with the mutation phase. One selector
+-- run per (selector, head_sha) counts, the latest, so re-running the selector
+-- on a commit does not repeat a miss. A verdict the record quarantined is not
+-- a miss: the selector could never have picked that test.
 CREATE OR REPLACE VIEW flaker_v1.misses AS
 SELECT DISTINCT
   v.selector_run_id,
@@ -245,8 +249,16 @@ SELECT DISTINCT
     '[]'::JSON
   ) AS changed_files
 FROM flaker_v1.selector_verdicts v
+JOIN (
+  SELECT selector_run_id FROM (
+    SELECT selector_run_id,
+      row_number() OVER (PARTITION BY selector, head_sha ORDER BY created_at DESC, selector_run_id DESC) AS rn
+    FROM selector_runs
+    WHERE source = 'real' AND head_sha IS NOT NULL
+  ) WHERE rn = 1
+) latest ON latest.selector_run_id = v.selector_run_id
 JOIN selector_ground_truth gt ON gt.commit_sha = v.head_sha AND gt.test_key = v.test_key
-WHERE v.test_key IS NOT NULL AND NOT v.selected AND v.source = 'real';
+WHERE v.test_key IS NOT NULL AND NOT v.selected AND v.source = 'real' AND v.reason <> 'quarantined';
 `;
 
 export const FLAKER_V1_VIEWS_SQL = [CORE_VIEWS, HISTORY_VIEWS, SELECTOR_VIEWS].join("\n");

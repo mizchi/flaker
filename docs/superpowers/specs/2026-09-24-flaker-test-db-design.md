@@ -61,7 +61,7 @@ Every dataset shares the key `test_key`, the stable ID from MoonBit `create_stab
 | `quarantine` | `test_key`, `reason`, `since`, `source` (`auto` / `manual`) | Quarantined tests |
 | `co_failures` | `changed_file`, `test_key`, `co_failures`, `changes`, `strength`, `window_days` | "This test failed when this file changed", aggregated |
 | `selector_verdicts` | `selector_run_id`, `selector`, `selector_version`, `head_sha`, `base_sha`, `context_digest`, `source` (`real` / `mutation`), `test_key`, `score`, `confidence`, `reason`, `selected` | A selector's per-test decisions |
-| `misses` | `selector_run_id`, `test_key`, `head_sha`, `ci_run_id`, `reason`, `changed_files` (JSON array) | Tests the selector did not select that really failed in a full run |
+| `misses` | `selector_run_id`, `test_key`, `head_sha`, `ci_run_id`, `reason`, `changed_files` (JSON array) | Tests the selector did not select that really failed in a full run on the same commit. Only the latest real selector run per `head_sha` counts, and a verdict the record quarantined is not a miss |
 | `gate_calibration` | `selector`, `calibrated_at`, `cutoff`, `unsure_below`, `unsure_margin`, `records`, `real_failures`, `recall_lb95`, `decision` (`tighten` / `loosen` / `keep`), `rationale` | History of calibration results. The latest row is the current value |
 
 `runs.is_full` comes from `full = true` on a lane in `[workflow_lanes]`. For a lane without it, a run counts as full when its result count is at least 95% of the recent `tests` count.

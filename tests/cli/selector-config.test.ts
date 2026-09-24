@@ -35,4 +35,10 @@ describe("[selector]", () => {
     const errors = validateConfigRanges(loadConfig(withToml(`[selector]\nrecall_target = 1.5`)));
     expect(errors.map((e) => e.path)).toContain("selector.recall_target");
   });
+
+  it("requires whole numbers for min_failures and max_hinted_tests", () => {
+    const errors = validateConfigRanges(loadConfig(withToml(`[selector]\nmin_failures = 2.5\nmax_hinted_tests = 10.5`)));
+    expect(errors.map((e) => e.path)).toEqual(expect.arrayContaining(["selector.min_failures", "selector.max_hinted_tests"]));
+    expect(validateConfigRanges(loadConfig(withToml(`[selector]\nmin_failures = 3\nmax_hinted_tests = 10`)))).toEqual([]);
+  });
 });
