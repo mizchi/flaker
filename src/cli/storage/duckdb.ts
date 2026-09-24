@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { SCHEMA_DDL, FLAKY_QUERY, CO_FAILURE_QUERY, buildTestCoFailureQuery } from "./schema.js";
 import { createStableTestId, resolveTestIdentity } from "../identity.js";
+import { FLAKER_V1_VIEWS_SQL } from "../datasets/views.js";
 import type {
   MetricStore,
   WorkflowRun,
@@ -56,6 +57,7 @@ export class DuckDBStore implements MetricStore {
     });
     this.conn = this.db.connect();
     await this.exec(SCHEMA_DDL);
+    await this.exec(FLAKER_V1_VIEWS_SQL);
     await this.backfillLegacyQuarantineEntries();
   }
 
