@@ -93,6 +93,8 @@ Calibration learns only from commits that have both a jev record and a full run.
 - **jev on main.** On every push to main, run jev with `--base` set to the previous commit (`${{ github.event.before }}`; it is all zeros on the first push of a branch, so fall back to `HEAD~1`), and run the full suite on the same commit in the same workflow. Upload only the full-suite report as the full lane's artifact. The tests jev selected are a partial run, and counted as full they would make every unselected test look like it passed.
 - **A full run after jev on some PRs.** In the PR job, run jev's selection first, then the rest of the suite on the same checkout, and import the result as a full lane. Doing this on a sample of PRs keeps the cost down.
 
+A complete workflow for the "jev on main" layout is in [`examples/github-actions/jev-loop.yml`](../examples/github-actions/jev-loop.yml). It keeps the database in the Actions cache (restored by prefix at the start, saved under a new key at the end, with a weekly run so the cache does not expire), serializes runs with a `concurrency` group because DuckDB has one writer, resolves `--base` from `github.event.before` with the `HEAD~1` fallback, uploads only the full-suite report, and then runs `import --adapter jev`, `import --ci`, `calibrate --selector` and, at the next run's start, `export --projection jev-context`. `import --ci` reads only completed runs, so a push's full run is imported by the next run.
+
 `flaker calibrate --selector --dry-run --json` shows whether the layout works: `without_full_run` counts records with no full run on their commit, and `decision.real_failures` is the evidence gathered so far.
 
 ## What the context changes in jev

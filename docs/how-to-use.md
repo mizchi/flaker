@@ -322,6 +322,17 @@ flaker query "SELECT * FROM flaker_v1.flaky WHERE is_flaky"
 
 Runs in a lane with `full = true` have `runs.is_full = true`, and `full = false` forces `false`. For a lane without `full`, a run counts as full when it has results for at least 95% as many tests as the largest run of the same workflow within the preceding `[flaky].window_days` (the run itself included). Renamed or deleted tests therefore do not make a later full run look partial.
 
+### `flaker prune` — retention
+
+```bash
+flaker prune --older-than 180 --dry-run   # what would go
+flaker prune --older-than 180             # delete, then CHECKPOINT
+```
+
+`flaker prune` deletes history older than `--older-than <days>` and keeps the tables consistent: workflow runs go with their results and collected artifacts, selector records with their verdicts, sampling runs with their tests, commit changes once no kept run or selector record names the commit, and gate calibrations except each selector's latest. Quarantine, coverage and settings are state and are kept. It checkpoints the database afterwards and prints what it removed per table (`--dry-run` deletes nothing and prints what it would remove; `--json` prints the same as JSON).
+
+`<days>` must be at least `max(90, [sampling].co_failure_window_days) + [flaky].window_days`, 104 by default: 90 days is the longest default window (`calibrate --window-days`, `calibrate --selector --window-days`, `explain insights`), and a run's `is_full` compares it with its workflow's runs up to the flaky window before it. A shorter value exits with code 2. If you pass a longer `--window-days` to `calibrate`, keep at least that much plus the flaky window. DuckDB is single-writer, so run it where no other flaker command holds the database, such as the scheduled job that already owns it.
+
 ### Selector calibration with jev-test-filter
 
 For a step-by-step setup, see [Using flaker with jev-test-filter](jev-test-filter-integration.md). This section is the reference.

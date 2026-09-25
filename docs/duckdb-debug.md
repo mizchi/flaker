@@ -1,18 +1,15 @@
 # DuckDB デバッグメモ
 
-`duckdb.node` が見つからない場合は、次の順に確認してください。
+flaker は DuckDB の Node バインディングとして `@duckdb/node-api` を使います（0.14.1 から。以前は `duckdb` パッケージ）。
+ネイティブ部分はプラットフォーム別の `@duckdb/node-bindings-<os>-<arch>` パッケージに同梱済みで、インストール時のビルドは不要です。
 
-1. `pnpm ignored-builds` で `duckdb` が無視されていないか確認
-2. `package.json` の `pnpm.onlyBuiltDependencies` に `duckdb` を追加
-3. Node ヘッダをローカル指定して再ビルド
+`Failed to load DuckDB native binding` が出る場合は、次の順に確認してください。
 
-```bash
-npm_config_nodedir=$(dirname $(dirname $(which node))) pnpm rebuild duckdb
-```
+1. `node_modules/@duckdb/` にこのプラットフォーム用の `node-bindings-*` があるか確認（`--no-optional` / `--omit=optional` でインストールすると入りません）
+2. 依存関係を入れ直す: `pnpm install --force` または `npm install`
+3. `flaker doctor` で `duckdb` チェックが通るか確認
 
-## この環境で確認したこと
+## ファイルロック
 
-- 事象: `Cannot find module .../duckdb/lib/binding/duckdb.node`
-- 原因1: `pnpm` が `duckdb` のビルドスクリプトを自動無視していた
-- 原因2: プロキシ下で `node-gyp` が Node ヘッダを外部取得しようとして 403 になり得る
-- 対策: `npm_config_nodedir` を指定してローカル Node ヘッダを使う
+DuckDB はファイル単位のシングルライターです。`DuckDBStore.close()` はロックを即座に解放するので、同じプロセスで close した直後に別プロセスが同じファイルを開けます。
+旧 `duckdb` バインディングでは close 後もオブジェクトが GC されるまでロックが残っていました (#106)。

@@ -58,3 +58,43 @@ test "resolve_test_identity fills defaults and preserves provided test id" {
   })
   assert_eq(preserved.test_id, "preset")
 }
+
+///|
+fn id_of_name(name : String) -> String {
+  create_stable_test_id(@types.StableTestIdentityInput::{
+    suite: "s",
+    test_name: name,
+    task_id: None,
+    filter: None,
+    variant: None,
+    test_id: None,
+  })
+}
+
+///|
+fn lone(code : Int) -> String {
+  let buf = StringBuilder::new()
+  buf.write_char('a')
+  buf.write_char(Int::unsafe_to_char(code))
+  buf.to_string()
+}
+
+///|
+test "create_stable_test_id keeps lone surrogates and U+FFFD apart" {
+  let high = id_of_name(lone(0xD800))
+  let low = id_of_name(lone(0xDC00))
+  let replacement = id_of_name("a\u{FFFD}")
+  assert_eq(
+    high, "{\"taskId\":\"s\",\"suite\":\"s\",\"testName\":\"a\u{FFFD}D800\",\"filter\":null,\"variant\":null}",
+  )
+  assert_eq(
+    low, "{\"taskId\":\"s\",\"suite\":\"s\",\"testName\":\"a\u{FFFD}DC00\",\"filter\":null,\"variant\":null}",
+  )
+  assert_eq(
+    replacement, "{\"taskId\":\"s\",\"suite\":\"s\",\"testName\":\"a\u{FFFD}FFFD\",\"filter\":null,\"variant\":null}",
+  )
+  // A surrogate pair is a character, not two lone surrogates.
+  assert_eq(
+    id_of_name("a😀"), "{\"taskId\":\"s\",\"suite\":\"s\",\"testName\":\"a😀\",\"filter\":null,\"variant\":null}",
+  )
+}

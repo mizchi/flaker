@@ -69,8 +69,15 @@ const CASES: Array<{ name: string; input: TestIdentityFields }> = [
   },
   { name: "emoji", input: { suite: "emoji 😀.spec.ts", testName: "👍🏽 works", variant: { "🚀": "🔥" } } },
   { name: "line separators", input: { suite: "s", testName: "a b c﻿" } },
+  { name: "U+FFFD in a name", input: { suite: "s\ufffd", testName: "a\ufffdb", variant: { "k\ufffd": "\ufffd" } } },
+];
+
+// MoonBit's JSON parser rejects lone-surrogate escapes, so these cannot reach
+// the MoonBit core through the bridge; the fallback computes their ids, and
+// src/identity/identity_core_test.mbt pins the same form on the MoonBit side.
+const LONE_SURROGATE_CASES: Array<{ name: string; input: TestIdentityFields; id: string }> = [
   {
-    name: "lone surrogates",
+    name: "lone surrogates in every field",
     input: {
       suite: "s\udc00",
       testName: "x\ud800y",
@@ -78,22 +85,27 @@ const CASES: Array<{ name: string; input: TestIdentityFields }> = [
       filter: "\ude00f",
       variant: { "k\ud800": "v\udfff" },
     },
+    id: `{"taskId":"t\ufffdD83D","suite":"s\ufffdDC00","testName":"x\ufffdD800y","filter":"\ufffdDE00f","variant":{"k\ufffdD800":"v\ufffdDFFF"}}`,
+  },
+  {
+    name: "a high surrogate",
+    input: { suite: "s", testName: "a\ud800" },
+    id: `{"taskId":"s","suite":"s","testName":"a\ufffdD800","filter":null,"variant":null}`,
+  },
+  {
+    name: "a low surrogate",
+    input: { suite: "s", testName: "a\udc00" },
+    id: `{"taskId":"s","suite":"s","testName":"a\ufffdDC00","filter":null,"variant":null}`,
   },
 ];
 
 function toMoonBitInput(input: TestIdentityFields): Record<string, unknown> {
-  // MoonBit's JSON parser rejects lone-surrogate escapes, so the reference id
-  // for such names is the one of their well-formed (U+FFFD) replacement.
-  const clean = (value: string) => value.toWellFormed();
-  const variant = Object.entries(input.variant ?? {}).map(([key, value]) => ({
-    key: clean(key),
-    value: clean(value),
-  }));
+  const variant = Object.entries(input.variant ?? {}).map(([key, value]) => ({ key, value }));
   return {
-    suite: clean(input.suite),
-    test_name: clean(input.testName),
-    ...(input.taskId != null ? { task_id: clean(input.taskId) } : {}),
-    ...(input.filter != null ? { filter: clean(input.filter) } : {}),
+    suite: input.suite,
+    test_name: input.testName,
+    ...(input.taskId != null ? { task_id: input.taskId } : {}),
+    ...(input.filter != null ? { filter: input.filter } : {}),
     ...(variant.length > 0 ? { variant } : {}),
   };
 }
@@ -134,6 +146,28 @@ describe("stable test id parity between the MoonBit core and the TS fallback", (
 
   it.each(CASES)("resolveTestIdentity: $name", ({ input }) => {
     expect(fallback.resolveTestIdentity(input).testId).toBe(moonbitId(input));
+  });
+
+  it.each(LONE_SURROGATE_CASES)("lone surrogates, fallback: $name", ({ input, id }) => {
+    expect(fallback.createStableTestId(input)).toBe(id);
+    expect(fallback.resolveTestIdentity(input).testId).toBe(id);
+  });
+
+  it.each(LONE_SURROGATE_CASES)("lone surrogates, bridge-backed public API: $name", async ({ input, id }) => {
+    vi.resetModules();
+    const identity = await import("../../src/cli/identity.js");
+    await identity.loadIdentityCore();
+    expect(identity.createStableTestId(input)).toBe(id);
+    const resolved = identity.resolveTestIdentity(input);
+    expect(resolved.testId).toBe(id);
+    for (const value of [resolved.taskId, resolved.filter, ...Object.entries(resolved.variant ?? {}).flat()]) {
+      if (value != null) expect(value.isWellFormed()).toBe(true);
+    }
+  });
+
+  it("gives names that differ only in their lone surrogate distinct ids (#103)", () => {
+    const ids = ["a\ud800", "a\udc00", "a\ufffd"].map((testName) => fallback.createStableTestId({ suite: "s", testName }));
+    expect(new Set(ids).size).toBe(3);
   });
 
   it.each(CASES)("bridge-backed public API: $name", async ({ input }) => {

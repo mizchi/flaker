@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `examples/github-actions/jev-loop.yml`: the "jev on main" loop as a workflow — the flaker database in the Actions cache, a `concurrency` group for DuckDB's single writer, jev against `github.event.before` (falling back to `HEAD~1`), a full-suite run on the same commit that alone uploads the full lane's artifact, then `import --adapter jev`, `import --ci` and `calibrate --selector`. Linked from the jev guide and the `flaker-setup` skill (#99).
+- `flaker prune --older-than <days> [--dry-run] [--json]` deletes history older than `<days>`: workflow runs with their results and collected artifacts, selector records with their verdicts, sampling runs, commit changes no kept run or record names, and gate calibrations other than each selector's latest. It keeps quarantine, coverage and settings, checkpoints the database afterwards, and reports what it removed (or would remove). `<days>` must be at least `max(90, [sampling].co_failure_window_days) + [flaky].window_days` (104 by default), so the flaky window, `is_full`, co-failures and both calibrations keep their data; a shorter value exits 2 (#105).
+
+### Changed
+
+- The DuckDB binding moves from the deprecated `duckdb` package to `@duckdb/node-api` (1.4.4, the same DuckDB version). Its native part ships as a prebuilt per-platform package, so nothing is compiled at install time and `pnpm.onlyBuiltDependencies` is no longer needed. Query results keep their JS types; in `flaker query` output, lists, structs and maps now print as JSON.
+
+### Fixed
+
+- Test names that differ only in which lone surrogate they contain (`"a\uD800"` and `"a\uDC00"`) get distinct stable test ids; both became U+FFFD before the id was built, so their results merged. The id text now writes a lone surrogate, and U+FFFD itself, as U+FFFD followed by its four hex digits, in both the MoonBit core and the TypeScript fallback. Stored names stay well-formed. **Ids change** for tests whose suite, name, task id, filter or variant contains a lone surrogate or U+FFFD; their history before the upgrade stays under the old id. No built-in adapter produces such names from a well-formed report (#103).
+- `DuckDBStore.close()` releases the database file lock at once. With the old binding the lock stayed until the instance was garbage-collected, so an in-process caller that closed a file-backed store could not hand the file to another process (#106).
+- Quarantines that `flaker apply` records (`quarantined_test_identities.created_at`) are dated in UTC, like every other timestamp flaker writes. They defaulted to `CURRENT_TIMESTAMP`, which DuckDB stores as the session's local wall-clock time, so on a machine outside UTC `flaker_v1.quarantine.since` was hours off. Rows written before this release keep their time; they cannot be corrected without knowing the writer's time zone (#102).
+
 ## 0.14.0
 
 ### Added

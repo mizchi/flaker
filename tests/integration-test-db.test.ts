@@ -1,7 +1,7 @@
 // tests/integration-test-db.test.ts
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { loadRecord, replay } from "jev-test-filter";
@@ -101,23 +101,16 @@ describe("jev-test-filter's own CLI reads the exported context", () => {
       join(project, "flaker.toml"),
       `[repo]\nowner = "a"\nname = "b"\n[storage]\npath = ".flaker/data"\n[affected]\nresolver = "git"\nconfig = ""\n`,
     );
-    // The duckdb binding keeps a closed database's file lock until the
-    // instance is garbage-collected, so a child process could not open it.
-    // Seed a scratch database, checkpoint it, and copy it into place.
-    const scratch = mkdtempSync(join(tmpdir(), "flaker-jev-seed-"));
-    writeFileSync(join(scratch, "flaker.toml"), readFileSync(join(project, "flaker.toml"), "utf8"));
-    const store = await openDatasetStore(scratch, loadConfig(scratch));
+    // Seed in-process, close, and let the CLI child open the same file:
+    // close() releases DuckDB's file lock at once (#106).
+    const store = await openDatasetStore(project, loadConfig(project));
     try {
-      await seedLoop(store, scratch);
+      await seedLoop(store, project);
       await store.addQuarantine({ suite: "tests/init.test.ts", testName: "init reads toml" }, "manual");
       await runSelectorCalibration({ store, selector: DEFAULT_SELECTOR, windowDays: 90, dryRun: false });
-      await store.raw("CHECKPOINT");
     } finally {
       await store.close();
     }
-    mkdirSync(join(project, ".flaker"));
-    copyFileSync(join(scratch, ".flaker/data"), join(project, ".flaker/data"));
-    expect(existsSync(join(scratch, ".flaker/data.wal"))).toBe(false);
 
     const env = scrubbedEnv();
     const exported = spawnSync("node", [FLAKER_CLI, "export", "--projection", "jev-context", "-o", "context.json"], { cwd: project, env, encoding: "utf8" });
@@ -148,5 +141,28 @@ describe("jev-test-filter's own CLI reads the exported context", () => {
     const bad = jev(tamperedPath);
     expect(bad.status).toBe(2);
     expect(bad.stderr).toMatch(/unsupported context version 2; expected 1/);
+  });
+});
+
+describe("flaker export --projection jev-context", () => {
+  it("caps hinted tests at [selector].max_hinted_tests from flaker.toml", async () => {
+    const project = mkdtempSync(join(tmpdir(), "flaker-jev-cap-"));
+    const base = `[repo]\nowner = "a"\nname = "b"\n[storage]\npath = ".flaker/data"\n[affected]\nresolver = "git"\nconfig = ""\n`;
+    writeFileSync(join(project, "flaker.toml"), base);
+    const store = await openDatasetStore(project, loadConfig(project));
+    try {
+      await seedLoop(store, project);
+    } finally {
+      await store.close();
+    }
+    const exportContext = () => {
+      const res = spawnSync("node", [FLAKER_CLI, "export", "--projection", "jev-context"], { cwd: project, env: scrubbedEnv(), encoding: "utf8" });
+      expect(res.status, res.stderr).toBe(0);
+      return JSON.parse(res.stdout) as JevContextV1;
+    };
+
+    expect(exportContext().tests).toHaveLength(1);
+    writeFileSync(join(project, "flaker.toml"), `${base}[selector]\ntype = "jev"\nmax_hinted_tests = 0\n`);
+    expect(exportContext().tests).toEqual([]);
   });
 });

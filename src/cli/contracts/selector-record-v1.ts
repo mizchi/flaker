@@ -10,7 +10,7 @@
  */
 import { canonicalJson, sha256Hex } from "./canonical-json.js";
 import {
-  BOOL, NUM, NUM_OR_NULL, STR, STR_OR_NULL, STRINGS, TIME, oneOf, type JsonSchema,
+  BOOL, NUM, NUM_OR_NULL, STR, STR_OR_NULL, STRINGS, RFC3339, TIME, oneOf, type JsonSchema,
 } from "./json-schema.js";
 
 export const SELECTOR_RECORD_KIND = "flaker-selector-record";
@@ -84,9 +84,6 @@ export const SELECTOR_RECORD_V1_SCHEMA: JsonSchema = {
     },
   },
 };
-
-/** JSON Schema's `date-time`: RFC 3339, with a `Z` or a numeric offset. */
-const RFC3339 = /^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(\.\d+)?([Zz]|[+-]\d{2}:\d{2})$/;
 
 function fail(what: string): never {
   throw new Error(`invalid selector-record: ${what}`);

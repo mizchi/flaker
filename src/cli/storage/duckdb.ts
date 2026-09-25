@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { SCHEMA_DDL, FLAKY_QUERY, CO_FAILURE_QUERY, buildTestCoFailureQuery } from "./schema.js";
 import { createStableTestId, resolveTestIdentity } from "../identity.js";
-import { FLAKER_V1_VIEWS_SQL } from "../datasets/views.js";
+import { FLAKER_V1_VIEWS_SQL, NOW_UTC } from "../datasets/views.js";
 import type {
   MetricStore,
   WorkflowRun,
@@ -28,6 +28,8 @@ import type {
 } from "./types.js";
 
 export class DuckDBStore implements MetricStore {
+  private duckdb: DuckDBModule | null = null;
+  private queue: Promise<void> = Promise.resolve();
   private db: DuckDBDatabase | null = null;
   private conn: DuckDBConnection | null = null;
   private dbPath: string;
@@ -58,20 +60,12 @@ export class DuckDBStore implements MetricStore {
     if (this.dbPath !== ":memory:" && !this.readOnly) {
       mkdirSync(dirname(this.dbPath), { recursive: true });
     }
-    this.db = await new Promise<DuckDBDatabase>((resolve, reject) => {
-      try {
-        const done = (err: any) => {
-          if (err) reject(err);
-          else resolve(db);
-        };
-        const db = this.readOnly
-          ? new duckdb.Database(this.dbPath, duckdb.OPEN_READONLY, done)
-          : new duckdb.Database(this.dbPath, done);
-      } catch (err) {
-        reject(err);
-      }
-    });
-    this.conn = this.db.connect();
+    this.duckdb = duckdb;
+    this.db = await duckdb.DuckDBInstance.create(
+      this.dbPath,
+      this.readOnly ? { access_mode: "READ_ONLY" } : undefined,
+    );
+    this.conn = await this.db.connect();
     if (this.readOnly) return;
     await this.exec(SCHEMA_DDL);
     await this.exec(FLAKER_V1_VIEWS_SQL);
@@ -79,8 +73,7 @@ export class DuckDBStore implements MetricStore {
   }
 
   private async loadDuckDBModule(): Promise<DuckDBModule> {
-    const mod = (await import("duckdb")) as unknown as { default?: DuckDBModule } & DuckDBModule;
-    return mod.default ?? mod;
+    return (await import("@duckdb/node-api")) as DuckDBModule;
   }
 
   private buildDuckDBLoadError(error: unknown): Error {
@@ -88,21 +81,24 @@ export class DuckDBStore implements MetricStore {
       [
         "Failed to load DuckDB native binding.",
         "Install/rebuild dependencies and ensure the runtime can load native modules.",
-        "Try: npm_config_nodedir=$(dirname $(dirname $(which node))) pnpm rebuild duckdb",
+        "Try: pnpm install --force (or npm install) so the @duckdb/node-bindings package for this platform is present",
         `Original error: ${error instanceof Error ? error.message : String(error)}`,
       ].join(" ")
     );
   }
 
+  /**
+   * Closes the connection and the instance. The file lock is released here,
+   * so another process can open the database right after (#106).
+   */
   async close(): Promise<void> {
-    if (this.db) {
-      await new Promise<void>((resolve, reject) => {
-        this.db!.close((err: any) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
+    await this.queue;
+    if (this.conn) {
+      this.conn.closeSync();
       this.conn = null;
+    }
+    if (this.db) {
+      this.db.closeSync();
       this.db = null;
     }
     if (this.ownedTempDir) {
@@ -461,8 +457,12 @@ export class DuckDBStore implements MetricStore {
   async addQuarantine(test: TestSelector, reason: string): Promise<void> {
     const resolved = resolveTestIdentity(test);
     await this.run(
-      `INSERT INTO quarantined_test_identities (test_id, task_id, suite, test_name, filter_text, reason)
-       VALUES (?, ?, ?, ?, ?, ?)
+      // created_at is written explicitly: databases created before 0.14.1 still
+      // default it to CURRENT_TIMESTAMP, which is session-local time (#102).
+      // DuckDB 1.4 cannot replay an ALTER ... SET DEFAULT from the WAL, so the
+      // old default is left in place rather than migrated.
+      `INSERT INTO quarantined_test_identities (test_id, task_id, suite, test_name, filter_text, reason, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ${NOW_UTC})
        ON CONFLICT (test_id) DO UPDATE SET reason = EXCLUDED.reason`,
       [
         resolved.testId,
@@ -817,33 +817,78 @@ export class DuckDBStore implements MetricStore {
 
   // Private helpers
 
+  /**
+   * One statement at a time on the connection. Callers overlap reads with
+   * `Promise.all`, and @duckdb/node-api fails a prepared statement that runs
+   * while another is still executing on the same connection.
+   */
+  private serialize<T>(task: () => Promise<T>): Promise<T> {
+    const result = this.queue.then(task);
+    this.queue = result.then(() => undefined, () => undefined);
+    return result;
+  }
+
   private all(sql: string, params: unknown[] = []): Promise<any[]> {
-    return new Promise((resolve, reject) => {
-      const cb = (err: any, result: any) => {
-        if (err) reject(err);
-        else resolve(result);
-      };
-      this.conn!.all(sql, ...params, cb);
+    return this.serialize(async () => {
+      const reader = params.length === 0
+        ? await this.conn!.runAndReadAll(sql)
+        : await this.conn!.runAndReadAll(sql, ...this.bind(params));
+      return reader.getRowObjectsJS();
     });
   }
 
   private run(sql: string, params: unknown[] = []): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const cb = (err: any) => {
-        if (err) reject(err);
-        else resolve();
-      };
-      this.conn!.run(sql, ...params, cb);
+    return this.serialize(async () => {
+      if (params.length === 0) await this.conn!.run(sql);
+      else await this.conn!.run(sql, ...this.bind(params));
     });
   }
 
+  /** Runs every statement in `sql` (DDL scripts, `;`-separated). */
   private exec(sql: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.conn!.exec(sql, (err: any) => {
-        if (err) reject(err);
-        else resolve();
-      });
+    return this.serialize(async () => {
+      await this.conn!.run(sql);
     });
+  }
+
+  /**
+   * Values with explicit types, the way the old `duckdb` binding bound them:
+   * an untyped `?` (e.g. `SELECT ?`) has no type to infer from otherwise.
+   */
+  private bind(params: unknown[]): [DuckDBValue[], DuckDBType[]] {
+    const d = this.duckdb!;
+    const values: DuckDBValue[] = [];
+    const types: DuckDBType[] = [];
+    for (const value of params) {
+      if (value === null || value === undefined) {
+        values.push(null);
+        types.push(d.SQLNULL);
+      } else if (typeof value === "number") {
+        if (Number.isSafeInteger(value) && Math.abs(value) <= 0x7fffffff) {
+          values.push(value);
+          types.push(d.INTEGER);
+        } else if (Number.isSafeInteger(value)) {
+          values.push(BigInt(value));
+          types.push(d.BIGINT);
+        } else {
+          values.push(value);
+          types.push(d.DOUBLE);
+        }
+      } else if (typeof value === "bigint") {
+        values.push(value);
+        types.push(d.BIGINT);
+      } else if (typeof value === "boolean") {
+        values.push(value);
+        types.push(d.BOOLEAN);
+      } else if (value instanceof Date) {
+        values.push(new d.DuckDBTimestampValue(BigInt(value.getTime()) * 1000n));
+        types.push(d.TIMESTAMP);
+      } else {
+        values.push(String(value));
+        types.push(d.VARCHAR);
+      }
+    }
+    return [values, types];
   }
 
   private async backfillLegacyQuarantineEntries(): Promise<void> {
@@ -886,18 +931,8 @@ export class DuckDBStore implements MetricStore {
   }
 }
 
-type DuckDBModule = {
-  Database: new (...args: unknown[]) => DuckDBDatabase;
-  OPEN_READONLY: number;
-};
-
-type DuckDBDatabase = {
-  connect: () => DuckDBConnection;
-  close: (callback: (err: unknown) => void) => void;
-};
-
-type DuckDBConnection = {
-  all: (sql: string, ...params: unknown[]) => void;
-  run: (sql: string, ...params: unknown[]) => void;
-  exec: (sql: string, callback: (err: unknown) => void) => void;
-};
+type DuckDBModule = typeof import("@duckdb/node-api");
+type DuckDBDatabase = import("@duckdb/node-api").DuckDBInstance;
+type DuckDBConnection = import("@duckdb/node-api").DuckDBConnection;
+type DuckDBValue = import("@duckdb/node-api").DuckDBValue;
+type DuckDBType = import("@duckdb/node-api").DuckDBType;
