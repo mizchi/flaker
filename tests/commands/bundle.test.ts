@@ -237,7 +237,9 @@ describe("analysis bundle", () => {
       },
     ]);
     expect(bundle.analysis.kpi.windowDays).toBe(30);
-    expect(bundle.analysis.context.environment.testCount).toBe(7);
+    // Distinct tests (flaker_v1.tests), not the 7 results.
+    expect(bundle.analysis.context.environment.testCount).toBe(bundle.data.testResults.uniqueTests);
+    expect(bundle.analysis.context.environment.testCount).toBe(3);
     expect(bundle.analysis.reason.summary.totalAnalyzed).toBeGreaterThan(0);
     expect(bundle.analysis.insights.summary.totalTests).toBeGreaterThan(0);
     expect(bundle.analysis.clusters.length).toBe(1);

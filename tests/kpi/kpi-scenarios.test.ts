@@ -39,7 +39,7 @@ describe("KPI scenarios", () => {
   async function insertResults(
     runId: number,
     sha: string,
-    tests: Array<{ suite: string; name: string; status: "passed" | "failed" }>,
+    tests: Array<{ suite: string; name: string; status: "passed" | "failed" | "flaky" }>,
   ) {
     await store.insertTestResults(
       tests.map((t) => ({
@@ -49,7 +49,7 @@ describe("KPI scenarios", () => {
         status: t.status,
         durationMs: 100,
         retryCount: 0,
-        errorMessage: t.status === "failed" ? "test failure" : null,
+        errorMessage: t.status === "passed" ? null : "test failure",
         commitSha: sha,
         variant: null,
         createdAt: new Date(),
@@ -126,9 +126,9 @@ describe("KPI scenarios", () => {
       await insertRun(c + 1, sha);
       await insertChanges(sha, [`src/module_${c % 3}.ts`]);
       const tests = Array.from({ length: 20 }, (_, i) => {
-        let status: "passed" | "failed" = "passed";
-        // test_0 and test_1 fail 30% of the time
-        if (i < 2 && c % 3 === 0) status = "failed";
+        let status: "passed" | "failed" | "flaky" = "passed";
+        // test_0 and test_1 flake 30% of the time (fail, then pass on retry)
+        if (i < 2 && c % 3 === 0) status = "flaky";
         return { suite: `suite_${i % 4}`, name: `test_${i}`, status };
       });
       await insertResults(c + 1, sha, tests);
@@ -199,15 +199,15 @@ describe("KPI scenarios", () => {
       const changedFile = c % 2 === 0 ? "src/core.ts" : "src/utils.ts";
       await insertChanges(sha, [changedFile]);
 
-      const tests: Array<{ suite: string; name: string; status: "passed" | "failed" }> = [];
+      const tests: Array<{ suite: string; name: string; status: "passed" | "failed" | "flaky" }> = [];
       for (let i = 0; i < 50; i++) {
-        let status: "passed" | "failed" = "passed";
+        let status: "passed" | "failed" | "flaky" = "passed";
         if (i < 2) {
           // Always broken
           status = "failed";
         } else if (i >= 2 && i < 5 && c % 4 === 0) {
-          // Intermittent flaky (25%)
-          status = "failed";
+          // Intermittent flaky (25%): fails, then passes on retry
+          status = "flaky";
         } else if (i === 5 && changedFile === "src/core.ts") {
           // Co-failure: core.ts → test_5
           status = "failed";

@@ -1,4 +1,5 @@
 import type { MetricStore } from "../../storage/types.js";
+import { coFailureStrength, dataConfidence, historyCounts, testHealth } from "../../datasets/facts.js";
 import type { FlakerConfig, SamplingConfig } from "../../config.js";
 
 export interface ProjectProfile {
@@ -33,104 +34,34 @@ export async function analyzeProject(
 ): Promise<ProjectProfile> {
   const window = opts.windowDays ?? 90;
   const now = opts.now ?? new Date();
-  const cutoff = new Date(now.getTime() - window * 24 * 60 * 60 * 1000);
-  const cutoffLiteral = cutoff.toISOString().replace("T", " ").replace("Z", "");
 
-  const testCountRows = await store.raw<{ cnt: number }>(`
-    SELECT COUNT(DISTINCT tr.suite || '::' || tr.test_name) AS cnt
-    FROM test_results tr
-    JOIN workflow_runs wr ON tr.workflow_run_id = wr.id
-    WHERE tr.created_at > '${cutoffLiteral}'::TIMESTAMP
-      AND COALESCE(wr.source, 'ci') = 'ci'
-  `);
-  const testCount = Number(testCountRows[0]?.cnt ?? 0);
+  const ci = await historyCounts(store, { windowDays: window, now, source: "ci" });
+  const testCount = ci.tests;
 
-  // Classify tests: broken (100% fail) vs intermittent flaky vs stable
-  const classRows = await store.raw<{
-    broken_count: number;
-    intermittent_count: number;
-    total_failing: number;
-    total_count: number;
-  }>(`
-    SELECT
-      COUNT(DISTINCT CASE WHEN fail_rate >= 100 THEN key END) AS broken_count,
-      COUNT(DISTINCT CASE WHEN fail_rate > 0 AND fail_rate < 100 THEN key END) AS intermittent_count,
-      COUNT(DISTINCT CASE WHEN fail_rate > 0 THEN key END) AS total_failing,
-      COUNT(DISTINCT key) AS total_count
-    FROM (
-      SELECT
-        tr.suite || '::' || tr.test_name AS key,
-        COUNT(*) AS runs,
-        ROUND(COUNT(*) FILTER (WHERE tr.status IN ('failed', 'flaky')) * 100.0 / COUNT(*), 1) AS fail_rate
-      FROM test_results tr
-      JOIN workflow_runs wr ON tr.workflow_run_id = wr.id
-      WHERE tr.created_at > '${cutoffLiteral}'::TIMESTAMP
-        AND COALESCE(wr.source, 'ci') = 'ci'
-      GROUP BY tr.suite, tr.test_name
-      HAVING COUNT(*) >= 5
-    ) sub
-  `);
-  const brokenTestCount = Number(classRows[0]?.broken_count ?? 0);
-  const intermittentFlakyCount = Number(classRows[0]?.intermittent_count ?? 0);
-  const totalFailing = Number(classRows[0]?.total_failing ?? 0);
-  const totalClassified = Number(classRows[0]?.total_count ?? 1);
-
-  const flakyRate = totalClassified > 0 ? totalFailing / totalClassified : 0;
+  // Classify CI results by flaker_v1.flaky: broken (fails every run, no flake
+  // evidence) vs flaky vs other failing tests.
+  const health = await testHealth(store, { windowDays: window, now, ciOnly: true });
+  const brokenTestCount = health.broken;
+  const intermittentFlakyCount = health.flaky;
+  const totalClassified = health.classified;
+  const flakyRate = totalClassified > 0 ? health.failing / totalClassified : 0;
   const trueFlakyRate = totalClassified > 0 ? intermittentFlakyCount / totalClassified : 0;
 
-  // Co-failure data
-  let coFailureStrength = 0.5;
-  let hasCoFailureData = false;
-  try {
-    const coRows = await store.raw<{ cnt: number }>(`
-      SELECT COUNT(*) AS cnt FROM commit_changes LIMIT 1
-    `);
-    if (Number(coRows[0]?.cnt ?? 0) > 0) {
-      hasCoFailureData = true;
-      const corrRows = await store.raw<{ avg_co_fail: number }>(`
-        SELECT COALESCE(AVG(co_fail_rate), 0) AS avg_co_fail
-        FROM (
-          SELECT
-            cc.file_path,
-            tr.suite || '::' || tr.test_name AS test_key,
-            COUNT(*) AS co_runs,
-            SUM(CASE WHEN tr.status IN ('failed', 'flaky') THEN 1 ELSE 0 END) AS co_fails,
-            CASE WHEN COUNT(*) >= 3
-              THEN CAST(SUM(CASE WHEN tr.status IN ('failed', 'flaky') THEN 1 ELSE 0 END) AS DOUBLE) / COUNT(*)
-              ELSE 0 END AS co_fail_rate
-          FROM commit_changes cc
-          JOIN test_results tr ON cc.commit_sha = tr.commit_sha
-          WHERE tr.created_at > '${cutoffLiteral}'::TIMESTAMP
-          GROUP BY cc.file_path, test_key
-          HAVING co_runs >= 3 AND co_fails > 0
-        ) sub
-      `);
-      coFailureStrength = Math.min(1, Number(corrRows[0]?.avg_co_fail ?? 0));
-    }
-  } catch {
-    // commit_changes table may not exist
-  }
+  // Co-failure strength: the mean flaker_v1.co_failures strength of pairs seen
+  // on at least 3 commits (0.5 before any commit changes are recorded).
+  const [changes] = await store.raw<{ cnt: number }>(`SELECT COUNT(*)::INTEGER AS cnt FROM commit_changes`);
+  const hasCoFailureData = (changes?.cnt ?? 0) > 0;
+  const strength = hasCoFailureData ? await coFailureStrength(store, { windowDays: window, now }) : null;
+  const coFailureStrengthValue = hasCoFailureData ? Math.min(1, strength ?? 0) : 0.5;
 
-  const commitRows = await store.raw<{ cnt: number }>(`
-    SELECT COUNT(DISTINCT commit_sha) AS cnt
-    FROM test_results
-    WHERE created_at > '${cutoffLiteral}'::TIMESTAMP
-      AND commit_sha IS NOT NULL
-  `);
-  const commitCount = Number(commitRows[0]?.cnt ?? 0);
-
-  // Confidence level
-  let confidence: ProjectProfile["confidence"];
-  if (commitCount < 5) confidence = "insufficient";
-  else if (commitCount < 30) confidence = "low";
-  else if (commitCount < 100) confidence = "moderate";
-  else confidence = "high";
+  const commitCount = (await historyCounts(store, { windowDays: window, now })).commits;
+  const confidence = dataConfidence(commitCount);
 
   return {
     testCount,
     flakyRate: Math.round(flakyRate * 1000) / 1000,
     trueFlakyRate: Math.round(trueFlakyRate * 1000) / 1000,
-    coFailureStrength: Math.round(coFailureStrength * 100) / 100,
+    coFailureStrength: Math.round(coFailureStrengthValue * 100) / 100,
     hasCoFailureData,
     commitCount,
     hasResolver: opts.hasResolver,
@@ -263,77 +194,4 @@ function strategyExplanation(strategy: string): string {
     case "weighted": return "prioritize by flaky rate + co-failure";
     default: return strategy;
   }
-}
-
-/**
- * Generate a JSON context blob for LLM-assisted calibration.
- */
-export function buildExplainContext(
-  result: CalibrationResult,
-  topTests?: { broken: string[]; flaky: string[] },
-): Record<string, unknown> {
-  const { profile: p, sampling: s } = result;
-  return {
-    project: {
-      testCount: p.testCount,
-      commitCount: p.commitCount,
-      confidence: p.confidence,
-      confidenceThresholds: { insufficient: "<5", low: "<30", moderate: "<100", high: "100+" },
-      brokenTests: p.brokenTestCount,
-      intermittentFlakyTests: p.intermittentFlakyCount,
-      trueFlakyRate: p.trueFlakyRate,
-      rawFlakyRate: p.flakyRate,
-      coFailureStrength: p.coFailureStrength,
-      hasCoFailureData: p.hasCoFailureData,
-      hasResolver: p.hasResolver,
-    },
-    recommendation: {
-      strategy: s.strategy,
-      strategyReason: strategyExplanation(s.strategy),
-      samplePercentage: s.sample_percentage,
-      holdoutRatio: s.holdout_ratio,
-      coFailureWindowDays: s.co_failure_window_days,
-    },
-    topTests: topTests ?? { broken: [], flaky: [] },
-    warnings: [
-      ...(p.confidence === "insufficient" ? ["Insufficient data (< 5 commits). Recommendations are unreliable."] : []),
-      ...(p.confidence === "low" ? [`Low confidence (${p.commitCount} commits). Need 50+ for reliable calibration.`] : []),
-      ...(p.brokenTestCount > 0 ? [`${p.brokenTestCount} test(s) fail 100% of the time — these are broken, not flaky.`] : []),
-      ...(!p.hasCoFailureData ? ["No co-failure data collected. Co-failure strength is a default estimate."] : []),
-    ],
-  };
-}
-
-/**
- * Query top broken and flaky test names for --explain context.
- */
-export async function queryTopTests(
-  store: MetricStore,
-  windowDays: number,
-  now?: Date,
-): Promise<{ broken: string[]; flaky: string[] }> {
-  const window = Number(windowDays);
-  const ref = now ?? new Date();
-  const cutoff = new Date(ref.getTime() - window * 24 * 60 * 60 * 1000);
-  const cutoffLiteral = cutoff.toISOString().replace("T", " ").replace("Z", "");
-  const rows = await store.raw<{ key: string; fail_rate: number }>(`
-    SELECT
-      tr.suite || ' > ' || tr.test_name AS key,
-      ROUND(COUNT(*) FILTER (WHERE tr.status IN ('failed', 'flaky')) * 100.0 / COUNT(*), 1) AS fail_rate
-    FROM test_results tr
-    JOIN workflow_runs wr ON tr.workflow_run_id = wr.id
-    WHERE tr.created_at > '${cutoffLiteral}'::TIMESTAMP
-      AND COALESCE(wr.source, 'ci') = 'ci'
-    GROUP BY tr.suite, tr.test_name
-    HAVING COUNT(*) >= 5 AND fail_rate > 0
-    ORDER BY fail_rate DESC
-    LIMIT 20
-  `);
-  const broken: string[] = [];
-  const flaky: string[] = [];
-  for (const r of rows) {
-    if (r.fail_rate >= 100) broken.push(r.key);
-    else flaky.push(r.key);
-  }
-  return { broken: broken.slice(0, 10), flaky: flaky.slice(0, 10) };
 }

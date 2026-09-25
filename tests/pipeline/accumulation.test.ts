@@ -115,7 +115,7 @@ describe("data accumulation pipeline", () => {
     for (let i = 0; i < fixture2.commits.length; i++) {
       const commit = fixture2.commits[i];
       const runId = 1000 + i;
-      const createdAt = new Date(baseTime + i * 86400000);
+      const createdAt = new Date(baseTime - i * 3600000);
       await store.insertWorkflowRun({
         id: runId,
         repo: "fixture/repo",

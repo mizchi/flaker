@@ -1,11 +1,11 @@
 import type { FlakerConfig, PromotionThresholds } from "../../config.js";
 import type { GateName } from "../../gate.js";
 import { resolveGate } from "../../gate-config.js";
-import { workflowRunSourceSql } from "../../run-source.js";
 import type { MetricStore, FlakyScore, QuarantinedTest } from "../../storage/types.js";
 import { computeKpi, type FlakerKpi } from "../analyze/kpi.js";
 import { runQuarantineSuggest } from "../quarantine/suggest.js";
 import { runFlaky } from "../analyze/flaky.js";
+import { activity as readActivity } from "../../datasets/facts.js";
 import { computeStateDiff, type StateDiffField } from "../apply/state.js";
 
 export interface DriftInput {
@@ -106,37 +106,10 @@ export async function runStatusSummary(input: {
 }): Promise<StatusSummary> {
   const now = input.now ?? new Date();
   const windowDays = input.windowDays ?? 30;
-  const cutoff = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000);
-  const cutoffLiteral = cutoff.toISOString().replace("T", " ").replace("Z", "");
-  const workflowSourceExpr = workflowRunSourceSql("wr");
 
-  const [kpi, activityRows, currentQuarantine, quarantinePlan] = await Promise.all([
+  const [kpi, counts, currentQuarantine, quarantinePlan] = await Promise.all([
     computeKpi(input.store, { windowDays, now }),
-    input.store.raw<{
-      total_runs: number;
-      ci_runs: number;
-      local_runs: number;
-      passed_results: number;
-      failed_results: number;
-    }>(`
-      WITH recent_runs AS (
-        SELECT wr.id, ${workflowSourceExpr} AS source
-        FROM workflow_runs wr
-        WHERE wr.created_at > '${cutoffLiteral}'::TIMESTAMP
-      ),
-      recent_results AS (
-        SELECT tr.status, tr.retry_count
-        FROM test_results tr
-        JOIN workflow_runs wr ON tr.workflow_run_id = wr.id
-        WHERE tr.created_at > '${cutoffLiteral}'::TIMESTAMP
-      )
-      SELECT
-        (SELECT COUNT(*)::INTEGER FROM recent_runs) AS total_runs,
-        (SELECT COUNT(*)::INTEGER FROM recent_runs WHERE source = 'ci') AS ci_runs,
-        (SELECT COUNT(*)::INTEGER FROM recent_runs WHERE source = 'local') AS local_runs,
-        (SELECT COUNT(*)::INTEGER FROM recent_results WHERE status = 'passed' AND retry_count = 0) AS passed_results,
-        (SELECT COUNT(*)::INTEGER FROM recent_results WHERE status IN ('failed', 'flaky') OR (status = 'passed' AND retry_count > 0)) AS failed_results
-    `),
+    readActivity(input.store, { windowDays, now }),
     input.store.queryQuarantined(),
     runQuarantineSuggest({
       store: input.store,
@@ -146,14 +119,6 @@ export async function runStatusSummary(input: {
       minRuns: input.config.quarantine.min_runs,
     }),
   ]);
-
-  const activity = activityRows[0] ?? {
-    total_runs: 0,
-    ci_runs: 0,
-    local_runs: 0,
-    passed_results: 0,
-    failed_results: 0,
-  };
 
   // kpi.sampling.falseNegativeRate, passCorrelation, and holdoutFNR are already
   // percentages (0–100); no multiplication needed.
@@ -184,11 +149,11 @@ export async function runStatusSummary(input: {
     generatedAt: now.toISOString(),
     windowDays,
     activity: {
-      totalRuns: activity.total_runs,
-      ciRuns: activity.ci_runs,
-      localRuns: activity.local_runs,
-      passedResults: activity.passed_results,
-      failedResults: activity.failed_results,
+      totalRuns: counts.runs.total,
+      ciRuns: counts.runs.ci,
+      localRuns: counts.runs.local,
+      passedResults: counts.results.passed,
+      failedResults: counts.results.failed,
     },
     health: {
       dataConfidence: kpi.data.confidence,

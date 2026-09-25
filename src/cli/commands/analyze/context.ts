@@ -44,27 +44,24 @@ export async function buildContext(
     }
   } catch {}
 
+  // Tests, not results (flaker_v1.tests); commits from flaker_v1.runs without mutation trials.
   const [testCount] = await store.raw<{ cnt: number }>(
-    "SELECT COUNT(*)::INTEGER AS cnt FROM test_results",
+    "SELECT COUNT(*)::INTEGER AS cnt FROM flaker_v1.tests",
   );
   const [suiteCount] = await store.raw<{ cnt: number }>(
-    "SELECT COUNT(DISTINCT suite)::INTEGER AS cnt FROM test_results",
+    "SELECT COUNT(DISTINCT suite)::INTEGER AS cnt FROM flaker_v1.tests",
   );
   const [commitCount] = await store.raw<{ cnt: number }>(
-    "SELECT COUNT(DISTINCT commit_sha)::INTEGER AS cnt FROM test_results",
+    `SELECT COUNT(DISTINCT ru.commit_sha)::INTEGER AS cnt
+     FROM flaker_v1.runs ru JOIN flaker_v1.results r ON r.run_id = ru.run_id
+     WHERE ru.source <> 'mutation'`,
   );
   const [changesCount] = await store.raw<{ cnt: number }>(
     "SELECT COUNT(DISTINCT commit_sha)::INTEGER AS cnt FROM commit_changes",
   );
   const [coFailureCount] = await store.raw<{ cnt: number }>(
-    `SELECT COUNT(*)::INTEGER AS cnt FROM (
-       SELECT cc.file_path, tr.test_id
-       FROM commit_changes cc
-       JOIN test_results tr ON cc.commit_sha = tr.commit_sha
-       WHERE tr.status IN ('failed', 'flaky') OR (tr.retry_count > 0 AND tr.status = 'passed')
-       GROUP BY cc.file_path, tr.test_id
-       HAVING COUNT(*) >= 2
-     )`,
+    // (changed file, test) pairs with at least two co-failing commits in the co-failure window.
+    "SELECT COUNT(*)::INTEGER AS cnt FROM flaker_v1.co_failures WHERE co_failures >= 2",
   );
 
   const [testCoverageCount] = await store.raw<{ cnt: number }>(

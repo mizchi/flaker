@@ -1,4 +1,5 @@
 import type { MetricStore } from "../../storage/types.js";
+import { dataConfidence, historyCounts, testHealth, type DataConfidence } from "../../datasets/facts.js";
 import { workflowRunSourceSql } from "../../run-source.js";
 
 export interface FlakerKpi {
@@ -40,7 +41,7 @@ export interface FlakerKpi {
     commitsWithChanges: number;
     coFailureCoverage: number;
     coFailureReady: boolean;
-    confidence: "insufficient" | "low" | "moderate" | "high";
+    confidence: DataConfidence;
     /** ISO date of most recent test result */
     lastDataAt: string | null;
     /** Days since last data */
@@ -56,8 +57,6 @@ export async function computeKpi(
   const now = opts?.now ?? new Date();
   const cutoff = new Date(now.getTime() - window * 24 * 60 * 60 * 1000);
   const cutoffLiteral = cutoff.toISOString().replace("T", " ").replace("Z", "");
-  const cutoffPrev = new Date(now.getTime() - window * 2 * 24 * 60 * 60 * 1000);
-  const cutoffPrevLiteral = cutoffPrev.toISOString().replace("T", " ").replace("Z", "");
   const workflowSourceExpr = workflowRunSourceSql("wr");
 
   // --- Sampling: confusion matrix from matched commits ---
@@ -181,59 +180,19 @@ export async function computeKpi(
     ) sub
   `);
 
-  // --- Flaky ---
-  const [flakyRow] = await store.raw<{
-    broken: number;
-    intermittent: number;
-    total_classified: number;
-  }>(`
-    SELECT
-      COUNT(DISTINCT CASE WHEN fail_rate >= 100 THEN key END)::INTEGER AS broken,
-      COUNT(DISTINCT CASE WHEN fail_rate > 0 AND fail_rate < 100 THEN key END)::INTEGER AS intermittent,
-      COUNT(DISTINCT key)::INTEGER AS total_classified
-    FROM (
-      SELECT
-        suite || '::' || test_name AS key,
-        ROUND(COUNT(*) FILTER (WHERE status IN ('failed', 'flaky')) * 100.0 / COUNT(*), 1) AS fail_rate
-      FROM test_results
-      WHERE created_at > '${cutoffLiteral}'::TIMESTAMP
-      GROUP BY suite, test_name
-      HAVING COUNT(*) >= 5
-    ) sub
-  `);
-
-  const [trendRow] = await store.raw<{ current_count: number; previous_count: number }>(`
-    SELECT
-      (SELECT COUNT(DISTINCT suite || '::' || test_name)::INTEGER FROM (
-        SELECT suite, test_name, COUNT(*) AS runs,
-          COUNT(*) FILTER (WHERE status IN ('failed', 'flaky')) AS fails
-        FROM test_results
-        WHERE created_at > '${cutoffLiteral}'::TIMESTAMP
-        GROUP BY suite, test_name HAVING runs >= 5 AND fails > 0
-      ) sub) AS current_count,
-      (SELECT COUNT(DISTINCT suite || '::' || test_name)::INTEGER FROM (
-        SELECT suite, test_name, COUNT(*) AS runs,
-          COUNT(*) FILTER (WHERE status IN ('failed', 'flaky')) AS fails
-        FROM test_results
-        WHERE created_at > '${cutoffPrevLiteral}'::TIMESTAMP
-          AND created_at <= '${cutoffLiteral}'::TIMESTAMP
-        GROUP BY suite, test_name HAVING runs >= 5 AND fails > 0
-      ) sub) AS previous_count
-  `);
-
-  const totalClassified = flakyRow?.total_classified ?? 1;
-  const intermittent = flakyRow?.intermittent ?? 0;
+  // --- Flaky (flaker_v1.flaky over this window and the one before) ---
+  const health = await testHealth(store, { windowDays: window, now });
+  const previous = await testHealth(store, { windowDays: window, now: cutoff });
+  const totalClassified = health.classified || 1;
+  const intermittent = health.flaky;
 
   // --- Data quality ---
+  const history = await historyCounts(store, { windowDays: window, now });
   const [dataRow] = await store.raw<{
-    commit_count: number;
     commits_with_changes: number;
     last_data_at: string | null;
   }>(`
     SELECT
-      (SELECT COUNT(DISTINCT commit_sha)::INTEGER FROM test_results
-       WHERE created_at > '${cutoffLiteral}'::TIMESTAMP
-         AND commit_sha IS NOT NULL) AS commit_count,
       (SELECT COUNT(DISTINCT commit_sha)::INTEGER FROM commit_changes
        WHERE commit_sha IN (
          SELECT DISTINCT commit_sha FROM test_results
@@ -242,15 +201,10 @@ export async function computeKpi(
       (SELECT MAX(created_at)::VARCHAR FROM test_results) AS last_data_at
   `);
 
-  const commitCount = dataRow?.commit_count ?? 0;
+  const commitCount = history.commits;
   const commitsWithChanges = dataRow?.commits_with_changes ?? 0;
   const coFailureCoverage = commitCount > 0 ? commitsWithChanges / commitCount : 0;
-
-  let confidence: FlakerKpi["data"]["confidence"];
-  if (commitCount < 5) confidence = "insufficient";
-  else if (commitCount < 30) confidence = "low";
-  else if (commitCount < 100) confidence = "moderate";
-  else confidence = "high";
+  const confidence = dataConfidence(commitCount);
 
   return {
     timestamp: new Date().toISOString(),
@@ -267,10 +221,10 @@ export async function computeKpi(
       confusionMatrix: matched > 0 ? { truePositive: tp, falsePositive: fp, falseNegative: fn, trueNegative: tn } : null,
     },
     flaky: {
-      brokenTests: flakyRow?.broken ?? 0,
+      brokenTests: health.broken,
       intermittentFlaky: intermittent,
       trueFlakyRate: Math.round((intermittent / totalClassified) * 1000) / 10,
-      flakyTrend: (trendRow?.current_count ?? 0) - (trendRow?.previous_count ?? 0),
+      flakyTrend: (health.flaky + health.broken) - (previous.flaky + previous.broken),
     },
     data: {
       commitCount,
@@ -280,7 +234,7 @@ export async function computeKpi(
       confidence,
       lastDataAt: dataRow?.last_data_at ?? null,
       staleDays: dataRow?.last_data_at
-        ? Math.floor((Date.now() - new Date(dataRow.last_data_at).getTime()) / 86400000)
+        ? Math.floor((now.getTime() - new Date(dataRow.last_data_at).getTime()) / 86400000)
         : null,
     },
   };
