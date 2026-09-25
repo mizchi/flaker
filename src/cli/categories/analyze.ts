@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { loadConfig } from "../config.js";
 import { DuckDBStore } from "../storage/duckdb.js";
+import { openDatasetStore } from "../datasets/open.js";
 import { runReason, formatReasoningReport } from "../commands/analyze/reason.js";
 import { formatFailureClusters, runFailureClusters } from "../commands/analyze/cluster.js";
 import { runQuery, formatQueryResult } from "../commands/analyze/query.js";
@@ -21,8 +22,7 @@ import { assertReadOnlyQuery } from "../commands/analyze/sql-guard.js";
 
 export async function analyzeKpiAction(opts: { windowDays: string; json?: boolean }): Promise<void> {
   const config = loadConfig(process.cwd());
-  const store = new DuckDBStore(resolve(config.storage.path));
-  await store.initialize();
+  const store = await openDatasetStore(process.cwd(), config);
   try {
     const { computeKpi, formatKpi } = await import("../commands/analyze/kpi.js");
     const kpi = await computeKpi(store, { windowDays: parseInt(opts.windowDays, 10) });
@@ -55,8 +55,7 @@ export async function statusAction(opts: {
   }
 
   const config = loadConfig(process.cwd());
-  const store = new DuckDBStore(resolve(config.storage.path));
-  await store.initialize();
+  const store = await openDatasetStore(process.cwd(), config);
   try {
     // --list modes: standalone, skip normal summary
     if (opts.list === "flaky") {
@@ -112,8 +111,7 @@ export async function statusAction(opts: {
 export async function analyzeBundleAction(opts: { windowDays: string; output?: string }): Promise<void> {
   const { writeFileSync } = await import("node:fs");
   const config = loadConfig(process.cwd());
-  const store = new DuckDBStore(resolve(config.storage.path));
-  await store.initialize();
+  const store = await openDatasetStore(process.cwd(), config);
   try {
     const bundle = await runAnalysisBundle({
       store,
@@ -147,8 +145,7 @@ export async function analyzeClusterAction(opts: {
     tag: opts.tag,
   });
   const config = loadConfig(process.cwd());
-  const store = new DuckDBStore(resolve(config.storage.path));
-  await store.initialize();
+  const store = await openDatasetStore(process.cwd(), config);
   try {
     const clusters = await runFailureClusters({
       store,
@@ -194,8 +191,7 @@ function parseWorkflowFilterOptions(opts: {
 
 export async function analyzeReasonAction(opts: { window: string; json?: boolean }): Promise<void> {
   const config = loadConfig(process.cwd());
-  const store = new DuckDBStore(resolve(config.storage.path));
-  await store.initialize();
+  const store = await openDatasetStore(process.cwd(), config);
   try {
     const report = await runReason({ store, windowDays: Number(opts.window) });
     if (opts.json) {
@@ -210,8 +206,7 @@ export async function analyzeReasonAction(opts: { window: string; json?: boolean
 
 export async function analyzeInsightsAction(opts: { windowDays: string; top: string }): Promise<void> {
   const config = loadConfig(process.cwd());
-  const store = new DuckDBStore(resolve(config.storage.path));
-  await store.initialize();
+  const store = await openDatasetStore(process.cwd(), config);
   try {
     const { runInsights: _runInsights, formatInsights } = await import("../commands/analyze/insights.js");
     const result = await _runInsights({
@@ -227,8 +222,7 @@ export async function analyzeInsightsAction(opts: { windowDays: string; top: str
 
 export async function analyzeContextAction(opts: { json?: boolean }): Promise<void> {
   const config = loadConfig(process.cwd());
-  const store = new DuckDBStore(resolve(config.storage.path));
-  await store.initialize();
+  const store = await openDatasetStore(process.cwd(), config);
 
   try {
     const hasResolver = !!(config as any).affected;

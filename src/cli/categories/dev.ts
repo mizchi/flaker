@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import type { Command } from "commander";
 import { loadConfig } from "../config.js";
 import { DuckDBStore } from "../storage/duckdb.js";
+import { openDatasetStore } from "../datasets/open.js";
 import { runSelfEval, formatSelfEvalReport } from "../commands/dev/self-eval.js";
 import { loadCore } from "../core/loader.js";
 import { loadFixtureIntoStore } from "../eval/fixture-loader.js";
@@ -21,8 +22,7 @@ export function registerDevCommands(program: Command): void {
     .option("--dry-run", "Show results without saving")
     .action(async (opts) => {
       const config = loadConfig(process.cwd());
-      const store = new DuckDBStore(resolve(config.storage.path));
-      await store.initialize();
+      const store = await openDatasetStore(process.cwd(), config);
 
       try {
         const windowDays = parseInt(opts.window, 10);
@@ -214,8 +214,7 @@ export function registerDevCommands(program: Command): void {
     .option("--json", "Output JSON report")
     .action(async (opts: { windows?: string; minCoRuns?: string; json?: boolean }) => {
       const config = loadConfig(process.cwd());
-      const store = new DuckDBStore(resolve(config.storage.path));
-      await store.initialize();
+      const store = await openDatasetStore(process.cwd(), config);
       try {
         const { analyzeCoFailureWindows, formatCoFailureWindowReport } = await import("../commands/dev/eval-co-failure.js");
         const windows = opts.windows?.split(",").map((w) => parseInt(w.trim(), 10));
@@ -238,8 +237,7 @@ export function registerDevCommands(program: Command): void {
     .option("--output <path>", "Write JSON to a file instead of stdout")
     .action(async (opts: { windowDays?: string; output?: string }) => {
       const config = loadConfig(process.cwd());
-      const store = new DuckDBStore(resolve(config.storage.path));
-      await store.initialize();
+      const store = await openDatasetStore(process.cwd(), config);
       try {
         const { computeKpi } = await import("../commands/analyze/kpi.js");
         const kpi = await computeKpi(store, {
@@ -264,8 +262,7 @@ export function registerDevCommands(program: Command): void {
     .option("--output <path>", "Write JSON to a file instead of stdout")
     .action(async (opts: { windowDays?: string; output?: string }) => {
       const config = loadConfig(process.cwd());
-      const store = new DuckDBStore(resolve(config.storage.path));
-      await store.initialize();
+      const store = await openDatasetStore(process.cwd(), config);
       try {
         const { runEval } = await import("../commands/analyze/eval.js");
         const report = await runEval({
