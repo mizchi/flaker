@@ -41,12 +41,11 @@ async function seedRuns(store: DuckDBStore, runCount: number): Promise<void> {
     await store.insertWorkflowRun(run);
 
     const results: TestResult[] = TEST_SUITES.map((t, idx) => {
-      let status: string = "passed";
+      const status = "passed";
 
-      // Flaky tests fail on even run IDs
-      if (FLAKY_INDICES.includes(idx) && runId % 2 === 0) {
-        status = "failed";
-      }
+      // Flaky tests fail on even run IDs and pass on retry: flake evidence,
+      // which is what flaker_v1.flaky counts.
+      const flaked = FLAKY_INDICES.includes(idx) && runId % 2 === 0;
 
       return {
         workflowRunId: runId,
@@ -54,8 +53,8 @@ async function seedRuns(store: DuckDBStore, runCount: number): Promise<void> {
         testName: "main test",
         status,
         durationMs: 1000 + idx * 100,
-        retryCount: 0,
-        errorMessage: status === "failed" ? "Intermittent failure" : null,
+        retryCount: flaked ? 1 : 0,
+        errorMessage: flaked ? "Intermittent failure" : null,
         commitSha: `sha-${runId}`,
         variant: null,
         createdAt: run.createdAt,

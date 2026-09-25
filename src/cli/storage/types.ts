@@ -57,7 +57,16 @@ export interface FlakyScore {
   totalRuns: number;
   failCount: number;
   flakyRetryCount: number;
+  /**
+   * flaker_v1.flaky's flaky_rate as a percentage: the share of runs with flake
+   * evidence (a retried pass, a `flaky` status, or a failure on a commit where
+   * the test also passed). A plain regression has 0.
+   */
   flakyRate: number;
+  /** flaker_v1.flaky's is_flaky. */
+  isFlaky: boolean;
+  /** Failed every run in the window with no flake evidence. */
+  isBroken: boolean;
   lastFlakyAt: Date | null;
   firstSeenAt: Date;
 }

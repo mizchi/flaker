@@ -88,7 +88,7 @@ async function classifyTests(
     const history = await store.queryTestHistory(test.suite, test.testName);
 
     const recentResults = history.slice(0, 20);
-    const failureRate = test.flakyRate;
+    const failureRate = test.totalRuns > 0 ? (test.failCount / test.totalRuns) * 100 : 0;
     const hasRetryPasses = test.flakyRetryCount > 0;
 
     const oldResults = history.slice(20);

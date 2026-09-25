@@ -10,6 +10,9 @@
 
 ### Changed
 
+- **Flaky means `flaker_v1.flaky` everywhere.** `status --list flaky`, the automatic quarantine plan (`flaker apply`, `status` pending add/remove), `explain reason` / `bundle` and the eval detection now read the same definition as the `flaky` dataset, over their own `--window-days`: flaky needs flake evidence (a retried pass, a `flaky` status, or a failure on a commit where the test also passed) at or above `[flaky].detection_threshold_ratio`. They used a failure rate, so a test failing on some commits and passing on others counted as flaky, and a test failing every run was proposed for quarantine at 100%. Now a test that fails every run is listed as `broken` (`kind` in `status --list flaky --json`), is never proposed for quarantine, and an existing quarantine of one is kept while it keeps failing. The flaky rate shown is the flake-evidence share, and `failCount` counts every failing result (including retried passes). `explain reason` still classifies on the failure rate (#108).
+- `flaker_v1.flaky` and `flaker_v1.co_failures` are defined once, as the table macros `flaker_flaky_window(window_days, until [, ci_only])` and `flaker_co_failures_window(window_days, until)`; the views call them at the configured window. `status`, `explain`, `plan` / `apply`, `calibrate` and `dev` sync the `flaker.toml` settings into the database before reading.
+
 - The DuckDB binding moves from the deprecated `duckdb` package to `@duckdb/node-api` (1.4.4, the same DuckDB version). Its native part ships as a prebuilt per-platform package, so nothing is compiled at install time and `pnpm.onlyBuiltDependencies` is no longer needed. Query results keep their JS types; in `flaker query` output, lists, structs and maps now print as JSON.
 
 ### Fixed

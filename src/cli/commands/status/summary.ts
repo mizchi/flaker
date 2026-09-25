@@ -382,8 +382,11 @@ export function renderDetail(drift: DriftReport, _thresholds: PromotionThreshold
 export interface FlakyListRow {
   suite: string;
   test_name: string;
+  /** flaker_v1.flaky's flaky_rate (0-1). */
   flaky_rate: number;
   runs: number;
+  /** `flaky` (flaker_v1.flaky.is_flaky) or `broken` (failed every run, no flake evidence). */
+  kind: "flaky" | "broken";
 }
 
 export interface QuarantinedListRow {
@@ -399,10 +402,11 @@ export function renderListFlaky(rows: FlakyListRow[], top = DEFAULT_LIST_TOP): s
   if (limited.length === 0) {
     return "No flaky tests found.";
   }
-  const header = ["Suite", "Test Name", "Flaky Rate", "Runs"];
+  const header = ["Suite", "Test Name", "Kind", "Flaky Rate", "Runs"];
   const tableRows = limited.map((r) => [
     r.suite,
     r.test_name,
+    r.kind,
     `${Math.round(r.flaky_rate * 100)}%`,
     String(r.runs),
   ]);
@@ -443,14 +447,17 @@ export async function runStatusListFlaky(input: {
   const results = await runFlaky({
     store: input.store,
     windowDays: input.windowDays ?? 30,
-    top: input.top ?? DEFAULT_LIST_TOP,
   });
-  return results.map((r) => ({
-    suite: r.suite,
-    test_name: r.testName,
-    flaky_rate: r.flakyRate / 100,
-    runs: r.totalRuns,
-  }));
+  return results
+    .filter((r) => r.isFlaky || r.isBroken)
+    .slice(0, input.top ?? DEFAULT_LIST_TOP)
+    .map((r) => ({
+      suite: r.suite,
+      test_name: r.testName,
+      flaky_rate: r.flakyRate / 100,
+      runs: r.totalRuns,
+      kind: r.isFlaky ? "flaky" as const : "broken" as const,
+    }));
 }
 
 export async function runStatusListQuarantined(input: {

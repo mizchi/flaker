@@ -611,7 +611,7 @@ async function loadFailureEvidence(
     const recentHistory = historyRows.map((row) =>
       toHistoryEntry(row, workflowArtifactMap),
     );
-    const failureSignals = flaky.failCount + flaky.flakyRetryCount;
+    const failureSignals = flaky.failCount;
     const passCount = Math.max(0, flaky.totalRuns - failureSignals);
 
     evidence.push({
@@ -625,7 +625,7 @@ async function loadFailureEvidence(
       flakyRetryCount: flaky.flakyRetryCount,
       failureSignals,
       passCount,
-      failureRate: flaky.flakyRate,
+      failureRate: flaky.totalRuns > 0 ? Math.round((flaky.failCount / flaky.totalRuns) * 10000) / 100 : 0,
       firstSeenAt: flaky.firstSeenAt.toISOString(),
       lastFailureAt: flaky.lastFlakyAt?.toISOString() ?? null,
       isQuarantined: activeQuarantines.length > 0,

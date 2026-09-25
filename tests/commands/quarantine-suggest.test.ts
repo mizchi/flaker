@@ -125,4 +125,20 @@ describe("quarantine suggest", () => {
       }),
     ]);
   });
+
+  it("never suggests a broken test, and keeps a quarantine of one while it keeps failing", async () => {
+    const now = new Date();
+    for (let i = 0; i < 6; i++) {
+      const at = new Date(now.getTime() - (i + 1) * 3_600_000);
+      await store.insertWorkflowRun(makeRun(900 + i, `b${i}`, at));
+      await store.insertTestResults([
+        makeResult(900 + i, "tests/broken.test.ts", "always fails", "failed", `b${i}`, at),
+        makeResult(900 + i, "tests/other.test.ts", "broken but quarantined", "failed", `b${i}`, at),
+      ]);
+    }
+    await store.addQuarantine({ suite: "tests/other.test.ts", testName: "broken but quarantined" }, "manual");
+    const plan = await runQuarantineSuggest({ store, now });
+    expect(plan.add.map((a) => a.selector.testName)).not.toContain("always fails");
+    expect(plan.remove.map((r) => r.selector.testName)).not.toContain("broken but quarantined");
+  });
 });

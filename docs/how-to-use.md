@@ -383,6 +383,8 @@ flaker status --list flaky                 # Top flaky tests
 flaker status --list flaky --json          # Machine-readable
 ```
 
+The list uses the `flaker_v1.flaky` definition over `--window-days` (default 30): a test is `flaky` when it has flake evidence (a retried pass, a `flaky` status, or a failure on a commit where it also passed) at or above `[flaky].detection_threshold_ratio`, and `broken` when it failed every run with no such evidence. The `Kind` column (`kind` in `--json`) says which. A test that fails on some commits and passes on others, but never on the same commit, is a regression pattern, not flaky, and is not listed. Automatic quarantine (`flaker apply`) proposes only flaky tests at or above `[quarantine].flaky_rate_threshold_percentage`; a broken test is never proposed, and a quarantine of one is kept while it keeps failing.
+
 For advanced filtering (by variant, trend, true-flaky), use `flaker query "SELECT ..."` directly or delegate to `flaker explain insights` for AI-assisted analysis.
 
 ### `flaker explain <topic>` — AI-assisted analysis

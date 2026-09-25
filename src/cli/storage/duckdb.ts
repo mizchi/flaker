@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { SCHEMA_DDL, FLAKY_QUERY, CO_FAILURE_QUERY, buildTestCoFailureQuery } from "./schema.js";
+import { SCHEMA_DDL, CO_FAILURE_QUERY, buildTestCoFailureQuery } from "./schema.js";
 import { createStableTestId, resolveTestIdentity } from "../identity.js";
 import { FLAKER_V1_VIEWS_SQL, NOW_UTC } from "../datasets/views.js";
 import type {
@@ -271,21 +271,48 @@ export class DuckDBStore implements MetricStore {
     }
   }
 
+  /**
+   * Tests that failed at least once in the window, from the flaker_v1.flaky
+   * definition (the flaker_flaky_window macro): flaky first, then broken and
+   * other failing tests. `top` keeps the first n.
+   */
   async queryFlakyTests(opts: FlakyQueryOpts): Promise<FlakyScore[]> {
     const windowDays = opts.windowDays ?? 30;
     const now = opts.now ?? new Date();
-    const cutoff = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000);
-    // ISO 8601 trimmed to DuckDB TIMESTAMP shape (YYYY-MM-DD HH:MM:SS.sss)
-    const cutoffLiteral = cutoff.toISOString().replace("T", " ").replace("Z", "");
-    const rows = await this.all(FLAKY_QUERY, [cutoffLiteral]);
-    return rows.map((row: any) => {
+    const until = now.toISOString().replace("T", " ").replace("Z", "");
+    const rows = await this.all(
+      `WITH f AS (SELECT * FROM flaker_flaky_window(?::INTEGER, ?::TIMESTAMP)),
+       r AS (
+         SELECT tr.test_id,
+           arg_max(tr.suite, tr.created_at) AS suite,
+           arg_max(tr.test_name, tr.created_at) AS test_name,
+           arg_max(COALESCE(tr.task_id, tr.suite), tr.created_at) AS task_id,
+           arg_max(tr.filter_text, tr.created_at) AS filter_text,
+           arg_max(tr.variant, tr.created_at) AS variant,
+           COUNT(*) FILTER (WHERE tr.status = 'flaky' OR (tr.retry_count > 0 AND tr.status = 'passed'))::INTEGER AS retries,
+           MAX(tr.created_at) FILTER (WHERE tr.status IN ('failed', 'flaky')) AS last_flaky_at,
+           MIN(tr.created_at) AS first_seen_at
+         FROM test_results tr
+         WHERE tr.test_id IN (SELECT test_key FROM f)
+           AND tr.created_at > ?::TIMESTAMP - to_days(?::INTEGER) AND tr.created_at <= ?::TIMESTAMP
+         GROUP BY tr.test_id
+       )
+       SELECT f.test_key, f.runs, f.failures, f.flaky_rate, f.is_flaky,
+         (f.failures = f.runs AND f.flaky_rate = 0) AS is_broken,
+         r.suite, r.test_name, r.task_id, r.filter_text, r.variant, r.retries, r.last_flaky_at, r.first_seen_at
+       FROM f JOIN r ON r.test_id = f.test_key
+       WHERE f.failures > 0
+       ORDER BY f.is_flaky DESC, f.flaky_rate DESC, f.failures DESC, f.test_key`,
+      [windowDays, until, until, windowDays, until],
+    );
+    const scores = rows.map((row: any): FlakyScore => {
       const resolved = resolveTestIdentity({
         suite: row.suite,
         testName: row.test_name,
         taskId: row.task_id,
         filter: row.filter_text,
         variant: row.variant ? JSON.parse(row.variant) : null,
-        testId: row.test_id || undefined,
+        testId: row.test_key,
       });
       return {
         testId: resolved.testId,
@@ -294,14 +321,17 @@ export class DuckDBStore implements MetricStore {
         taskId: resolved.taskId,
         filter: resolved.filter,
         variant: resolved.variant,
-        totalRuns: row.total_runs,
-        failCount: row.fail_count,
-        flakyRetryCount: row.flaky_retry_count,
-        flakyRate: row.flaky_rate,
+        totalRuns: row.runs,
+        failCount: row.failures,
+        flakyRetryCount: row.retries,
+        flakyRate: Math.round(row.flaky_rate * 10000) / 100,
+        isFlaky: row.is_flaky === true,
+        isBroken: row.is_broken === true,
         lastFlakyAt: row.last_flaky_at ? new Date(row.last_flaky_at) : null,
         firstSeenAt: new Date(row.first_seen_at),
       };
     });
+    return opts.top ? scores.slice(0, opts.top) : scores;
   }
 
   async queryTestHistory(

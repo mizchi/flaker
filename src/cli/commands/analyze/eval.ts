@@ -18,7 +18,7 @@ export interface EvalReport {
     trueFlakyTests: number;
     quarantinedTests: number;
     distribution: { range: string; count: number }[];
-    flakyTestDetails?: { flakyRate: number; totalRuns: number }[];
+    flakyTestDetails?: { flakyRate: number; totalRuns: number; isBroken?: boolean }[];
   };
   resolution: {
     resolvedFlaky: number;
@@ -212,7 +212,7 @@ function buildEvalRecommendations(report: EvalReport): string[] {
     recommendations.push("Collect more data: run `flaker import --ci` regularly to build history");
   }
   const brokenInEval = det.flakyTestDetails?.filter(
-    (t) => t.flakyRate >= 100 && t.totalRuns >= 5,
+    (t) => t.isBroken === true,
   ).length ?? 0;
   if (brokenInEval > 0) {
     recommendations.push(`Fix or quarantine ${brokenInEval} broken test(s) (100% fail rate): run \`flaker status --list flaky\``);
@@ -591,7 +591,8 @@ export async function runEval(opts: { store: MetricStore; windowDays?: number; n
 
   // 2. Detection (filter to >= 5 runs, consistent with kpi/calibrate)
   const allFlakyTests = await store.queryFlakyTests({ windowDays });
-  const flakyTests = allFlakyTests.filter((t) => t.totalRuns >= 5);
+  // Flaky (flaker_v1.flaky.is_flaky) and broken tests with enough runs to judge.
+  const flakyTests = allFlakyTests.filter((t) => t.totalRuns >= 5 && (t.isFlaky || t.isBroken));
   const trueFlakyTests = await store.queryTrueFlakyTests();
   const quarantined = await store.queryQuarantined();
 
@@ -691,6 +692,7 @@ export async function runEval(opts: { store: MetricStore; windowDays?: number; n
       flakyTestDetails: flakyTests.map((t) => ({
         flakyRate: t.flakyRate,
         totalRuns: t.totalRuns,
+        isBroken: t.isBroken,
       })),
     },
     resolution: {
@@ -732,7 +734,7 @@ function formatEvalTextReport(report: EvalReport): string {
   lines.push("## Detection");
   const det = report.detection;
   const brokenCount = det.flakyTestDetails?.filter(
-    (t: { flakyRate: number; totalRuns: number }) => t.flakyRate >= 100 && t.totalRuns >= 5,
+    (t: { isBroken?: boolean }) => t.isBroken === true,
   ).length ?? 0;
   const intermittentCount = det.flakyTests - brokenCount;
   if (brokenCount > 0) {
@@ -805,8 +807,8 @@ function formatEvalMarkdownReport(
     "| Metric | Value |",
     "| --- | --- |",
     `| Health score | ${report.healthScore}/100 (${healthScoreLabel(report.healthScore)}) |`,
-    `| Broken tests (100% fail) | ${det.flakyTestDetails?.filter((t) => t.flakyRate >= 100 && t.totalRuns >= 5).length ?? 0} |`,
-    `| Flaky tests (intermittent) | ${det.flakyTests - (det.flakyTestDetails?.filter((t) => t.flakyRate >= 100 && t.totalRuns >= 5).length ?? 0)} |`,
+    `| Broken tests (100% fail) | ${det.flakyTestDetails?.filter((t) => t.isBroken === true).length ?? 0} |`,
+    `| Flaky tests (intermittent) | ${det.flakyTests - (det.flakyTestDetails?.filter((t) => t.isBroken === true).length ?? 0)} |`,
     `| Retry flaky (pass+fail in same commit) | ${det.trueFlakyTests} |`,
     `| Matched commits | ${kpi.matchedCommits} |`,
     `| Avg sample ratio | ${kpi.avgSampleRatio != null ? `${kpi.avgSampleRatio}% of CI` : "N/A"} |`,
