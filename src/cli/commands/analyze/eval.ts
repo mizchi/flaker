@@ -155,6 +155,7 @@ interface SamplingKpiOutput {
 
 interface EvalCoreExports {
   build_sampling_kpi_json?: (rowsJson: string) => string;
+  build_holdout_kpi_json?: (rowsJson: string) => string;
 }
 
 function roundMetric(value: number): number {
@@ -481,30 +482,32 @@ export async function runSamplingKpi(
   const now = opts.now ?? new Date();
   const cutoff = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000);
   const cutoffLiteral = cutoff.toISOString().replace("T", " ").replace("Z", "");
-  const workflowSourceExpr = workflowRunSourceSql("wr");
+  const untilLiteral = now.toISOString().replace("T", " ").replace("Z", "");
+  // Runs and results from flaker_v1 (mutation trials excluded); run durations
+  // and sampled-run details come from storage, which flaker_v1 does not expose.
   const commitSignalRows = await store.raw<CommitSignalRow>(`
     WITH recent_results AS (
       SELECT
-        wr.commit_sha,
-        wr.event,
-        ${workflowSourceExpr} AS run_source,
-        wr.id AS workflow_run_id,
+        ru.commit_sha,
+        ru.source AS run_source,
+        ru.run_id AS workflow_run_id,
         wr.duration_ms AS workflow_duration_ms,
-        tr.test_id,
-        tr.suite,
-        tr.test_name,
-        tr.status,
-        tr.retry_count
-      FROM workflow_runs wr
-      INNER JOIN test_results tr ON tr.workflow_run_id = wr.id
-      WHERE tr.created_at > '${cutoffLiteral}'::TIMESTAMP
+        r.test_key AS test_id,
+        r.status,
+        r.retry_count
+      FROM flaker_v1.results r
+      JOIN flaker_v1.runs ru ON ru.run_id = r.run_id
+      LEFT JOIN workflow_runs wr ON wr.id = ru.run_id
+      WHERE ru.source <> 'mutation'
+        AND r.created_at > '${cutoffLiteral}'::TIMESTAMP
+        AND r.created_at <= '${untilLiteral}'::TIMESTAMP
     ),
     aggregated_results AS (
       SELECT
         commit_sha,
         run_source AS run_kind,
         COUNT(DISTINCT workflow_run_id)::INTEGER AS run_count,
-        COUNT(DISTINCT COALESCE(NULLIF(test_id, ''), suite || '::' || test_name))::INTEGER AS distinct_tests,
+        COUNT(DISTINCT test_id)::INTEGER AS distinct_tests,
         COUNT(*) FILTER (
           WHERE status IN ('failed', 'flaky')
             OR (retry_count > 0 AND status = 'passed')
@@ -524,6 +527,7 @@ export async function runSamplingKpi(
       FROM sampling_runs
       WHERE command_kind = 'run'
         AND created_at > '${cutoffLiteral}'::TIMESTAMP
+        AND created_at <= '${untilLiteral}'::TIMESTAMP
     )
     SELECT
       ar.commit_sha,
@@ -560,6 +564,113 @@ export async function runSamplingKpi(
       fallbackUsed: row.fallback_used,
     })),
   );
+}
+
+export interface HoldoutKpiReport {
+  commits: number;
+  holdoutTests: number;
+  holdoutFailures: number;
+  /** Held-out tests that failed in CI on the same commit, as a percentage. */
+  falseNegativeRate: number | null;
+}
+
+interface HoldoutCommitRow {
+  commit_sha: string;
+  holdout_tests: number;
+  holdout_failures: number;
+}
+
+/** Mirrors `build_holdout_kpi` in src/eval/eval_core.mbt. */
+function buildHoldoutKpiFallback(rows: HoldoutCommitRow[]): HoldoutKpiReport {
+  const counted = rows.filter((r) => r.holdout_tests > 0);
+  const tests = counted.reduce((n, r) => n + r.holdout_tests, 0);
+  const failures = counted.reduce((n, r) => n + r.holdout_failures, 0);
+  return {
+    commits: counted.length,
+    holdoutTests: tests,
+    holdoutFailures: failures,
+    falseNegativeRate: tests > 0 ? roundMetric((failures * 100) / tests) : null,
+  };
+}
+
+let cachedHoldoutBuilder: ((rows: HoldoutCommitRow[]) => HoldoutKpiReport) | undefined;
+
+async function getBuildHoldoutKpi(): Promise<(rows: HoldoutCommitRow[]) => HoldoutKpiReport> {
+  if (cachedHoldoutBuilder) return cachedHoldoutBuilder;
+  cachedHoldoutBuilder = buildHoldoutKpiFallback;
+  try {
+    const mod = (await import(MOONBIT_JS_BRIDGE_URL.href)) as EvalCoreExports;
+    if (typeof mod.build_holdout_kpi_json === "function") {
+      const build = mod.build_holdout_kpi_json;
+      cachedHoldoutBuilder = (rows) => {
+        try {
+          const out = JSON.parse(build(JSON.stringify(rows))) as {
+            commits: number; holdout_tests: number; holdout_failures: number; false_negative_rate?: number | null;
+          };
+          return {
+            commits: out.commits,
+            holdoutTests: out.holdout_tests,
+            holdoutFailures: out.holdout_failures,
+            falseNegativeRate: out.false_negative_rate ?? null,
+          };
+        } catch {
+          return buildHoldoutKpiFallback(rows);
+        }
+      };
+    }
+  } catch {
+    // MoonBit build unavailable — keep the fallback.
+  }
+  return cachedHoldoutBuilder;
+}
+
+/**
+ * Holdout tests of each commit's latest local sampled run in the window, and
+ * how many failed in CI on that commit (flaker_v1.results / runs). Commits
+ * with no CI run give no evidence and are left out.
+ */
+export async function runHoldoutKpi(
+  opts: { store: MetricStore; windowDays?: number; now?: Date },
+): Promise<HoldoutKpiReport> {
+  const windowDays = opts.windowDays ?? 30;
+  const now = opts.now ?? new Date();
+  const since = new Date(now.getTime() - windowDays * 86_400_000).toISOString().replace("T", " ").replace("Z", "");
+  const until = now.toISOString().replace("T", " ").replace("Z", "");
+  const rows = await opts.store.raw<HoldoutCommitRow>(
+    `WITH latest AS (
+       SELECT id, commit_sha,
+         ROW_NUMBER() OVER (PARTITION BY commit_sha ORDER BY created_at DESC, id DESC) AS rn
+       FROM sampling_runs
+       WHERE command_kind = 'run' AND commit_sha IS NOT NULL
+         AND created_at > ?::TIMESTAMP AND created_at <= ?::TIMESTAMP
+     ),
+     ci AS (
+       SELECT ru.commit_sha, r.test_key, r.status
+       FROM flaker_v1.results r JOIN flaker_v1.runs ru ON ru.run_id = r.run_id
+       WHERE ru.source = 'ci' AND r.created_at > ?::TIMESTAMP AND r.created_at <= ?::TIMESTAMP
+     ),
+     holdout AS (
+       SELECT l.commit_sha,
+         COALESCE(srt.test_id,
+           (SELECT t.test_key FROM flaker_v1.tests t WHERE t.suite = srt.suite AND t.test_name = srt.test_name LIMIT 1)
+         ) AS test_key
+       FROM sampling_run_tests srt
+       JOIN latest l ON l.id = srt.sampling_run_id AND l.rn = 1
+       WHERE srt.is_holdout
+         AND l.commit_sha IN (SELECT commit_sha FROM ci)
+     )
+     SELECT h.commit_sha,
+       COUNT(*)::INTEGER AS holdout_tests,
+       COUNT(*) FILTER (WHERE EXISTS (
+         SELECT 1 FROM ci WHERE ci.commit_sha = h.commit_sha AND ci.test_key = h.test_key
+           AND ci.status IN ('failed', 'flaky')
+       ))::INTEGER AS holdout_failures
+     FROM holdout h
+     GROUP BY h.commit_sha
+     ORDER BY h.commit_sha`,
+    [since, until, since, until],
+  );
+  return (await getBuildHoldoutKpi())(rows);
 }
 
 export async function runEval(opts: { store: MetricStore; windowDays?: number; now?: Date }): Promise<EvalReport> {

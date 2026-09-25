@@ -235,66 +235,45 @@ describe("KPI scenarios", () => {
     expect(sampling.strategy).toBe("hybrid");
   });
 
-  it("Scenario 7: Sampling validation — confusion matrix from matched commits", async () => {
-    // Simulate: local sampling selected 3 of 10 tests, CI ran all 10
-    // Test_0: sampled + CI failed (TP)
-    // Test_1: sampled + CI passed (FP)
-    // Test_2: sampled + CI passed (FP)
-    // Test_3: skipped + CI failed (FN — missed bug!)
-    // Test_4-9: skipped + CI passed (TN)
-    const sha = "matched-sha-1";
-
-    // CI run (source=ci)
-    await insertRun(1, sha, "ci");
-    const ciTests = Array.from({ length: 10 }, (_, i) => ({
-      suite: "suite",
-      name: `test_${i}`,
-      status: (i === 0 || i === 3 ? "failed" : "passed") as "passed" | "failed",
-    }));
-    await insertResults(1, sha, ciTests);
-
-    // Local sampling run (source=local)
-    await insertRun(2, sha, "local", "flaker-local-run");
-    // Record the sampling run
-    const samplingRunId = await store.recordSamplingRun({
-      commitSha: sha,
-      commandKind: "run",
-      strategy: "weighted",
-      requestedCount: 3,
-      requestedPercentage: null,
-      seed: null,
-      changedFiles: null,
-      candidateCount: 10,
-      selectedCount: 3,
-      sampleRatio: 0.3,
-      estimatedSavedTests: 7,
-      estimatedSavedMinutes: null,
-      fallbackReason: null,
-      durationMs: 1000,
-    });
-    await store.recordSamplingRunTests([
-      { samplingRunId, ordinal: 0, suite: "suite", testName: "test_0", testId: null, taskId: null, filter: null, isHoldout: false },
-      { samplingRunId, ordinal: 1, suite: "suite", testName: "test_1", testId: null, taskId: null, filter: null, isHoldout: false },
-      { samplingRunId, ordinal: 2, suite: "suite", testName: "test_2", testId: null, taskId: null, filter: null, isHoldout: false },
-    ]);
+  it("Scenario 7: Sampling validation — commit-level confusion matrix and holdout FNR", async () => {
+    // One engine (MoonBit build_sampling_kpi): per matched commit, did the
+    // local sampled run fail, and did CI fail?
+    //   c1: local fail, CI fail → TP    c2: local pass, CI fail → FN
+    //   c3: local pass, CI pass → TN    c4: local fail, CI pass → FP
+    const outcomes: Array<[string, boolean, boolean]> = [
+      ["c1", true, true], ["c2", false, true], ["c3", false, false], ["c4", true, false],
+    ];
+    let runId = 1;
+    for (const [sha, localFails, ciFails] of outcomes) {
+      await insertRun(runId, sha, "ci");
+      await insertResults(runId++, sha, Array.from({ length: 10 }, (_, i) => ({
+        suite: "suite", name: `test_${i}`, status: (ciFails && i === 3 ? "failed" : "passed") as "passed" | "failed",
+      })));
+      await insertRun(runId, sha, "local", "flaker-local-run");
+      await insertResults(runId++, sha, [0, 1, 2].map((i) => ({
+        suite: "suite", name: `test_${i}`, status: (localFails && i === 0 ? "failed" : "passed") as "passed" | "failed",
+      })));
+      const samplingRunId = await store.recordSamplingRun({
+        commitSha: sha, commandKind: "run", strategy: "weighted", requestedCount: 3, requestedPercentage: null,
+        seed: null, changedFiles: null, candidateCount: 10, selectedCount: 3, sampleRatio: 0.3,
+        estimatedSavedTests: 7, estimatedSavedMinutes: null, fallbackReason: null, durationMs: 1000,
+      });
+      // test_3 is held out on c2 (it fails in CI there) and c3 (it passes).
+      if (sha === "c2" || sha === "c3") {
+        await store.recordSamplingRunTests([
+          { samplingRunId, ordinal: 0, suite: "suite", testName: "test_3", testId: null, taskId: null, filter: null, isHoldout: true },
+        ]);
+      }
+    }
 
     const kpi = await computeKpi(store);
-
-    // Should have 1 matched commit
-    expect(kpi.sampling.matchedCommits).toBe(1);
-
-    // Confusion matrix
-    expect(kpi.sampling.confusionMatrix).not.toBeNull();
-    const cm = kpi.sampling.confusionMatrix!;
-    expect(cm.truePositive).toBe(1);   // test_0: sampled + failed
-    expect(cm.falsePositive).toBe(2);  // test_1, test_2: sampled + passed
-    expect(cm.falseNegative).toBe(1);  // test_3: skipped + failed
-    expect(cm.trueNegative).toBe(6);   // test_4-9: skipped + passed
-
-    // Derived metrics
-    expect(kpi.sampling.recall).toBe(50);  // 1 / (1+1) = 50%
-    expect(kpi.sampling.falseNegativeRate).toBeCloseTo(14.3, 0); // 1/7 ≈ 14.3%
-    expect(kpi.sampling.passCorrelation).toBeCloseTo(85.7, 0);   // 6/7 ≈ 85.7%
+    expect(kpi.sampling.matchedCommits).toBe(4);
+    expect(kpi.sampling.confusionMatrix).toEqual({ truePositive: 1, falsePositive: 1, falseNegative: 1, trueNegative: 1 });
+    expect(kpi.sampling.recall).toBe(50);
+    expect(kpi.sampling.falseNegativeRate).toBe(50);
+    expect(kpi.sampling.passCorrelation).toBe(50);
+    expect(kpi.sampling.sampleRatio).toBe(30);
+    expect(kpi.sampling.holdoutFNR).toBe(50);
   });
 
   it("Scenario 8: Insufficient data — too few commits", async () => {

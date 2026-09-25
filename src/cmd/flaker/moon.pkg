@@ -49,6 +49,7 @@ options(
         "compute_quarantine_exit_code_json",
         "run_config_check_json",
         "build_sampling_kpi_json",
+        "build_holdout_kpi_json",
         "select_by_coverage_json",
         "bucketize_rate_json",
         "train_gbdt_json",

@@ -6,6 +6,8 @@ import {
 }
 
 // Values
+pub fn build_holdout_kpi(Array[@contracts.HoldoutCommitInput]) -> @contracts.HoldoutKpiOutput
+
 pub fn build_sampling_kpi(Array[@contracts.EvalCommitSignalInput]) -> @contracts.SamplingKpiOutput
 
 // Errors
