@@ -373,26 +373,3 @@ ${TEST_CO_FAILURE_QUERY_TAIL}`,
   };
 }
 
-export const FLAKY_QUERY = `
-WITH recent AS (
-  SELECT * FROM test_results
-  WHERE created_at > ?::TIMESTAMP
-)
-SELECT
-  COALESCE(test_id, '') AS test_id,
-  COALESCE(task_id, suite) AS task_id,
-  suite,
-  test_name,
-  filter_text,
-  variant,
-  COUNT(*)::INTEGER AS total_runs,
-  COUNT(*) FILTER (WHERE status = 'failed')::INTEGER AS fail_count,
-  COUNT(*) FILTER (WHERE status = 'flaky' OR (retry_count > 0 AND status = 'passed'))::INTEGER AS flaky_retry_count,
-  ROUND((COUNT(*) FILTER (WHERE status IN ('failed', 'flaky') OR (retry_count > 0 AND status = 'passed')) ) * 100.0 / COUNT(*), 2)::DOUBLE AS flaky_rate,
-  MAX(created_at) FILTER (WHERE status IN ('failed', 'flaky')) AS last_flaky_at,
-  MIN(created_at) AS first_seen_at
-FROM recent
-GROUP BY test_id, task_id, suite, test_name, filter_text, variant
-HAVING flaky_rate > 0
-ORDER BY flaky_rate DESC
-`;

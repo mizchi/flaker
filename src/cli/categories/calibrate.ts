@@ -62,8 +62,7 @@ export async function calibrateAction(opts: CalibrateCliOpts): Promise<void> {
 
   const cwd = process.cwd();
   const config = loadConfig(cwd);
-  const store = new DuckDBStore(resolve(cwd, config.storage.path));
-  await store.initialize();
+  const store = await openDatasetStore(process.cwd(), config);
   try {
     const { profile, sampling } = await calibrateSampling(store, config, { windowDays });
     const written = !opts.dryRun;

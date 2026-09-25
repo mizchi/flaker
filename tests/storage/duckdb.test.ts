@@ -153,9 +153,13 @@ describe("DuckDBStore", () => {
     expect(flaky[0].suite).toBe("integration");
     expect(flaky[0].testName).toBe("flaky-test");
     expect(flaky[0].totalRuns).toBe(10);
-    expect(flaky[0].failCount).toBe(3);
+    // flaker_v1.flaky: failures count retried passes too; every one is flake
+    // evidence (retries, or failures on a commit where the test also passed).
+    expect(flaky[0].failCount).toBe(5);
     expect(flaky[0].flakyRetryCount).toBe(2);
     expect(flaky[0].flakyRate).toBe(50.0);
+    expect(flaky[0].isFlaky).toBe(true);
+    expect(flaky[0].isBroken).toBe(false);
   });
 
   it("keeps same suite/testName separate when filter differs", async () => {

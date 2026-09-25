@@ -374,6 +374,23 @@ pub(all) struct SamplingKpiOutput {
 } derive(Eq, Show, Debug, FromJson, ToJson)
 
 ///|
+/// Holdout tests of one commit's local sampled run: tests the sampler held
+/// out on purpose, and how many of them failed in CI on the same commit.
+pub(all) struct HoldoutCommitInput {
+  commit_sha : String
+  holdout_tests : Int
+  holdout_failures : Int
+} derive(Eq, Show, Debug, FromJson, ToJson)
+
+///|
+pub(all) struct HoldoutKpiOutput {
+  commits : Int
+  holdout_tests : Int
+  holdout_failures : Int
+  false_negative_rate : Double?
+} derive(Eq, Show, Debug, FromJson, ToJson)
+
+///|
 pub(all) struct AffectedTargetInput {
   spec : String
   task_id : String

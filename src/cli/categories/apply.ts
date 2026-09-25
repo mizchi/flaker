@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import type { Command } from "commander";
 import { loadConfig, writeSamplingConfig } from "../config.js";
 import { DuckDBStore } from "../storage/duckdb.js";
+import { openDatasetStore } from "../datasets/open.js";
 import { computeKpi } from "../commands/analyze/kpi.js";
 import { planApply, type PlannedAction } from "../commands/apply/planner.js";
 import { probeRepo } from "../commands/apply/probe.js";
@@ -57,8 +58,7 @@ export function isColdStartZeroTest(result: unknown): boolean {
 export async function planAction(opts: { json?: boolean; output?: string }): Promise<void> {
   const cwd = process.cwd();
   const config = loadConfig(cwd);
-  const store = new DuckDBStore(resolve(config.storage.path));
-  await store.initialize();
+  const store = await openDatasetStore(process.cwd(), config);
   try {
     const kpi = await computeKpi(store, { windowDays: 30 });
     const probe = await probeRepo({ cwd, store });
@@ -115,8 +115,7 @@ export async function applyAction(opts: {
 
   const cwd = process.cwd();
   const config = loadConfig(cwd);
-  const store = new DuckDBStore(resolve(config.storage.path));
-  await store.initialize();
+  const store = await openDatasetStore(process.cwd(), config);
   try {
     const kpi = await computeKpi(store, { windowDays: 30 });
     const probe = await probeRepo({ cwd, store });

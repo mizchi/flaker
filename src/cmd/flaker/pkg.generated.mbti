@@ -8,6 +8,8 @@ pub fn bucketize_rate_json(Double) -> Int
 
 pub fn build_affected_report_json(String, String, String, String) -> String
 
+pub fn build_holdout_kpi_json(String) -> String
+
 pub fn build_reverse_deps_json(String) -> String
 
 pub fn build_sampling_kpi_json(String) -> String

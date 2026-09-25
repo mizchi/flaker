@@ -1,5 +1,6 @@
 import type { MetricStore } from "../../storage/types.js";
-import { workflowRunSourceSql } from "../../run-source.js";
+import { dataConfidence, historyCounts, testHealth, type DataConfidence } from "../../datasets/facts.js";
+import { runHoldoutKpi, runSamplingKpi } from "./eval.js";
 
 export interface FlakerKpi {
   timestamp: string;
@@ -40,7 +41,7 @@ export interface FlakerKpi {
     commitsWithChanges: number;
     coFailureCoverage: number;
     coFailureReady: boolean;
-    confidence: "insufficient" | "low" | "moderate" | "high";
+    confidence: DataConfidence;
     /** ISO date of most recent test result */
     lastDataAt: string | null;
     /** Days since last data */
@@ -56,184 +57,35 @@ export async function computeKpi(
   const now = opts?.now ?? new Date();
   const cutoff = new Date(now.getTime() - window * 24 * 60 * 60 * 1000);
   const cutoffLiteral = cutoff.toISOString().replace("T", " ").replace("Z", "");
-  const cutoffPrev = new Date(now.getTime() - window * 2 * 24 * 60 * 60 * 1000);
-  const cutoffPrevLiteral = cutoffPrev.toISOString().replace("T", " ").replace("Z", "");
-  const workflowSourceExpr = workflowRunSourceSql("wr");
 
-  // --- Sampling: confusion matrix from matched commits ---
-  // A "matched commit" has both a sampling_run (local) and CI test_results
-  const [cmRow] = await store.raw<{
-    matched: number;
-    tp: number;
-    fp: number;
-    fn_count: number;
-    tn: number;
-    sample_ratio: number | null;
-    skipped_minutes: number | null;
-  }>(`
-    WITH local_sampling AS (
-      SELECT sr.commit_sha,
-        sr.selected_count, sr.candidate_count, sr.duration_ms
-      FROM sampling_runs sr
-      WHERE sr.command_kind = 'run'
-        AND sr.created_at > '${cutoffLiteral}'::TIMESTAMP
-    ),
-    sampled_tests AS (
-      SELECT sr.commit_sha, srt.suite, srt.test_name
-      FROM sampling_run_tests srt
-      JOIN sampling_runs sr ON srt.sampling_run_id = sr.id
-      WHERE sr.command_kind = 'run'
-        AND sr.created_at > '${cutoffLiteral}'::TIMESTAMP
-        AND srt.is_holdout = FALSE
-    ),
-    holdout_tests AS (
-      SELECT sr.commit_sha, srt.suite, srt.test_name
-      FROM sampling_run_tests srt
-      JOIN sampling_runs sr ON srt.sampling_run_id = sr.id
-      WHERE sr.command_kind = 'run'
-        AND sr.created_at > '${cutoffLiteral}'::TIMESTAMP
-        AND srt.is_holdout = TRUE
-    ),
-    ci_results AS (
-      SELECT tr.commit_sha, tr.suite, tr.test_name, tr.status, tr.duration_ms
-      FROM test_results tr
-      JOIN workflow_runs wr ON tr.workflow_run_id = wr.id
-      WHERE ${workflowSourceExpr} = 'ci'
-        AND tr.created_at > '${cutoffLiteral}'::TIMESTAMP
-    ),
-    matched_commits AS (
-      SELECT DISTINCT ls.commit_sha
-      FROM local_sampling ls
-      WHERE EXISTS (SELECT 1 FROM ci_results cr WHERE cr.commit_sha = ls.commit_sha)
-    ),
-    per_test AS (
-      SELECT
-        cr.commit_sha,
-        cr.suite,
-        cr.test_name,
-        cr.status AS ci_status,
-        cr.duration_ms,
-        CASE WHEN st.suite IS NOT NULL THEN TRUE ELSE FALSE END AS was_sampled
-      FROM ci_results cr
-      INNER JOIN matched_commits mc ON cr.commit_sha = mc.commit_sha
-      LEFT JOIN sampled_tests st ON cr.commit_sha = st.commit_sha
-        AND cr.suite = st.suite AND cr.test_name = st.test_name
-      WHERE NOT EXISTS (
-        SELECT 1 FROM holdout_tests ht
-        WHERE ht.commit_sha = cr.commit_sha
-          AND ht.suite = cr.suite AND ht.test_name = cr.test_name
-      )
-    )
-    SELECT
-      (SELECT COUNT(DISTINCT commit_sha)::INTEGER FROM matched_commits) AS matched,
-      COALESCE(SUM(CASE WHEN was_sampled AND ci_status IN ('failed', 'flaky') THEN 1 ELSE 0 END), 0)::INTEGER AS tp,
-      COALESCE(SUM(CASE WHEN was_sampled AND ci_status = 'passed' THEN 1 ELSE 0 END), 0)::INTEGER AS fp,
-      COALESCE(SUM(CASE WHEN NOT was_sampled AND ci_status IN ('failed', 'flaky') THEN 1 ELSE 0 END), 0)::INTEGER AS fn_count,
-      COALESCE(SUM(CASE WHEN NOT was_sampled AND ci_status = 'passed' THEN 1 ELSE 0 END), 0)::INTEGER AS tn,
-      CASE WHEN (SELECT COUNT(*) FROM local_sampling) > 0
-        THEN (SELECT ROUND(AVG(selected_count * 100.0 / NULLIF(candidate_count, 0)), 1) FROM local_sampling)
-        ELSE NULL END AS sample_ratio,
-      COALESCE(
-        (SELECT ROUND(SUM(
-          CASE WHEN NOT was_sampled THEN duration_ms ELSE 0 END
-        ) / 60000.0, 1) FROM per_test),
-        NULL
-      ) AS skipped_minutes
-    FROM per_test
-  `);
+  // --- Sampling: one engine (MoonBit build_sampling_kpi, commit level) ---
+  // A matched commit has a local sampled run and a CI run with results. The
+  // confusion matrix counts commits: did the local run fail, did CI fail.
+  const [samplingKpi, holdout] = await Promise.all([
+    runSamplingKpi({ store, windowDays: window, now }),
+    runHoldoutKpi({ store, windowDays: window, now }),
+  ]);
+  const matched = samplingKpi.matchedCommits;
+  const { truePositive: tp, falsePositive: fp, falseNegative: fn, trueNegative: tn } = samplingKpi.confusionMatrix;
+  const pct = (num: number, den: number, empty: number) => (den > 0 ? Math.round((num / den) * 1000) / 10 : empty);
+  const recall = matched > 0 ? pct(tp, tp + fn, 100) : null;
+  const falsePositiveRate = matched > 0 ? pct(fp, fp + tn, 0) : null;
+  const falseNegativeRate = matched > 0 ? (samplingKpi.misses.falseNegativeRate ?? 0) : null;
+  const passCorrelation = matched > 0 ? (samplingKpi.passSignal.rate ?? 100) : null;
 
-  const matched = cmRow?.matched ?? 0;
-  const tp = cmRow?.tp ?? 0;
-  const fp = cmRow?.fp ?? 0;
-  const fn = cmRow?.fn_count ?? 0;
-  const tn = cmRow?.tn ?? 0;
-
-  const totalCiFailures = tp + fn;
-  const totalSampled = tp + fp;
-  const totalSkipped = fn + tn;
-
-  let recall: number | null = null;
-  let falsePositiveRate: number | null = null;
-  let falseNegativeRate: number | null = null;
-  let passCorrelation: number | null = null;
-
-  if (matched > 0) {
-    recall = totalCiFailures > 0 ? Math.round((tp / totalCiFailures) * 1000) / 10 : 100;
-    falsePositiveRate = totalSampled > 0 ? Math.round((fp / totalSampled) * 1000) / 10 : 0;
-    falseNegativeRate = totalSkipped > 0 ? Math.round((fn / totalSkipped) * 1000) / 10 : 0;
-    // Pass correlation: what fraction of skipped tests actually passed in CI
-    passCorrelation = totalSkipped > 0 ? Math.round((tn / totalSkipped) * 1000) / 10 : 100;
-  }
-
-  // Holdout FNR
-  const [holdoutRow] = await store.raw<{ fnr: number | null }>(`
-    SELECT CASE WHEN holdout_total > 0
-      THEN ROUND(holdout_fails * 100.0 / holdout_total, 1) ELSE NULL END AS fnr
-    FROM (
-      SELECT
-        COUNT(*) FILTER (WHERE srt.is_holdout = TRUE)::INTEGER AS holdout_total,
-        COUNT(*) FILTER (WHERE srt.is_holdout = TRUE AND tr.status IN ('failed', 'flaky'))::INTEGER AS holdout_fails
-      FROM sampling_run_tests srt
-      JOIN sampling_runs sr ON srt.sampling_run_id = sr.id
-      LEFT JOIN test_results tr ON tr.suite = srt.suite AND tr.test_name = srt.test_name
-        AND tr.commit_sha = sr.commit_sha
-      WHERE sr.created_at > '${cutoffLiteral}'::TIMESTAMP
-    ) sub
-  `);
-
-  // --- Flaky ---
-  const [flakyRow] = await store.raw<{
-    broken: number;
-    intermittent: number;
-    total_classified: number;
-  }>(`
-    SELECT
-      COUNT(DISTINCT CASE WHEN fail_rate >= 100 THEN key END)::INTEGER AS broken,
-      COUNT(DISTINCT CASE WHEN fail_rate > 0 AND fail_rate < 100 THEN key END)::INTEGER AS intermittent,
-      COUNT(DISTINCT key)::INTEGER AS total_classified
-    FROM (
-      SELECT
-        suite || '::' || test_name AS key,
-        ROUND(COUNT(*) FILTER (WHERE status IN ('failed', 'flaky')) * 100.0 / COUNT(*), 1) AS fail_rate
-      FROM test_results
-      WHERE created_at > '${cutoffLiteral}'::TIMESTAMP
-      GROUP BY suite, test_name
-      HAVING COUNT(*) >= 5
-    ) sub
-  `);
-
-  const [trendRow] = await store.raw<{ current_count: number; previous_count: number }>(`
-    SELECT
-      (SELECT COUNT(DISTINCT suite || '::' || test_name)::INTEGER FROM (
-        SELECT suite, test_name, COUNT(*) AS runs,
-          COUNT(*) FILTER (WHERE status IN ('failed', 'flaky')) AS fails
-        FROM test_results
-        WHERE created_at > '${cutoffLiteral}'::TIMESTAMP
-        GROUP BY suite, test_name HAVING runs >= 5 AND fails > 0
-      ) sub) AS current_count,
-      (SELECT COUNT(DISTINCT suite || '::' || test_name)::INTEGER FROM (
-        SELECT suite, test_name, COUNT(*) AS runs,
-          COUNT(*) FILTER (WHERE status IN ('failed', 'flaky')) AS fails
-        FROM test_results
-        WHERE created_at > '${cutoffPrevLiteral}'::TIMESTAMP
-          AND created_at <= '${cutoffLiteral}'::TIMESTAMP
-        GROUP BY suite, test_name HAVING runs >= 5 AND fails > 0
-      ) sub) AS previous_count
-  `);
-
-  const totalClassified = flakyRow?.total_classified ?? 1;
-  const intermittent = flakyRow?.intermittent ?? 0;
+  // --- Flaky (flaker_v1.flaky over this window and the one before) ---
+  const health = await testHealth(store, { windowDays: window, now });
+  const previous = await testHealth(store, { windowDays: window, now: cutoff });
+  const totalClassified = health.classified || 1;
+  const intermittent = health.flaky;
 
   // --- Data quality ---
+  const history = await historyCounts(store, { windowDays: window, now });
   const [dataRow] = await store.raw<{
-    commit_count: number;
     commits_with_changes: number;
     last_data_at: string | null;
   }>(`
     SELECT
-      (SELECT COUNT(DISTINCT commit_sha)::INTEGER FROM test_results
-       WHERE created_at > '${cutoffLiteral}'::TIMESTAMP
-         AND commit_sha IS NOT NULL) AS commit_count,
       (SELECT COUNT(DISTINCT commit_sha)::INTEGER FROM commit_changes
        WHERE commit_sha IN (
          SELECT DISTINCT commit_sha FROM test_results
@@ -242,15 +94,10 @@ export async function computeKpi(
       (SELECT MAX(created_at)::VARCHAR FROM test_results) AS last_data_at
   `);
 
-  const commitCount = dataRow?.commit_count ?? 0;
+  const commitCount = history.commits;
   const commitsWithChanges = dataRow?.commits_with_changes ?? 0;
   const coFailureCoverage = commitCount > 0 ? commitsWithChanges / commitCount : 0;
-
-  let confidence: FlakerKpi["data"]["confidence"];
-  if (commitCount < 5) confidence = "insufficient";
-  else if (commitCount < 30) confidence = "low";
-  else if (commitCount < 100) confidence = "moderate";
-  else confidence = "high";
+  const confidence = dataConfidence(commitCount);
 
   return {
     timestamp: new Date().toISOString(),
@@ -260,17 +107,17 @@ export async function computeKpi(
       recall,
       falsePositiveRate,
       falseNegativeRate,
-      sampleRatio: cmRow?.sample_ratio ?? null,
+      sampleRatio: samplingKpi.avgSampleRatio,
       passCorrelation,
-      holdoutFNR: holdoutRow?.fnr ?? null,
-      skippedMinutes: cmRow?.skipped_minutes ?? null,
+      holdoutFNR: holdout.falseNegativeRate,
+      skippedMinutes: samplingKpi.avgSavedMinutes,
       confusionMatrix: matched > 0 ? { truePositive: tp, falsePositive: fp, falseNegative: fn, trueNegative: tn } : null,
     },
     flaky: {
-      brokenTests: flakyRow?.broken ?? 0,
+      brokenTests: health.broken,
       intermittentFlaky: intermittent,
       trueFlakyRate: Math.round((intermittent / totalClassified) * 1000) / 10,
-      flakyTrend: (trendRow?.current_count ?? 0) - (trendRow?.previous_count ?? 0),
+      flakyTrend: (health.flaky + health.broken) - (previous.flaky + previous.broken),
     },
     data: {
       commitCount,
@@ -280,7 +127,7 @@ export async function computeKpi(
       confidence,
       lastDataAt: dataRow?.last_data_at ?? null,
       staleDays: dataRow?.last_data_at
-        ? Math.floor((Date.now() - new Date(dataRow.last_data_at).getTime()) / 86400000)
+        ? Math.floor((now.getTime() - new Date(dataRow.last_data_at).getTime()) / 86400000)
         : null,
     },
   };

@@ -383,6 +383,8 @@ flaker status --list flaky                 # 上位 flaky テスト一覧
 flaker status --list flaky --json          # 機械可読
 ```
 
+一覧は `--window-days` (既定 30) の範囲で `flaker_v1.flaky` の定義を使います。flake の証拠 (retry で通った、`flaky` ステータス、同じコミットで通過と失敗の両方がある失敗) が `[flaky].detection_threshold_ratio` 以上あれば `flaky`、証拠なしに毎回失敗していれば `broken` です。どちらかは `Kind` 列 (`--json` では `kind`) で分かります。あるコミットでは落ち別のコミットでは通るが、同じコミットで両方になることはないテストは regression のパターンで、flaky ではないので一覧に出ません。自動 quarantine (`flaker apply`) が提案するのは `[quarantine].flaky_rate_threshold_percentage` 以上の flaky テストだけで、broken なテストは提案せず、quarantine 済みの broken なテストは失敗し続ける間は外しません。
+
 旧 `analyze flaky` の `--top` / `--test` / `--true-flaky` / `--trend` / `--by-variant` に相当する詳細切り口は、現状 `flaker query "SELECT ..."` で SQL を直接叩くか、`flaker explain insights` で AI 分析に委ねる。
 
 ### `flaker explain <topic>` — AI 分析

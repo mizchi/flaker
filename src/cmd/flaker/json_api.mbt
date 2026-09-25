@@ -317,6 +317,14 @@ pub fn build_sampling_kpi_json(rows_json : String) -> String {
 }
 
 ///|
+pub fn build_holdout_kpi_json(rows_json : String) -> String {
+  let rows : Array[@types.HoldoutCommitInput] = try! @json.from_json(
+    try! @json.parse(rows_json),
+  )
+  @eval_core.build_holdout_kpi(rows).to_json().stringify()
+}
+
+///|
 pub fn select_by_coverage_json(
   coverages_json : String,
   changed_edges_json : String,

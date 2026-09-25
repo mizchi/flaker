@@ -36,8 +36,9 @@ export function formatFlakyTable(results: FlakyScore[]): string {
     return "No flaky tests found.";
   }
 
-  const broken = results.filter((r) => r.flakyRate >= 100 && r.totalRuns >= 2);
-  const flaky = results.filter((r) => r.flakyRate < 100 || r.totalRuns < 2);
+  const broken = results.filter((r) => r.isBroken);
+  const flaky = results.filter((r) => r.isFlaky);
+  const failing = results.filter((r) => !r.isBroken && !r.isFlaky);
 
   const lines: string[] = [];
   if (broken.length > 0) {
@@ -53,7 +54,7 @@ export function formatFlakyTable(results: FlakyScore[]): string {
     lines.push("");
   }
   if (flaky.length > 0) {
-    lines.push(`Flaky (intermittent failures):`);
+    lines.push(`Flaky (flake evidence: retried passes, or pass and fail on one commit):`);
     const headers = ["Suite", "Test Name", "Flaky Rate", "Total Runs", "Fail Count"];
     const rows = flaky.map((r) => [
       r.suite,
@@ -63,7 +64,21 @@ export function formatFlakyTable(results: FlakyScore[]): string {
       String(r.failCount),
     ]);
     lines.push(formatTable(headers, rows));
+    lines.push("");
   }
+  if (failing.length > 0) {
+    lines.push(`Failing, not flaky (below the flaky threshold, or no flake evidence):`);
+    const headers = ["Suite", "Test Name", "Flaky Rate", "Total Runs", "Fail Count"];
+    const rows = failing.map((r) => [
+      r.suite,
+      r.testName,
+      `${r.flakyRate}%`,
+      String(r.totalRuns),
+      String(r.failCount),
+    ]);
+    lines.push(formatTable(headers, rows));
+  }
+  while (lines[lines.length - 1] === "") lines.pop();
   if (lines.length === 0) {
     return "No flaky tests found.";
   }

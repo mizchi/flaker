@@ -495,7 +495,7 @@ Promote `flaker run --gate merge` to a required check only after the nightly iss
 - `false negative rate <= 5%` — share of commits where the `merge` gate passed but the full run failed (sampling missed a real regression). Measured over the same matched-commit window.
 - `pass correlation >= 95%` — `P(full run passes | merge gate passes)` on matched commits. Same metric referenced elsewhere in this README as `P(CI pass | local pass)`.
 - `holdout FNR <= 10%` — FNR measured on the holdout slice defined by `[sampling] holdout_ratio`. Tests in the holdout slice are excluded from the sampled run so that their outcomes can be used to audit whether the sampler's verdict generalizes. Guards against sampler overfitting to the visible slice.
-- `data confidence` reaches `moderate` or `high` — derived signal combining matched-commit count, history window coverage, and flaky-noise level. Rough rule of thumb: `low` until ~10 matched commits, `moderate` around 20–40 with FNR/correlation green, `high` beyond 40 with stable noise. Exact boundaries come from the `status --gate merge --detail --json` output, not from config.
+- `data confidence` reaches `moderate` or `high` — how much history the window holds, by distinct commits with results: fewer than 5 is `insufficient`, fewer than 30 `low`, fewer than 100 `moderate`, else `high`. `status`, `plan` / `apply` and `calibrate` use the same thresholds.
 
 ## Recommended Usage Model
 

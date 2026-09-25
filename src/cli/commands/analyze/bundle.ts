@@ -24,6 +24,7 @@ import type {
 } from "../../reporting/flaker-analysis-bundle-contract.js";
 import { workflowRunSourceSql } from "../../run-source.js";
 import type { FlakyScore } from "../../storage/types.js";
+import { activity as readActivity } from "../../datasets/facts.js";
 import type { QuarantineManifestEntry } from "../../quarantine-manifest.js";
 
 // DuckDB BIGINT columns (workflow_run_id, artifact_id) come back as JS BigInt.
@@ -52,18 +53,6 @@ export interface AnalysisBundleOpts {
   insightsTop?: number;
   /** Reference time for the window cutoff. Defaults to `new Date()`. */
   now?: Date;
-}
-
-interface WorkflowRunCountsRow {
-  total_runs: number;
-  ci_runs: number;
-  local_runs: number;
-}
-
-interface TestResultCountsRow {
-  total_results: number;
-  unique_tests: number;
-  unique_commits: number;
 }
 
 interface RecentFailureRow {
@@ -611,7 +600,7 @@ async function loadFailureEvidence(
     const recentHistory = historyRows.map((row) =>
       toHistoryEntry(row, workflowArtifactMap),
     );
-    const failureSignals = flaky.failCount + flaky.flakyRetryCount;
+    const failureSignals = flaky.failCount;
     const passCount = Math.max(0, flaky.totalRuns - failureSignals);
 
     evidence.push({
@@ -625,7 +614,7 @@ async function loadFailureEvidence(
       flakyRetryCount: flaky.flakyRetryCount,
       failureSignals,
       passCount,
-      failureRate: flaky.flakyRate,
+      failureRate: flaky.totalRuns > 0 ? Math.round((flaky.failCount / flaky.totalRuns) * 10000) / 100 : 0,
       firstSeenAt: flaky.firstSeenAt.toISOString(),
       lastFailureAt: flaky.lastFlakyAt?.toISOString() ?? null,
       isQuarantined: activeQuarantines.length > 0,
@@ -653,8 +642,7 @@ export async function runAnalysisBundle(
   const workflowSourceExpr = workflowRunSourceSql("wr");
 
   const [
-    [workflowRunCounts],
-    [testResultCounts],
+    counts,
     recentFailureRows,
     context,
     kpi,
@@ -664,22 +652,7 @@ export async function runAnalysisBundle(
     clusters,
     failureEvidence,
   ] = await Promise.all([
-    opts.store.raw<WorkflowRunCountsRow>(`
-      SELECT
-        COUNT(*)::INTEGER AS total_runs,
-        COUNT(*) FILTER (WHERE ${workflowSourceExpr} = 'ci')::INTEGER AS ci_runs,
-        COUNT(*) FILTER (WHERE ${workflowSourceExpr} = 'local')::INTEGER AS local_runs
-      FROM workflow_runs wr
-      WHERE wr.created_at > '${cutoffLiteral}'::TIMESTAMP
-    `),
-    opts.store.raw<TestResultCountsRow>(`
-      SELECT
-        COUNT(*)::INTEGER AS total_results,
-        COUNT(DISTINCT COALESCE(NULLIF(test_id, ''), suite || '::' || test_name))::INTEGER AS unique_tests,
-        COUNT(DISTINCT commit_sha)::INTEGER AS unique_commits
-      FROM test_results
-      WHERE created_at > '${cutoffLiteral}'::TIMESTAMP
-    `),
+    readActivity(opts.store, { windowDays, now }),
     opts.store.raw<RecentFailureRow>(`
       SELECT
         COALESCE(tr.test_id, '') AS test_id,
@@ -788,14 +761,14 @@ export async function runAnalysisBundle(
     windowDays,
     data: {
       workflowRuns: {
-        total: workflowRunCounts?.total_runs ?? 0,
-        ci: workflowRunCounts?.ci_runs ?? 0,
-        local: workflowRunCounts?.local_runs ?? 0,
+        total: counts.runs.total,
+        ci: counts.runs.ci,
+        local: counts.runs.local,
       },
       testResults: {
-        total: testResultCounts?.total_results ?? 0,
-        uniqueTests: testResultCounts?.unique_tests ?? 0,
-        uniqueCommits: testResultCounts?.unique_commits ?? 0,
+        total: counts.results.total,
+        uniqueTests: counts.results.tests,
+        uniqueCommits: counts.results.commits,
       },
       recentFailures,
       failureEvidence,

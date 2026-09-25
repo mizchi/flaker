@@ -231,3 +231,28 @@ pub fn build_sampling_kpi(
     },
   }
 }
+
+///|
+/// The holdout false negative rate: of the tests held out of local sampled
+/// runs, the share that failed in CI on the same commit (a percentage, one
+/// decimal). Commits without holdout tests are skipped.
+pub fn build_holdout_kpi(
+  rows : Array[@types.HoldoutCommitInput],
+) -> @types.HoldoutKpiOutput {
+  let mut commits = 0
+  let mut tests = 0
+  let mut failures = 0
+  for row in rows {
+    if row.holdout_tests > 0 {
+      commits += 1
+      tests += row.holdout_tests
+      failures += row.holdout_failures
+    }
+  }
+  @types.HoldoutKpiOutput::{
+    commits,
+    holdout_tests: tests,
+    holdout_failures: failures,
+    false_negative_rate: to_rate(failures, tests),
+  }
+}

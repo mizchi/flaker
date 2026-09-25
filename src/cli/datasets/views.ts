@@ -131,12 +131,18 @@ const HISTORY_VIEWS = `
 -- on a commit where the same test also passed. A plain regression therefore
 -- has flaky_rate 0 and is not flaky, so it cannot hide its own failures from
 -- selector ground truth.
-CREATE OR REPLACE VIEW flaker_v1.flaky AS
+--
+-- The definition lives in the table macro flaker_flaky_window, over the
+-- window_days up to \`until\` (and, with ci_only, CI runs only). The view is
+-- that macro at the configured window and now; commands that take a window
+-- flag or a fixed "now" call the macro, so every output reads one definition.
+CREATE OR REPLACE MACRO flaker_flaky_window(window_days, until, ci_only := false) AS TABLE
 WITH cfg AS (SELECT * FROM flaker_dataset_config WHERE id = 1),
 recent AS (
   SELECT r.test_id, r.commit_sha, r.status, r.retry_count
-  FROM (${REAL_RESULTS_SQL}) r CROSS JOIN cfg
-  WHERE r.created_at > ${NOW_UTC} - to_days(cfg.flaky_window_days)
+  FROM (${REAL_RESULTS_SQL}
+    AND (NOT ci_only OR ${workflowRunSourceSql("wr")} = 'ci')) r
+  WHERE r.created_at > until - to_days(window_days) AND r.created_at <= until
 ),
 flip_commits AS (
   SELECT test_id, commit_sha
@@ -161,14 +167,18 @@ agg AS (
 )
 SELECT
   agg.test_id AS test_key,
-  cfg.flaky_window_days AS window_days,
+  window_days::INTEGER AS window_days,
   agg.runs,
   agg.failures,
   ROUND(agg.evidence * 1.0 / agg.runs, 4)::DOUBLE AS flaky_rate,
   (agg.evidence > 0 AND agg.evidence * 1.0 / agg.runs >= cfg.flaky_threshold_ratio) AS is_flaky,
-  ${NOW_UTC} AS computed_at
+  until::TIMESTAMP AS computed_at
 FROM agg
 CROSS JOIN cfg;
+
+CREATE OR REPLACE VIEW flaker_v1.flaky AS
+SELECT * FROM flaker_flaky_window(
+  (SELECT flaky_window_days FROM flaker_dataset_config WHERE id = 1), ${NOW_UTC});
 
 CREATE OR REPLACE VIEW flaker_v1.quarantine AS
 SELECT
@@ -183,8 +193,7 @@ FROM quarantined_test_identities;
 -- commits; co_failures counts the ones where the test failed at least once.
 -- A single failing result on a commit is enough, and every file the commit
 -- changed gets the co-failure.
-CREATE OR REPLACE VIEW flaker_v1.co_failures AS
-WITH cfg AS (SELECT * FROM flaker_dataset_config WHERE id = 1)
+CREATE OR REPLACE MACRO flaker_co_failures_window(window_days, until) AS TABLE
 SELECT
   cc.file_path AS changed_file,
   tr.test_id AS test_key,
@@ -195,13 +204,16 @@ SELECT
       / COUNT(DISTINCT cc.commit_sha),
     4
   )::DOUBLE AS strength,
-  cfg.co_failure_window_days AS window_days
+  window_days::INTEGER AS window_days
 FROM commit_changes cc
 JOIN (${REAL_RESULTS_SQL}) tr ON tr.commit_sha = cc.commit_sha
-CROSS JOIN cfg
-WHERE tr.created_at > ${NOW_UTC} - to_days(cfg.co_failure_window_days)
-GROUP BY cc.file_path, tr.test_id, cfg.co_failure_window_days
+WHERE tr.created_at > until - to_days(window_days) AND tr.created_at <= until
+GROUP BY cc.file_path, tr.test_id
 HAVING COUNT(DISTINCT cc.commit_sha) FILTER (WHERE ${FAILURE_SQL("tr")}) > 0;
+
+CREATE OR REPLACE VIEW flaker_v1.co_failures AS
+SELECT * FROM flaker_co_failures_window(
+  (SELECT co_failure_window_days FROM flaker_dataset_config WHERE id = 1), ${NOW_UTC});
 `;
 
 const SELECTOR_VIEWS = `

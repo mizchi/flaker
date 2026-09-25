@@ -51,6 +51,8 @@ pub using @contracts {
   type SamplingKpiMissesOutput,
   type SamplingKpiConfusionMatrixOutput,
   type SamplingKpiOutput,
+  type HoldoutCommitInput,
+  type HoldoutKpiOutput,
   type AffectedTargetInput,
   type AffectedDirectSelectionInput,
   type AffectedTransitiveTaskInput,
@@ -125,4 +127,4 @@ pub using @config {run_config_check}
 
 ///|
 /// Evaluation metrics
-pub using @eval {build_sampling_kpi}
+pub using @eval {build_sampling_kpi, build_holdout_kpi}

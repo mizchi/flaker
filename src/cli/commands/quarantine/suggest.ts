@@ -99,10 +99,14 @@ export async function runQuarantineSuggest(input: {
   const add: QuarantineSuggestionItem[] = [];
   const remove: QuarantineSuggestionItem[] = [];
 
+  // Flaky as flaker_v1.flaky decides (is_flaky), at or above the configured
+  // rate. A broken test (fails every run) is not flaky: it is never suggested
+  // for quarantine, and a quarantine of one is kept while it keeps failing.
+  const qualifies = (score: FlakyScore) => score.isFlaky && score.flakyRate >= flakyRateThresholdPercentage;
   for (const score of flaky) {
     if (score.totalRuns < minRuns) continue;
     const current = quarantinedById.get(score.testId);
-    if (score.flakyRate >= flakyRateThresholdPercentage && !current) {
+    if (qualifies(score) && !current) {
       add.push({
         selector: fromFlakyScore(score),
         reason: "flaky_rate_exceeded",
@@ -115,7 +119,7 @@ export async function runQuarantineSuggest(input: {
         },
       });
     }
-    if (current && score.flakyRate < flakyRateThresholdPercentage) {
+    if (current && !qualifies(score) && !score.isBroken) {
       remove.push({
         selector: fromQuarantined(current),
         reason: "below_threshold",

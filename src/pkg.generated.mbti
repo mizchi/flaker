@@ -12,6 +12,8 @@ pub fn build_affected_report(Array[@contracts.AffectedTargetInput], Array[@contr
 
 pub fn build_affected_report_from_input(@contracts.AffectedReportInput) -> @contracts.AffectedReportCoreOutput
 
+pub fn build_holdout_kpi(Array[@contracts.HoldoutCommitInput]) -> @contracts.HoldoutKpiOutput
+
 pub fn build_reverse_deps(@contracts.DependencyGraphInput) -> Array[@contracts.ReverseDepEntry]
 
 pub fn build_sampling_kpi(Array[@contracts.EvalCommitSignalInput]) -> @contracts.SamplingKpiOutput
@@ -102,6 +104,10 @@ pub using @contracts {type EvalCommitSignalInput}
 pub using @contracts {type FlakyResult}
 
 pub using @contracts {type GraphNodeInput}
+
+pub using @contracts {type HoldoutCommitInput}
+
+pub using @contracts {type HoldoutKpiOutput}
 
 pub using @contracts {type QuarantineEntryInput}
 
