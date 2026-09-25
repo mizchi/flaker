@@ -135,6 +135,10 @@ New and optional: `[selector]`, `flaker import --adapter selector-record|jev`, `
 
 These pass silently, so check them explicitly when a repository depends on them.
 
+- (after 0.14.0) Flaky is judged by `flaker_v1.flaky` in `status --list flaky`, the automatic quarantine plan, `explain` and eval. A test that fails every run is `broken`, not flaky, and is never proposed for quarantine; a test that fails on some commits and passes on others, never on the same one, is not flaky. `status --list flaky --json` rows gain `kind` (`flaky` / `broken`), and `flaky_rate` is the flake-evidence share, not the failure rate. A script that parsed the old list or expected broken tests to be auto-quarantined must change.
+- (after 0.14.0) The sampling KPI in `status --json` (`health.matchedCommits`, drift `false_negative_rate` / `pass_correlation` / `holdout_fnr`) and `plan` / `apply` is per commit, from MoonBit `build_sampling_kpi`. A matched commit needs local results as well as a recorded sampling run. Values differ from 0.14.0, which computed them per test; re-check thresholds tuned against the old numbers.
+- (after 0.14.0) `explain context --json`'s `environment.testCount` counts tests, not results.
+
 - `flaker calibrate` now recommends `hybrid` when `[affected].resolver` is set and `weighted` otherwise. It never recommends `random` (small suites) or `gbdt` any more.
 - `flaker apply --json` and `--output` list `executed` in plan order, also for `--plan-file`. The ApplyArtifact JSON no longer has an `emitted` field.
 - `flaker explain context --json` no longer lists `random`, `coverage-guided` or `gbdt` strategies and no longer has `environment.gbdtModelAvailable`.
