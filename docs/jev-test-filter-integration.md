@@ -97,6 +97,8 @@ A complete workflow for the "jev on main" layout is in [`examples/github-actions
 
 `flaker calibrate --selector --dry-run --json` shows whether the layout works: `without_full_run` counts records with no full run on their commit, and `decision.real_failures` is the evidence gathered so far.
 
+While real evidence is thin, `flaker calibrate --mutate <n>` runs jev and the full suite on synthetic mutations in a temporary worktree (see `docs/how-to-use.md`, "Mutation trials"). A mutation jev missed tightens the gate; mutations never loosen it.
+
 ## What the context changes in jev
 
 `jev-context` v1 has three parts:

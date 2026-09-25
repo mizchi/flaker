@@ -97,6 +97,8 @@ calibration が学べるのは、jev の record と full run の両方がある�
 
 構成が機能しているかは `flaker calibrate --selector --dry-run --json` で分かります。`without_full_run` は自分のコミットに full run がない record の数で、`decision.real_failures` はこれまでに集まった根拠の件数です。
 
+本物の根拠が少ないうちは、`flaker calibrate --mutate <n>` で一時的な worktree 上の人工的な mutation に対して jev と全件を走らせられます (`docs/how-to-use.ja.md` の「mutation による試行」)。jev が取りこぼした mutation は gate を締めますが、mutation で緩めることはありません。
+
 ## context で jev の何が変わるか
 
 `jev-context` v1 は 3 つの部分からなります。

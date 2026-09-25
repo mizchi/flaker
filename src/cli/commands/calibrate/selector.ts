@@ -3,7 +3,7 @@ import { DEFAULT_CUTOFF, DEFAULT_UNSURE_BELOW, DEFAULT_UNSURE_MARGIN } from "jev
 import type { MetricStore } from "../../storage/types.js";
 import type { SelectorConfig } from "../../config.js";
 import { resolveSelectorTestKeys } from "../../selector/store.js";
-import { loadCalibrationRecords, type UnmatchedFailure } from "../../selector/ground-truth.js";
+import { loadCalibrationRecords, type MutationEvidence, type UnmatchedFailure } from "../../selector/ground-truth.js";
 import { calibrateGate, type CalibrationDecision } from "../../selector/calibrate-core.js";
 import type { GateValues } from "../../selector/replay.js";
 import { FLAKER_V1_SCHEMAS, type FlakerV1GateCalibrationRow } from "../../contracts/flaker-v1-datasets.js";
@@ -66,6 +66,8 @@ export interface SelectorCalibrationResult {
   withoutFullRun: number;
   superseded: number;
   unmatched: UnmatchedFailure[];
+  /** Mutation records in `decision.records`; their failures can only tighten. */
+  mutation: MutationEvidence;
   written: boolean;
 }
 
@@ -100,7 +102,8 @@ export async function runSelectorCalibration(opts: {
   }
   return {
     selector: name, calibratedAt: calibratedAt.toISOString(), decision,
-    withoutFullRun: loaded.withoutFullRun, superseded: loaded.superseded, unmatched: loaded.unmatched, written: !opts.dryRun,
+    withoutFullRun: loaded.withoutFullRun, superseded: loaded.superseded, unmatched: loaded.unmatched,
+    mutation: loaded.mutation, written: !opts.dryRun,
   };
 }
 
@@ -110,8 +113,11 @@ export function formatSelectorCalibration(r: SelectorCalibrationResult): string 
   const d = r.decision;
   const lines = [
     `Selector gate calibration (${r.selector})`,
-    `  records with a full run:  ${d.records} (${r.withoutFullRun} without one, ${r.superseded} superseded by a later run on the same head)`,
+    `  records with a full run:  ${d.records - r.mutation.records} real (${r.withoutFullRun} without one, ${r.superseded} superseded by a later run on the same head)`,
     `  real failures:            ${d.realFailures}`,
+    ...(r.mutation.records + r.mutation.withoutTrial === 0 ? [] : [
+      `  mutation records:         ${r.mutation.records} with ${r.mutation.failures} killed tests (tighten only; ${r.mutation.withoutTrial} without a trial here)`,
+    ]),
     `  current gate:             ${g(d.current.gate)} → selected ${d.current.selected}, missed ${d.current.missed}`,
     `  decision:                 ${d.decision} → ${g(d.gate)} (selected ${d.adopted.selected}, missed ${d.adopted.missed})`,
     `  recall lower bound (95%): ${d.recallLb95 === null ? "n/a" : d.recallLb95.toFixed(3)}`,

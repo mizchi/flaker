@@ -39,13 +39,44 @@ describe("loadCalibrationRecords", () => {
     ]);
   });
 
-  it("loads only real selector runs: a mutation record on a real full run is not scored", async () => {
+  it("does not score a mutation record against a real full run", async () => {
     await seedSelectorRun(store, { id: "m1", headSha: "H", source: "mutation", tests: [
       { testKey: await keyFor(store, S, "known"), file: S, titlePath: ["known"], reason: "below", selected: false, score: 0.4, confidence: 0.9 },
     ] });
     const loaded = await loadCalibrationRecords(store, { selector: "jev", since: new Date(0) });
     expect(loaded.records).toEqual([]);
     expect(loaded.unmatched).toEqual([]);
+    expect(loaded.mutation).toEqual({ records: 0, failures: 0, withoutTrial: 1, unmatched: 0 });
+  });
+
+  it("scores a mutation record against the tests its trial killed, the latest record per trial", async () => {
+    const known = await keyFor(store, S, "known");
+    const ok = await keyFor(store, S, "ok");
+    await store.raw(
+      `INSERT INTO mutation_trials VALUES (7, 'M', 'H', 'src/a.ts', 3, 'compare', '===', '!==', 3, ?)`,
+      [new Date()],
+    );
+    for (const id of [known, ok, "not-a-verdict"]) {
+      await store.raw(`INSERT INTO mutation_failures VALUES (7, ?)`, [id]);
+    }
+    await store.addQuarantine({ suite: S, testName: "ok" }, "manual");
+    for (const [i, id] of ["m-old", "m-new"].entries()) {
+      await seedSelectorRun(store, { id, headSha: "M", source: "mutation", createdAt: new Date(Date.now() - (2 - i) * 60_000), tests: [
+        { testKey: known, file: S, titlePath: ["known"], reason: "below", selected: false, score: 0.4, confidence: 0.9 },
+        { testKey: ok, file: S, titlePath: ["ok"], reason: "quarantined", selected: false },
+      ] });
+    }
+    const loaded = await loadCalibrationRecords(store, { selector: "jev", since: new Date(0) });
+    const mutation = loaded.records.filter((r) => r.source === "mutation");
+    // The quarantined kill is not ground truth; a kill no verdict names is unmatched.
+    expect(mutation).toEqual([expect.objectContaining({ selectorRunId: "m-new", failures: [known] })]);
+    expect(loaded.mutation).toEqual({ records: 1, failures: 1, withoutTrial: 0, unmatched: 1 });
+
+    const [row] = await store.raw<{ source: string; is_full: boolean; run_id: bigint }>(
+      `SELECT source, is_full, run_id FROM flaker_v1.runs WHERE commit_sha = 'M'`,
+    );
+    expect(row).toMatchObject({ source: "mutation", is_full: true });
+    expect(Number(row.run_id)).toBe(-7);
   });
 
   it("keeps one selector run per head, the latest, so one regression counts once", async () => {

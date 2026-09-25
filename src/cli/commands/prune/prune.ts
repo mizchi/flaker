@@ -18,6 +18,8 @@ export interface PruneCounts {
   selector_runs: number;
   selector_run_tests: number;
   gate_calibrations: number;
+  mutation_trials: number;
+  mutation_failures: number;
 }
 
 export interface PruneResult {
@@ -39,7 +41,7 @@ export function minimumRetentionDays(settings: Pick<DatasetSettings, "flakyWindo
 
 /** Tables other tables reference with a REFERENCES constraint. */
 const FK_PARENTS = new Set<keyof PruneCounts>(["workflow_runs", "sampling_runs"]);
-const TEMP_TABLES = ["prune_runs", "prune_selector_runs", "prune_commits", "prune_sampling_runs", "prune_gate_calibrations"];
+const TEMP_TABLES = ["prune_runs", "prune_selector_runs", "prune_commits", "prune_sampling_runs", "prune_gate_calibrations", "prune_mutation_trials"];
 
 function naiveUtc(date: Date): string {
   return date.toISOString().replace("T", " ").replace("Z", "");
@@ -49,7 +51,8 @@ function naiveUtc(date: Date): string {
  * Deletes history older than `olderThanDays`, keeping every table consistent:
  * results and collected artifacts go with their run, selector verdicts with
  * their selector run, and commit changes once no kept run or selector run
- * names the commit. Quarantine, coverage and settings are state, not history,
+ * names the commit, mutation trials with the tests they killed. Quarantine,
+ * coverage and settings are state, not history,
  * and are kept; so is the latest gate calibration of each selector.
  */
 export async function runPrune(opts: {
@@ -90,6 +93,8 @@ export async function runPrune(opts: {
       )`);
     await store.raw(`CREATE OR REPLACE TEMP TABLE prune_sampling_runs AS
       SELECT id FROM sampling_runs WHERE created_at < ?::TIMESTAMP`, [cutoff]);
+    await store.raw(`CREATE OR REPLACE TEMP TABLE prune_mutation_trials AS
+      SELECT run_id FROM mutation_trials WHERE created_at < ?::TIMESTAMP`, [cutoff]);
     await store.raw(`CREATE OR REPLACE TEMP TABLE prune_gate_calibrations AS
       SELECT selector, calibrated_at FROM gate_calibrations g
       WHERE calibrated_at < ?::TIMESTAMP
@@ -106,6 +111,8 @@ export async function runPrune(opts: {
       selector_runs: `FROM selector_runs WHERE selector_run_id IN (SELECT selector_run_id FROM prune_selector_runs)`,
       gate_calibrations: `FROM gate_calibrations g WHERE EXISTS (
         SELECT 1 FROM prune_gate_calibrations p WHERE p.selector = g.selector AND p.calibrated_at = g.calibrated_at)`,
+      mutation_failures: `FROM mutation_failures WHERE run_id IN (SELECT run_id FROM prune_mutation_trials)`,
+      mutation_trials: `FROM mutation_trials WHERE run_id IN (SELECT run_id FROM prune_mutation_trials)`,
     };
     const removed = {} as PruneCounts;
     for (const [table, from] of Object.entries(targets) as Array<[keyof PruneCounts, string]>) {

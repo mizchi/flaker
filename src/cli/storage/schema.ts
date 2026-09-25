@@ -178,6 +178,32 @@ CREATE TABLE IF NOT EXISTS selector_run_tests (
   PRIMARY KEY (selector_run_id, ordinal)
 );
 
+-- Mutation trials of \`flaker calibrate --mutate\`. Kept apart from
+-- workflow_runs / test_results so no history query can mistake a synthetic
+-- failure for a real one; flaker_v1.runs lists each trial as a full run with
+-- source = 'mutation'. commit_sha is the throwaway commit holding the mutated
+-- tree (a selector record of the trial names it as head_sha).
+CREATE SEQUENCE IF NOT EXISTS mutation_trials_id_seq START 1;
+CREATE TABLE IF NOT EXISTS mutation_trials (
+  run_id        BIGINT PRIMARY KEY,
+  commit_sha    VARCHAR NOT NULL,
+  base_sha      VARCHAR NOT NULL,
+  file          VARCHAR NOT NULL,
+  line          INTEGER NOT NULL,
+  kind          VARCHAR NOT NULL,
+  original      VARCHAR NOT NULL,
+  replacement   VARCHAR NOT NULL,
+  tests         INTEGER NOT NULL,
+  created_at    TIMESTAMP NOT NULL
+);
+
+-- Tests a trial killed: failed on the mutated tree, passed on its base.
+CREATE TABLE IF NOT EXISTS mutation_failures (
+  run_id   BIGINT NOT NULL,
+  test_id  VARCHAR NOT NULL,
+  PRIMARY KEY (run_id, test_id)
+);
+
 CREATE TABLE IF NOT EXISTS gate_calibrations (
   selector       VARCHAR NOT NULL,
   calibrated_at  TIMESTAMP NOT NULL,

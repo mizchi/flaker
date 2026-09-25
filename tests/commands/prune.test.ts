@@ -44,6 +44,13 @@ describe("flaker prune", () => {
       );
     }
     await store.addQuarantine({ suite: "a.test.ts", testName: "a" }, "manual");
+    for (const [id, daysAgo] of [[1, 200], [2, 5]]) {
+      await store.raw(
+        `INSERT INTO mutation_trials VALUES (?, ?, 'old', 'src/a.ts', 1, 'compare', '===', '!==', 1, ?)`,
+        [id, `m${id}`, new Date(Date.now() - daysAgo * DAY)],
+      );
+      await store.raw(`INSERT INTO mutation_failures VALUES (?, 'k')`, [id]);
+    }
   });
 
   afterEach(async () => {
@@ -60,6 +67,8 @@ describe("flaker prune", () => {
     selector_runs: 1,
     selector_run_tests: 1,
     gate_calibrations: 1,
+    mutation_trials: 1,
+    mutation_failures: 1,
   };
 
   it("--dry-run reports what it would remove and removes nothing", async () => {
@@ -86,6 +95,8 @@ describe("flaker prune", () => {
     expect(await count(store, "selector_run_tests")).toBe(1);
     expect(await count(store, "gate_calibrations")).toBe(1);
     expect(await count(store, "quarantined_test_identities")).toBe(1);
+    expect(await count(store, "mutation_trials")).toBe(1);
+    expect(await count(store, "mutation_failures")).toBe(1);
     // No orphans left behind for the views to trip over.
     expect(await count(store, "flaker_v1.results")).toBe(1);
 
