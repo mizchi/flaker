@@ -9,7 +9,7 @@
 pub fn select_by_coverage(
   test_coverages : Array[TestCoverage],
   changed_edges : Array[String],
-  count~ : Int,
+  count~ : Int32,
 ) -> CoverageGuidedResult {
   if test_coverages.is_empty() || changed_edges.is_empty() || count <= 0 {
     return CoverageGuidedResult::{
@@ -21,7 +21,7 @@ pub fn select_by_coverage(
   }
 
   // Build set of changed edges
-  let changed_set : Map[String, Bool] = {}
+  let changed_set : Map[String, Bool] = Map([])
   for edge in changed_edges {
     changed_set.set(edge, true)
   }
@@ -42,8 +42,8 @@ pub fn select_by_coverage(
 
   // Greedy set cover
   let selected : Array[String] = []
-  let covered : Map[String, Bool] = {}
-  let used_suites : Map[String, Bool] = {}
+  let covered : Map[String, Bool] = Map([])
+  let used_suites : Map[String, Bool] = Map([])
 
   let max_select = if count < test_relevant_edges.length() {
     count
@@ -115,7 +115,7 @@ pub fn select_by_coverage(
 /// | 16-35   | 3      |
 /// | 36-65   | 4      |
 /// | 66-100  | 5      |
-pub fn bucketize_rate(rate : Double) -> Int {
+pub fn bucketize_rate(rate : Double) -> Int32 {
   if rate <= 0.0 {
     0
   } else if rate <= 5.0 {

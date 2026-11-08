@@ -1,5 +1,5 @@
 ///|
-fn clamp_count(count : Int, total : Int) -> Int {
+fn clamp_count(count : Int32, total : Int32) -> Int32 {
   if count <= 0 {
     0
   } else if count > total {
@@ -17,7 +17,7 @@ fn lcg_next(state : UInt64) -> UInt64 {
 ///|
 pub fn sample_random(
   meta : Array[@types.TestMeta],
-  count~ : Int,
+  count~ : Int32,
   seed~ : UInt64,
 ) -> Array[@types.TestMeta] {
   let n = meta.length()
@@ -43,7 +43,7 @@ pub fn sample_random(
 ///|
 pub fn sample_weighted(
   meta : Array[@types.TestMeta],
-  count~ : Int,
+  count~ : Int32,
   seed~ : UInt64,
 ) -> Array[@types.TestMeta] {
   let n = meta.length()
@@ -104,20 +104,20 @@ pub fn sample_weighted(
 pub fn sample_hybrid(
   meta : Array[@types.TestMeta],
   affected_suites~ : Array[String],
-  count~ : Int,
+  count~ : Int32,
   seed~ : UInt64,
 ) -> Array[@types.TestMeta] {
   let actual_count = clamp_count(count, meta.length())
   if actual_count == 0 {
     return []
   }
-  let affected_set : Map[String, Bool] = {}
+  let affected_set : Map[String, Bool] = Map([])
   for s in affected_suites {
     affected_set.set(s, true)
   }
 
   let selected : Array[@types.TestMeta] = []
-  let used : Map[Int, Bool] = {}
+  let used : Map[Int32, Bool] = Map([])
 
   // Priority 1: affected tests
   for i, m in meta {

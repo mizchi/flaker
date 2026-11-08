@@ -1,4 +1,5 @@
-///| Select tests to run based on history.
+///|
+/// Select tests to run based on history.
 async fn cmd_sample(args : Array[String]) -> Unit {
   let config = read_config()
   let count = parse_int_arg(args, "--count", 0)
@@ -10,7 +11,9 @@ async fn cmd_sample(args : Array[String]) -> Unit {
   match strategy {
     "random" | "weighted" | "hybrid" => ()
     _ => {
-      println("Error: unknown strategy '\{strategy}'. Use: random, weighted, hybrid")
+      println(
+        "Error: unknown strategy '\{strategy}'. Use: random, weighted, hybrid",
+      )
       return
     }
   }
@@ -42,7 +45,9 @@ async fn cmd_sample(args : Array[String]) -> Unit {
     _ => @sampler.sample_weighted(meta, count=sample_count, seed~)
   }
 
-  println("# Sampling: \{strategy}  (\{sampled.length()}/\{meta.length()} tests, \{percentage}%)")
+  println(
+    "# Sampling: \{strategy}  (\{sampled.length()}/\{meta.length()} tests, \{percentage}%)",
+  )
   println("")
   for t in sampled {
     let suite = shorten_suite(t.suite)
@@ -60,51 +65,54 @@ async fn cmd_sample(args : Array[String]) -> Unit {
   close_db(db)
 }
 
-///| Remove CI workspace prefix from suite path, keep relative path.
+///|
+/// Remove CI workspace prefix from suite path, keep relative path.
 fn shorten_suite(suite : String) -> String {
   let markers = ["tests/", "src/", "test/", "spec/"]
   for marker in markers {
     let idx = rfind(suite, marker)
     if idx >= 0 {
-      return suite[idx:].to_string()
+      return suite[idx:].to_owned()
     }
   }
   suite
 }
 
-///| Find last occurrence of needle in haystack. Returns -1 if not found.
-fn rfind(haystack : String, needle : String) -> Int {
+///|
+/// Find last occurrence of needle in haystack. Returns -1 if not found.
+fn rfind(haystack : String, needle : String) -> Int32 {
   let hlen = haystack.length()
   let nlen = needle.length()
   if nlen > hlen {
     return -1
   }
   for i = hlen - nlen; i >= 0; i = i - 1 {
-    if haystack[i:i + nlen].to_string() == needle {
+    if haystack[i:i + nlen].to_owned() == needle {
       return i
     }
   }
   -1
 }
 
-///| Format rate with one decimal place.
+///|
+/// Format rate with one decimal place.
 fn format_rate(rate : Double) -> String {
   let r = (rate * 10.0).to_int().to_double() / 10.0
   r.to_string()
 }
 
-///| Build TestMeta array from DuckDB.
+///|
+/// Build TestMeta array from DuckDB.
 fn build_test_meta(db : @duckdb.Connection) -> Array[@types.TestMeta] {
   let rows = query_cells(
-    db,
-    "SELECT suite, test_name, COUNT(*)::INTEGER, COUNT(*) FILTER (WHERE status IN ('failed', 'flaky'))::INTEGER, ROUND(COUNT(*) FILTER (WHERE status IN ('failed', 'flaky')) * 100.0 / COUNT(*), 2), MAX(created_at)::VARCHAR, COALESCE(AVG(duration_ms), 0)::INTEGER FROM test_results GROUP BY suite, test_name",
+    db, "SELECT suite, test_name, COUNT(*)::INTEGER, COUNT(*) FILTER (WHERE status IN ('failed', 'flaky'))::INTEGER, ROUND(COUNT(*) FILTER (WHERE status IN ('failed', 'flaky')) * 100.0 / COUNT(*), 2), MAX(created_at)::VARCHAR, COALESCE(AVG(duration_ms), 0)::INTEGER FROM test_results GROUP BY suite, test_name",
   )
   let meta : Array[@types.TestMeta] = []
   for row in rows {
-    let total_runs = try { @string.parse_int(row[2]) } catch { _ => 0 }
-    let fail_count = try { @string.parse_int(row[3]) } catch { _ => 0 }
-    let flaky_rate = try { @string.parse_double(row[4]) } catch { _ => 0.0 }
-    let avg_duration = try { @string.parse_int(row[6]) } catch { _ => 0 }
+    let total_runs = @string.parse_int(row[2]) catch { _ => 0 }
+    let fail_count = @string.parse_int(row[3]) catch { _ => 0 }
+    let flaky_rate = @string.parse_double(row[4]) catch { _ => 0.0 }
+    let avg_duration = @string.parse_int(row[6]) catch { _ => 0 }
     meta.push({
       suite: row[0],
       test_name: row[1],

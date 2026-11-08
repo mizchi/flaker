@@ -4,7 +4,10 @@ fn round_metric(value : Double) -> Double {
 }
 
 ///|
-fn percentile_nearest_rank(values : Array[Int], percentile : Double) -> Double? {
+fn percentile_nearest_rank(
+  values : Array[Int32],
+  percentile : Double,
+) -> Double? {
   if values.length() == 0 {
     return None
   }
@@ -16,7 +19,7 @@ fn percentile_nearest_rank(values : Array[Int], percentile : Double) -> Double? 
 }
 
 ///|
-fn median(values : Array[Int]) -> Double? {
+fn median(values : Array[Int32]) -> Double? {
   if values.length() == 0 {
     return None
   }
@@ -31,7 +34,7 @@ fn median(values : Array[Int]) -> Double? {
 }
 
 ///|
-fn to_rate(numerator : Int, denominator : Int) -> Double? {
+fn to_rate(numerator : Int32, denominator : Int32) -> Double? {
   if denominator == 0 {
     return None
   }
@@ -39,7 +42,7 @@ fn to_rate(numerator : Int, denominator : Int) -> Double? {
 }
 
 ///|
-fn average(values : Array[Int]) -> Double? {
+fn average(values : Array[Int32]) -> Double? {
   if values.length() == 0 {
     return None
   }
@@ -51,7 +54,10 @@ fn average(values : Array[Int]) -> Double? {
 }
 
 ///|
-fn average_ratio(numerators : Array[Int], denominators : Array[Int]) -> Double? {
+fn average_ratio(
+  numerators : Array[Int32],
+  denominators : Array[Int32],
+) -> Double? {
   if numerators.length() == 0 || denominators.length() == 0 {
     return None
   }
@@ -72,8 +78,8 @@ fn average_ratio(numerators : Array[Int], denominators : Array[Int]) -> Double? 
 
 ///|
 fn average_duration_delta_minutes(
-  local_durations : Array[Int],
-  ci_durations : Array[Int],
+  local_durations : Array[Int32],
+  ci_durations : Array[Int32],
 ) -> Double? {
   if local_durations.length() == 0 || ci_durations.length() == 0 {
     return None
@@ -94,8 +100,8 @@ fn average_duration_delta_minutes(
 pub fn build_sampling_kpi(
   rows : Array[@types.EvalCommitSignalInput],
 ) -> @types.SamplingKpiOutput {
-  let local_by_commit : Map[String, @types.EvalCommitSignalInput] = {}
-  let ci_by_commit : Map[String, @types.EvalCommitSignalInput] = {}
+  let local_by_commit : Map[String, @types.EvalCommitSignalInput] = Map([])
+  let ci_by_commit : Map[String, @types.EvalCommitSignalInput] = Map([])
   let local_order : Array[String] = []
   let ci_order : Array[String] = []
 
@@ -134,10 +140,10 @@ pub fn build_sampling_kpi(
     }
   }
 
-  let sample_sizes : Array[Int] = []
-  let ci_test_counts : Array[Int] = []
-  let local_durations : Array[Int] = []
-  let ci_durations : Array[Int] = []
+  let sample_sizes : Array[Int32] = []
+  let ci_test_counts : Array[Int32] = []
+  let local_durations : Array[Int32] = []
+  let ci_durations : Array[Int32] = []
 
   let mut local_pass_commits = 0
   let mut ci_pass_when_local_pass = 0

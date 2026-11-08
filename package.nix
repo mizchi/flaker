@@ -5,20 +5,11 @@
   zlib,
   autoPatchelfHook,
   stdenv,
-  moonPlatform,
-  moonRegistryIndex,
+  moonHome,
 }:
-let
-  moonHome = moonPlatform.bundleWithRegistry {
-    cachedRegistry = moonPlatform.buildCachedRegistry {
-      moonModJson = ./moon.mod.json;
-      registryIndexSrc = moonRegistryIndex;
-    };
-  };
-in
 stdenv.mkDerivation {
   pname = "flaker";
-  version = "0.0.3";
+  version = (lib.importJSON ./package.json).version;
   src = ./.;
 
   nativeBuildInputs = [
@@ -42,7 +33,6 @@ stdenv.mkDerivation {
     export MOON_HOME=$(mktemp -d)
     cp -rL ${moonHome}/* $MOON_HOME/
     chmod -R u+w $MOON_HOME
-    export HOME=$TMPDIR
 
     # src/cmd/flaker_native/moon.pkg names -lduckdb, so moon links the
     # binary itself; LIBRARY_PATH lets the linker find the nix libduckdb.
@@ -69,8 +59,6 @@ stdenv.mkDerivation {
     mainProgram = "flaker";
     platforms = [
       "x86_64-linux"
-      "aarch64-linux"
-      "x86_64-darwin"
       "aarch64-darwin"
     ];
   };

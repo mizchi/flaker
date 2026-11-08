@@ -1,23 +1,25 @@
 ///|
+#warnings("-deprecated-deprecated_syntax")
+#derive(Eq, Hash, Show)
 struct TestKey {
   suite : String
   test_name : String
-} derive(Eq, Hash, Show)
+}
 
 ///|
 priv struct TestAgg {
-  mut total : Int
-  mut fail_count : Int
-  mut flaky_retry_count : Int
+  mut total : Int32
+  mut fail_count : Int32
+  mut flaky_retry_count : Int32
 }
 
 ///|
 pub fn detect_flaky(input : @types.DetectInput) -> @types.DetectOutput {
-  let map : Map[TestKey, TestAgg] = {}
+  let map : Map[TestKey, TestAgg] = Map([])
   for entry in input.results {
-    let key = TestKey::{ suite: entry.suite, test_name: entry.test_name }
+    let key = TestKey::{ suite: entry.suite, test_name: entry.test_name, }
     let agg = map.get_or_init(key, fn() {
-      TestAgg::{ total: 0, fail_count: 0, flaky_retry_count: 0 }
+      TestAgg::{ total: 0, fail_count: 0, flaky_retry_count: 0, }
     })
     agg.total += 1
     if entry.status == "failed" {
@@ -59,5 +61,5 @@ pub fn detect_flaky(input : @types.DetectInput) -> @types.DetectOutput {
       0
     }
   })
-  @types.DetectOutput::{ flaky_tests: results }
+  @types.DetectOutput::{ flaky_tests: results, }
 }

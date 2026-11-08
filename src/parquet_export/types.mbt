@@ -1,4 +1,6 @@
 ///|
+#warnings("-deprecated-deprecated_syntax")
+#derive(Show, FromJson, ToJson)
 pub(all) struct TestResultRow {
   workflow_run_id : Int64
   test_id : String?
@@ -6,22 +8,26 @@ pub(all) struct TestResultRow {
   suite : String
   test_name : String
   status : String
-  duration_ms : Int
-  retry_count : Int
+  duration_ms : Int32
+  retry_count : Int32
   commit_sha : String
   created_at_ms : Int64
-} derive(Show, FromJson, ToJson)
+}
 
 ///|
+#warnings("-deprecated-deprecated_syntax")
+#derive(Show, FromJson, ToJson)
 pub(all) struct CommitChangeRow {
   commit_sha : String
   file_path : String
   change_type : String?
-  additions : Int
-  deletions : Int
-} derive(Show, FromJson, ToJson)
+  additions : Int32
+  deletions : Int32
+}
 
 ///|
+#warnings("-deprecated-deprecated_syntax")
+#derive(Show, FromJson, ToJson)
 pub(all) struct WorkflowRunRow {
   id : Int64
   repo : String
@@ -30,5 +36,5 @@ pub(all) struct WorkflowRunRow {
   event : String?
   status : String?
   created_at_ms : Int64
-  duration_ms : Int
-} derive(Show, FromJson, ToJson)
+  duration_ms : Int32
+}

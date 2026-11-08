@@ -1,6 +1,6 @@
 ///|
 test "run_config_check detects duplicate ownership and unmanaged specs" {
-  let report = run_config_check(
+  let report = @config_check.run_config_check(
     [
       @types.ConfigCheckListedTestInput::{
         suite: "tests/auth/login.spec.ts",

@@ -4,41 +4,41 @@ pub fn detect_flaky_json(input_json : String) -> String {
     try! @json.parse(input_json),
   )
   let output = @flaky_detector.detect_flaky(input)
-  output.to_json().stringify()
+  ToJson::to_json(output).stringify()
 }
 
 ///|
 pub fn sample_random_json(
   meta_json : String,
-  count : Int,
-  seed : Int,
+  count : Int32,
+  seed : Int32,
 ) -> String {
   let meta : Array[@types.TestMeta] = try! @json.from_json(
     try! @json.parse(meta_json),
   )
   let result = @sampler.sample_random(meta, count~, seed=seed.to_uint64())
-  result.to_json().stringify()
+  ToJson::to_json(result).stringify()
 }
 
 ///|
 pub fn sample_weighted_json(
   meta_json : String,
-  count : Int,
-  seed : Int,
+  count : Int32,
+  seed : Int32,
 ) -> String {
   let meta : Array[@types.TestMeta] = try! @json.from_json(
     try! @json.parse(meta_json),
   )
   let result = @sampler.sample_weighted(meta, count~, seed=seed.to_uint64())
-  result.to_json().stringify()
+  ToJson::to_json(result).stringify()
 }
 
 ///|
 pub fn sample_hybrid_json(
   meta_json : String,
   affected_json : String,
-  count : Int,
-  seed : Int,
+  count : Int32,
+  seed : Int32,
 ) -> String {
   let meta : Array[@types.TestMeta] = try! @json.from_json(
     try! @json.parse(meta_json),
@@ -52,7 +52,7 @@ pub fn sample_hybrid_json(
     count~,
     seed=seed.to_uint64(),
   )
-  result.to_json().stringify()
+  ToJson::to_json(result).stringify()
 }
 
 ///|
@@ -67,7 +67,7 @@ pub fn build_sampling_meta_json(
     try! @json.parse(listed_tests_json),
   )
   let result = @sampler.build_sampling_meta(history_rows, listed_tests)
-  result.to_json().stringify()
+  ToJson::to_json(result).stringify()
 }
 
 ///|
@@ -79,7 +79,7 @@ pub fn resolve_affected_json(
     try! @json.parse(changed_paths_json),
   )
   let result = @affected.resolve_affected(workflow_text, changed)
-  result.to_json().stringify()
+  ToJson::to_json(result).stringify()
 }
 
 ///|
@@ -88,7 +88,7 @@ pub fn create_stable_test_id_json(input_json : String) -> String {
     try! @json.parse(input_json),
   )
   let result = @identity_core.create_stable_test_id(input)
-  result.to_json().stringify()
+  ToJson::to_json(result).stringify()
 }
 
 ///|
@@ -97,7 +97,7 @@ pub fn resolve_test_identity_json(input_json : String) -> String {
     try! @json.parse(input_json),
   )
   let result = @identity_core.resolve_test_identity(input)
-  result.to_json().stringify()
+  ToJson::to_json(result).stringify()
 }
 
 ///|
@@ -106,7 +106,7 @@ pub fn dedupe_affected_targets_json(targets_json : String) -> String {
     try! @json.parse(targets_json),
   )
   let result = @affected_explain.dedupe_affected_targets(targets)
-  result.to_json().stringify()
+  ToJson::to_json(result).stringify()
 }
 
 ///|
@@ -131,7 +131,7 @@ pub fn build_affected_report_json(
   let result = @affected_explain.build_affected_report(
     targets, direct_selections, transitive_tasks, unmatched,
   )
-  result.to_json().stringify()
+  ToJson::to_json(result).stringify()
 }
 
 ///|
@@ -146,7 +146,7 @@ pub fn find_affected_nodes_json(
     try! @json.parse(changed_files_json),
   )
   let result = @graph_core.find_affected_nodes(graph, changed)
-  result.to_json().stringify()
+  ToJson::to_json(result).stringify()
 }
 
 ///|
@@ -161,7 +161,7 @@ pub fn expand_transitive_json(
     try! @json.parse(initial_json),
   )
   let result = @graph_core.expand_transitive(graph, initial)
-  result.to_json().stringify()
+  ToJson::to_json(result).stringify()
 }
 
 ///|
@@ -170,7 +170,7 @@ pub fn build_reverse_deps_json(graph_json : String) -> String {
     try! @json.parse(graph_json),
   )
   let result = @graph_core.build_reverse_deps(graph)
-  result.to_json().stringify()
+  ToJson::to_json(result).stringify()
 }
 
 ///|
@@ -179,7 +179,7 @@ pub fn topological_sort_json(graph_json : String) -> String {
     try! @json.parse(graph_json),
   )
   let result = @graph_core.topological_sort(graph)
-  result.to_json().stringify()
+  ToJson::to_json(result).stringify()
 }
 
 ///|
@@ -194,7 +194,7 @@ pub fn get_affected_test_patterns_json(
     try! @json.parse(affected_ids_json),
   )
   let result = @graph_core.get_affected_test_patterns(graph, affected_ids)
-  result.to_json().stringify()
+  ToJson::to_json(result).stringify()
 }
 
 ///|
@@ -203,7 +203,7 @@ pub fn classify_report_diff_json(inputs_json : String) -> String {
     try! @json.parse(inputs_json),
   )
   let result = @report_diff_core.classify_report_diff(inputs)
-  result.to_json().stringify()
+  ToJson::to_json(result).stringify()
 }
 
 ///|
@@ -212,7 +212,7 @@ pub fn aggregate_report_json(shards_json : String) -> String {
     try! @json.parse(shards_json),
   )
   let result = @report_aggregate_core.aggregate_report(shards)
-  result.to_json().stringify()
+  ToJson::to_json(result).stringify()
 }
 
 ///|
@@ -221,7 +221,7 @@ pub fn summarize_report_json(tests_json : String) -> String {
     try! @json.parse(tests_json),
   )
   let result = @report_summary_core.summarize_report(tests)
-  result.to_json().stringify()
+  ToJson::to_json(result).stringify()
 }
 
 ///|
@@ -230,7 +230,7 @@ pub fn summarize_quarantine_json(
   tasks_json : String,
   existing_specs_json : String,
   now_date : String,
-  expires_soon_days : Int,
+  expires_soon_days : Int32,
 ) -> String {
   let entries : Array[@types.QuarantineEntryInput] = try! @json.from_json(
     try! @json.parse(entries_json),
@@ -244,7 +244,7 @@ pub fn summarize_quarantine_json(
   let result = @quarantine_core.summarize_quarantine(
     entries, tasks, existing_specs, now_date, expires_soon_days,
   )
-  result.to_json().stringify()
+  ToJson::to_json(result).stringify()
 }
 
 ///|
@@ -260,7 +260,7 @@ pub fn find_matching_quarantine_json(
   let result = @quarantine_core.find_matching_quarantine(
     entries, task_id, spec, title,
   )
-  result.to_json().stringify()
+  ToJson::to_json(result).stringify()
 }
 
 ///|
@@ -269,13 +269,13 @@ pub fn is_blocking_failure_json(result_json : String) -> String {
     try! @json.parse(result_json),
   )
   let blocking = @quarantine_core.is_blocking_failure(result)
-  blocking.to_json().stringify()
+  ToJson::to_json(blocking).stringify()
 }
 
 ///|
 pub fn compute_quarantine_exit_code_json(
   results_json : String,
-  fallback_exit_code : Int,
+  fallback_exit_code : Int32,
 ) -> String {
   let results : Array[@types.QuarantineRuntimeResultInput] = try! @json.from_json(
     try! @json.parse(results_json),
@@ -283,7 +283,7 @@ pub fn compute_quarantine_exit_code_json(
   let exit_code = @quarantine_core.compute_quarantine_exit_code(
     results, fallback_exit_code,
   )
-  exit_code.to_json().stringify()
+  ToJson::to_json(exit_code).stringify()
 }
 
 ///|
@@ -304,7 +304,7 @@ pub fn run_config_check_json(
   let result = @config_check_core.run_config_check(
     listed_tests, discovered_specs, task_definitions,
   )
-  result.to_json().stringify()
+  ToJson::to_json(result).stringify()
 }
 
 ///|
@@ -313,7 +313,7 @@ pub fn build_sampling_kpi_json(rows_json : String) -> String {
     try! @json.parse(rows_json),
   )
   let result = @eval_core.build_sampling_kpi(rows)
-  result.to_json().stringify()
+  ToJson::to_json(result).stringify()
 }
 
 ///|
@@ -328,7 +328,7 @@ pub fn build_holdout_kpi_json(rows_json : String) -> String {
 pub fn select_by_coverage_json(
   coverages_json : String,
   changed_edges_json : String,
-  count : Int,
+  count : Int32,
 ) -> String {
   let coverages : Array[@coverage.TestCoverage] = try! @json.from_json(
     try! @json.parse(coverages_json),
@@ -337,25 +337,25 @@ pub fn select_by_coverage_json(
     try! @json.parse(changed_edges_json),
   )
   let result = @coverage.select_by_coverage(coverages, changed_edges, count~)
-  result.to_json().stringify()
+  ToJson::to_json(result).stringify()
 }
 
 ///|
-pub fn bucketize_rate_json(rate : Double) -> Int {
+pub fn bucketize_rate_json(rate : Double) -> Int32 {
   @coverage.bucketize_rate(rate)
 }
 
 ///|
 pub fn train_gbdt_json(
   data_json : String,
-  num_trees : Int,
+  num_trees : Int32,
   learning_rate : Double,
 ) -> String {
   let data : Array[@gbdt.TrainingRow] = try! @json.from_json(
     try! @json.parse(data_json),
   )
   let model = @gbdt.train(data, num_trees~, learning_rate~)
-  model.to_json().stringify()
+  ToJson::to_json(model).stringify()
 }
 
 ///|
@@ -381,7 +381,7 @@ pub fn predict_batch_gbdt_json(
     try! @json.parse(batch_json),
   )
   let result = @gbdt.predict_batch(model, batch)
-  result.to_json().stringify()
+  ToJson::to_json(result).stringify()
 }
 
 ///|
@@ -390,5 +390,5 @@ pub fn generate_fixture_json(config_json : String) -> String {
     try! @json.parse(config_json),
   )
   let result = @fixture.generate_fixture(config)
-  result.to_json().stringify()
+  ToJson::to_json(result).stringify()
 }

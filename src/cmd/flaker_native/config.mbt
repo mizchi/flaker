@@ -1,13 +1,17 @@
-///| Parsed flaker.toml configuration.
+///|
+/// Parsed flaker.toml configuration.
+#warnings("-deprecated-deprecated_syntax")
+#derive(Show)
 pub struct FlakerConfig {
   owner : String
   name : String
   storage_path : String
   adapter_type : String
   artifact_name : String
-} derive(Show)
+}
 
-///| Parse flaker.toml content into FlakerConfig.
+///|
+/// Parse flaker.toml content into FlakerConfig.
 pub fn parse_config(content : String) -> FlakerConfig raise {
   let toml = @toml.parse(content)
   guard toml is TomlTable(root) else {
@@ -23,9 +27,11 @@ pub fn parse_config(content : String) -> FlakerConfig raise {
 
   // [adapter]
   let adapter_type = get_string_or(root, "adapter", "type", "playwright")
-  let artifact_name = get_string_or(root, "adapter", "artifact_name", "playwright-report")
+  let artifact_name = get_string_or(
+    root, "adapter", "artifact_name", "playwright-report",
+  )
 
-  { owner, name, storage_path, adapter_type, artifact_name }
+  { owner, name, storage_path, adapter_type, artifact_name, }
 }
 
 ///|
@@ -59,9 +65,7 @@ fn get_string_or(
   key : String,
   default : String,
 ) -> String {
-  try {
-    get_string(root, section, key)
-  } catch {
+  get_string(root, section, key) catch {
     _ => default
   }
 }

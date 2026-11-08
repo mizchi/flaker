@@ -1,6 +1,6 @@
 ///|
 /// 32-bit LCG (matches TypeScript fixture-generator)
-fn lcg32(state : UInt) -> (UInt, Double) {
+fn lcg32(state : UInt32) -> (UInt32, Double) {
   let next = state * 1664525U + 1013904223U
   (next, next.to_double() / 4294967296.0)
 }
@@ -40,11 +40,11 @@ pub fn generate_fixture(config : FixtureConfig) -> FixtureData {
     let file_idx = i % file_count
     let suite = "tests/module_\{file_idx}/test_\{i}.spec.ts"
     file_dep_suites[file_idx].push(suite)
-    FixtureTest::{ suite, test_name: "test_\{i}", is_flaky: i < flaky_count }
+    FixtureTest::{ suite, test_name: "test_\{i}", is_flaky: i < flaky_count, }
   })
 
   let file_deps : Array[FixtureFileDep] = Array::makei(file_count, fn(i) {
-    FixtureFileDep::{ file: files[i], suites: file_dep_suites[i] }
+    FixtureFileDep::{ file: files[i], suites: file_dep_suites[i], }
   })
 
   // Generate commits
@@ -122,10 +122,10 @@ pub fn generate_fixture(config : FixtureConfig) -> FixtureData {
       })
     }
 
-    commits.push(FixtureCommit::{ sha, changed_files, test_results })
+    commits.push(FixtureCommit::{ sha, changed_files, test_results, })
   } nobreak {
     ()
   }
 
-  FixtureData::{ tests, files, file_deps, commits, config }
+  FixtureData::{ tests, files, file_deps, commits, config, }
 }

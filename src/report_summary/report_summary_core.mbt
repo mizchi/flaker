@@ -1,12 +1,12 @@
 ///|
 priv struct TotalsAcc {
-  mut total : Int
-  mut passed : Int
-  mut failed : Int
-  mut flaky : Int
-  mut skipped : Int
-  mut retries : Int
-  mut duration_ms : Int
+  mut total : Int32
+  mut passed : Int32
+  mut failed : Int32
+  mut flaky : Int32
+  mut skipped : Int32
+  mut retries : Int32
+  mut duration_ms : Int32
 }
 
 ///|
@@ -57,7 +57,7 @@ pub fn summarize_report(
   tests : Array[@types.ReportSummaryTestInput],
 ) -> @types.ReportSummaryOutput {
   let totals = empty_totals_acc()
-  let file_totals_map : Map[String, TotalsAcc] = {}
+  let file_totals_map : Map[String, TotalsAcc] = Map([])
   let unstable_test_ids : Array[String] = []
 
   for entry in tests {

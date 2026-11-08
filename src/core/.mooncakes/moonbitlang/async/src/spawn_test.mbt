@@ -14,7 +14,7 @@
 
 ///|
 async test "spawn basic" {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   @async.with_task_group(fn(root) {
     root.spawn_bg(fn() {
       @async.sleep(100)
@@ -49,7 +49,7 @@ async test "spawn basic" {
 
 ///|
 async test "spawn error1" {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let result = try? @async.with_task_group(fn(root) {
     root.spawn_bg(fn() {
       @async.sleep(1000)
@@ -66,7 +66,7 @@ async test "spawn error1" {
 
 ///|
 async test "spawn error2" {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let result = try? @async.with_task_group(fn(root) {
     root.spawn_bg(fn() {
       @async.sleep(200)

@@ -16,9 +16,9 @@ fn normalize_variant(
 }
 
 ///|
-fn hex4(code : Int) -> String {
+fn hex4(code : Int32) -> String {
   let digits = "0123456789ABCDEF"
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for shift in [12, 8, 4, 0] {
     buf.write_char(digits.code_unit_at((code >> shift) & 0xF).unsafe_to_char())
   }
@@ -43,7 +43,7 @@ fn escape_for_id(value : String) -> String {
   if plain {
     return value
   }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut i = 0
   while i < len {
     let c = value.code_unit_at(i).to_int()
@@ -51,7 +51,7 @@ fn escape_for_id(value : String) -> String {
       let d = value.code_unit_at(i + 1).to_int()
       if d >= 0xDC00 && d <= 0xDFFF {
         buf.write_char(
-          Int::unsafe_to_char(0x10000 + ((c - 0xD800) << 10) + (d - 0xDC00)),
+          Int32::unsafe_to_char(0x10000 + ((c - 0xD800) << 10) + (d - 0xDC00)),
         )
         i += 2
         continue
@@ -61,7 +61,7 @@ fn escape_for_id(value : String) -> String {
       buf.write_char('\u{FFFD}')
       buf.write_string(hex4(c))
     } else {
-      buf.write_char(Int::unsafe_to_char(c))
+      buf.write_char(Int32::unsafe_to_char(c))
     }
     i += 1
   }
@@ -70,7 +70,7 @@ fn escape_for_id(value : String) -> String {
 
 ///|
 fn quote_json(value : String) -> String {
-  escape_for_id(value).to_json().stringify()
+  ToJson::to_json(escape_for_id(value)).stringify()
 }
 
 ///|

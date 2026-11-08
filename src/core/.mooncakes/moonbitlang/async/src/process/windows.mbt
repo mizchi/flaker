@@ -86,7 +86,7 @@ async fn spawn(
     [.., .. ".exe"] => cmd
     _ => cmd + ".exe"
   }
-  let command_line = StringBuilder::new()
+  let command_line = StringBuilder()
   command_line.write_arg_with_windows_escape(cmd)
   for arg in args {
     command_line..write_char(' ')..write_arg_with_windows_escape(arg)
@@ -123,7 +123,7 @@ async fn spawn(
     (true, true) => None
     (false, true) => Some(@os_string.encode("\u{0}"))
     (_, false) => {
-      let env = StringBuilder::new()
+      let env = StringBuilder()
       for key, value in extra_env {
         env
         ..write_string(key)

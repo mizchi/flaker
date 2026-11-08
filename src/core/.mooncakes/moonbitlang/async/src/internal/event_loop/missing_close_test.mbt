@@ -14,7 +14,7 @@
 
 ///|
 test "missing_close" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @event_loop.with_event_loop(fn() {
     @async.with_task_group(fn(root) {
       let (r, w) = @pipe.pipe()

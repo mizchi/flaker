@@ -15,7 +15,7 @@
 
 ///|
 async test "basic wait" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   let test_prog = sleep_prog.wait()
   @async.with_task_group(fn(root) {
     root.spawn_bg(fn() {
@@ -46,7 +46,7 @@ async test "wait exitcode" {
 
 ///|
 async test "wait_pid" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   let test_prog = sleep_prog.wait()
   @async.with_task_group(fn(group) {
     group.spawn_bg(fn() {

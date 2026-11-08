@@ -9,7 +9,7 @@ test "resolve_affected finds targets for changed paths" {
     #|task(id="test-home", node="home", cmd="test", needs=[], srcs=["src/home/**"])
     #|task(id="test-utils", node="utils", cmd="test", needs=[], srcs=["src/utils/**"])
   let changed = ["src/auth/login.ts"]
-  let affected = resolve_affected(workflow, changed)
+  let affected = @affected.resolve_affected(workflow, changed)
   assert_true(affected.contains("test-auth"))
   assert_true(!affected.contains("test-home"))
 }
@@ -21,7 +21,7 @@ test "resolve_affected returns empty for no matches" {
     #|node(id="auth", depends_on=[])
     #|task(id="test-auth", node="auth", cmd="test", needs=[], srcs=["src/auth/**"])
   let changed = ["src/payments/stripe.ts"]
-  let affected = resolve_affected(workflow, changed)
+  let affected = @affected.resolve_affected(workflow, changed)
   assert_eq(affected.length(), 0)
 }
 
@@ -34,7 +34,7 @@ test "resolve_affected expands transitive dependencies" {
     #|task(id="lib", node="lib", cmd="test", needs=[], srcs=["src/lib/**"])
     #|task(id="app", node="app", cmd="test", needs=["lib"], srcs=["src/app/**"])
   let changed = ["src/lib/core.ts"]
-  let affected = resolve_affected(workflow, changed)
+  let affected = @affected.resolve_affected(workflow, changed)
   assert_true(affected.contains("lib"))
   // "app" depends on "lib", so it should also be affected
   assert_true(affected.contains("app"))
@@ -47,6 +47,6 @@ test "resolve_affected normalizes windows path separators" {
     #|node(id="auth", depends_on=[])
     #|task(id="test-auth", node="auth", cmd="test", needs=[], srcs=["src/auth/**"])
   let changed = ["src\\auth\\login.ts"]
-  let affected = resolve_affected(workflow, changed)
+  let affected = @affected.resolve_affected(workflow, changed)
   assert_true(affected.contains("test-auth"))
 }

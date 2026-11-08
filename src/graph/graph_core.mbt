@@ -7,7 +7,7 @@ fn file_matches_node(file : String, node : @types.GraphNodeInput) -> Bool {
 fn build_reverse_deps_map(
   graph : @types.DependencyGraphInput,
 ) -> Map[String, Array[String]] {
-  let reverse : Map[String, Array[String]] = {}
+  let reverse : Map[String, Array[String]] = Map([])
   for node in graph.nodes {
     for dep in node.dependencies {
       let dependents = reverse.get_or_init(dep, fn() { [] })
@@ -37,7 +37,7 @@ pub fn build_reverse_deps(
   let entries : Array[@types.ReverseDepEntry] = []
   let reverse = build_reverse_deps_map(graph)
   reverse.each(fn(id, dependents) {
-    entries.push(@types.ReverseDepEntry::{ id, dependents })
+    entries.push(@types.ReverseDepEntry::{ id, dependents, })
   })
   entries
 }
@@ -45,7 +45,7 @@ pub fn build_reverse_deps(
 ///|
 fn expand_queue(
   queue : Array[String],
-  index : Int,
+  index : Int32,
   reverse : Map[String, Array[String]],
   affected : Map[String, Bool],
 ) -> Unit {
@@ -68,7 +68,7 @@ pub fn expand_transitive(
   graph : @types.DependencyGraphInput,
   initial : Array[String],
 ) -> Array[String] {
-  let affected : Map[String, Bool] = {}
+  let affected : Map[String, Bool] = Map([])
   let queue : Array[String] = []
   for node_id in initial {
     if !affected.contains(node_id) {
@@ -86,7 +86,7 @@ pub fn find_affected_nodes(
   graph : @types.DependencyGraphInput,
   changed_files : Array[String],
 ) -> Array[String] {
-  let directly_affected : Map[String, Bool] = {}
+  let directly_affected : Map[String, Bool] = Map([])
   for file in changed_files {
     for node in graph.nodes {
       if file_matches_node(file, node) {
@@ -126,7 +126,7 @@ fn visit_topological(
 
 ///|
 pub fn topological_sort(graph : @types.DependencyGraphInput) -> Array[String] {
-  let visited : Map[String, Bool] = {}
+  let visited : Map[String, Bool] = Map([])
   let result : Array[String] = []
   for node in graph.nodes {
     visit_topological(graph, node.id, visited, result)

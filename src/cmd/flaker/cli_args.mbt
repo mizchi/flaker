@@ -2,7 +2,7 @@
 fn basename(path : String) -> String {
   let normalized = path.replace_all(old="\\", new="/")
   match normalized.rev_split_once("/") {
-    Some((_, base)) => base.to_string()
+    Some((_, base)) => base.to_owned()
     None => path
   }
 }
@@ -10,7 +10,7 @@ fn basename(path : String) -> String {
 ///|
 fn strip_js_extension(name : String) -> String {
   match name.strip_suffix(".js") {
-    Some(base) if !base.is_empty() => base.to_string()
+    Some(base) if !base.is_empty() => base.to_owned()
     _ => name
   }
 }
@@ -32,7 +32,7 @@ fn normalize_process_argv(argv : Array[String]) -> Array[String] {
 ///|
 fn drop_program_name(argv : Array[String]) -> Array[String] {
   match argv {
-    [_, .. rest] => rest.to_array()
+    [_, .. rest] => rest.to_owned()
     [] => []
   }
 }

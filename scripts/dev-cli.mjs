@@ -22,7 +22,7 @@ export function getDevCliSourceInputs(repoRoot = DEFAULT_REPO_ROOT) {
     resolve(repoRoot, "scripts"),
     resolve(repoRoot, "package.json"),
     resolve(repoRoot, "tsconfig.json"),
-    resolve(repoRoot, "moon.mod.json"),
+    resolve(repoRoot, "moon.mod"),
   ];
 }
 

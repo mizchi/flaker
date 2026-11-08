@@ -28,7 +28,7 @@ async fn writer(log : StringBuilder, w : PipeWrite) -> Unit {
 
 ///|
 async test "BufferedReader::read" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(fn(root) {
     let (r, w) = pipe()
     root.spawn_bg(() => writer(log, w))
@@ -59,7 +59,7 @@ async test "BufferedReader::read" {
 
 ///|
 async test "BufferedReader::read_exactly" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(fn(root) {
     let (r, w) = pipe()
     root.spawn_bg(() => writer(log, w))
@@ -88,7 +88,7 @@ async test "BufferedReader::read_exactly" {
 
 ///|
 async test "BufferedReader::op_get" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   log.write_object(
     try? @async.with_task_group(fn(root) {
       let (r, w) = pipe()
@@ -124,7 +124,7 @@ async test "BufferedReader::op_get" {
 
 ///|
 async test "BufferedReader::op_as_view" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   log.write_object(
     try? @async.with_task_group(fn(root) {
       let (r, w) = pipe()
@@ -164,7 +164,7 @@ async test "BufferedReader::op_as_view" {
 
 ///|
 async test "BufferedReader::find single byte" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   log.write_object(
     try? @async.with_task_group(fn(root) {
       let (r, w) = pipe()
@@ -218,7 +218,7 @@ async test "BufferedReader::find single byte" {
 
 ///|
 async test "BufferedReader::find bytes" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   log.write_object(
     try? @async.with_task_group(fn(root) {
       let (r, w) = pipe()
@@ -310,7 +310,7 @@ async test "BufferedReader::find_opt" {
 
 ///|
 async test "lazy drop" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(fn(root) {
     let (r, w) = pipe()
     root.spawn_bg(fn() {

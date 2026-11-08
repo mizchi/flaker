@@ -1,19 +1,21 @@
-///| A parsed test result.
+///|
+/// A parsed test result.
 struct TestResult {
   suite : String
   test_name : String
   status : String
-  duration_ms : Int
+  duration_ms : Int32
   error_message : String
 }
 
-///| Download artifact and import test results for a workflow run.
+///|
+/// Download artifact and import test results for a workflow run.
 pub async fn process_run_artifact(
   client : @github_client.GitHubClient,
   db : @duckdb.Connection,
   config : FlakerConfig,
   run : @github_actions.WorkflowRun,
-) -> Int {
+) -> Int32 {
   let artifacts = @github_actions.list_artifacts(
     client,
     config.owner,
@@ -48,7 +50,7 @@ pub async fn process_run_artifact(
 
 ///|
 fn parse_vitest_json_text(text : String) -> Array[TestResult] {
-  let json = try { @json.parse(text) } catch { _ => return [] }
+  let json = @json.parse(text) catch { _ => return [] }
   parse_vitest_json(json)
 }
 
@@ -96,7 +98,7 @@ fn parse_vitest_json(json : Json) -> Array[TestResult] {
       let parts = full_name.split(" > ")
       let parts_arr : Array[String] = []
       for p in parts {
-        parts_arr.push(p.to_string())
+        parts_arr.push(p.to_owned())
       }
       let test_name = if parts_arr.length() > 0 {
         parts_arr[parts_arr.length() - 1]
@@ -104,7 +106,7 @@ fn parse_vitest_json(json : Json) -> Array[TestResult] {
         full_name
       }
       let suite = if parts_arr.length() > 1 {
-        let buf = StringBuilder::new()
+        let buf = StringBuilder()
         for i = 0; i < parts_arr.length() - 1; i = i + 1 {
           if i > 0 {
             buf.write_string(" > ")
@@ -118,7 +120,11 @@ fn parse_vitest_json(json : Json) -> Array[TestResult] {
       results.push({
         suite,
         test_name,
-        status: if status_str == "passed" { "passed" } else { "failed" },
+        status: if status_str == "passed" {
+          "passed"
+        } else {
+          "failed"
+        },
         duration_ms: duration,
         error_message: error_msg,
       })
@@ -127,7 +133,8 @@ fn parse_vitest_json(json : Json) -> Array[TestResult] {
   results
 }
 
-///| Insert test results in batches of 50 rows.
+///|
+/// Insert test results in batches of 50 rows.
 fn insert_test_results_batch(
   db : @duckdb.Connection,
   results : Array[TestResult],
@@ -137,8 +144,10 @@ fn insert_test_results_batch(
   let batch_size = 50
   let mut i = 0
   while i < results.length() {
-    let b = StringBuilder::new()
-    b.write_string("INSERT INTO test_results (id, workflow_run_id, suite, test_name, status, duration_ms, error_message, commit_sha, created_at) VALUES ")
+    let b = StringBuilder()
+    b.write_string(
+      "INSERT INTO test_results (id, workflow_run_id, suite, test_name, status, duration_ms, error_message, commit_sha, created_at) VALUES ",
+    )
     let end = if i + batch_size < results.length() {
       i + batch_size
     } else {

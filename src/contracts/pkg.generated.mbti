@@ -11,34 +11,67 @@ import {
 // Errors
 
 // Types and methods
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct AffectedDirectSelectionInput {
   spec : String
   task_id : String
   filter : String?
   matched_paths : Array[String]
   match_reasons : Array[String]
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn AffectedDirectSelectionInput::equal(Self, Self) -> Bool
+pub fn AffectedDirectSelectionInput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn AffectedDirectSelectionInput::not_equal(Self, Self) -> Bool
+pub fn AffectedDirectSelectionInput::output(Self, &Logger) -> Unit
+pub fn AffectedDirectSelectionInput::to_json(Self) -> @json.Json
+pub fn AffectedDirectSelectionInput::to_repr(Self) -> @debug.Repr
+pub fn AffectedDirectSelectionInput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct AffectedReportCoreOutput {
   matched : Array[AffectedSelectionOutput]
   selected : Array[AffectedSelectionOutput]
   unmatched : Array[String]
   summary : AffectedReportSummaryOutput
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn AffectedReportCoreOutput::equal(Self, Self) -> Bool
+pub fn AffectedReportCoreOutput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn AffectedReportCoreOutput::not_equal(Self, Self) -> Bool
+pub fn AffectedReportCoreOutput::output(Self, &Logger) -> Unit
+pub fn AffectedReportCoreOutput::to_json(Self) -> @json.Json
+pub fn AffectedReportCoreOutput::to_repr(Self) -> @debug.Repr
+pub fn AffectedReportCoreOutput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct AffectedReportInput {
   targets : Array[AffectedTargetInput]
   direct_selections : Array[AffectedDirectSelectionInput]
   transitive_tasks : Array[AffectedTransitiveTaskInput]
   unmatched : Array[String]
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn AffectedReportInput::equal(Self, Self) -> Bool
+pub fn AffectedReportInput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn AffectedReportInput::not_equal(Self, Self) -> Bool
+pub fn AffectedReportInput::output(Self, &Logger) -> Unit
+pub fn AffectedReportInput::to_json(Self) -> @json.Json
+pub fn AffectedReportInput::to_repr(Self) -> @debug.Repr
+pub fn AffectedReportInput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct AffectedReportSummaryOutput {
-  matched_count : Int
-  selected_count : Int
-  unmatched_count : Int
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+  matched_count : Int32
+  selected_count : Int32
+  unmatched_count : Int32
+}
+pub fn AffectedReportSummaryOutput::equal(Self, Self) -> Bool
+pub fn AffectedReportSummaryOutput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn AffectedReportSummaryOutput::not_equal(Self, Self) -> Bool
+pub fn AffectedReportSummaryOutput::output(Self, &Logger) -> Unit
+pub fn AffectedReportSummaryOutput::to_json(Self) -> @json.Json
+pub fn AffectedReportSummaryOutput::to_repr(Self) -> @debug.Repr
+pub fn AffectedReportSummaryOutput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct AffectedSelectionOutput {
   task_id : String
   spec : String
@@ -47,135 +80,282 @@ pub(all) struct AffectedSelectionOutput {
   included_by : Array[String]
   matched_paths : Array[String]
   match_reasons : Array[String]
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn AffectedSelectionOutput::equal(Self, Self) -> Bool
+pub fn AffectedSelectionOutput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn AffectedSelectionOutput::not_equal(Self, Self) -> Bool
+pub fn AffectedSelectionOutput::output(Self, &Logger) -> Unit
+pub fn AffectedSelectionOutput::to_json(Self) -> @json.Json
+pub fn AffectedSelectionOutput::to_repr(Self) -> @debug.Repr
+pub fn AffectedSelectionOutput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct AffectedTargetInput {
   spec : String
   task_id : String
   filter : String?
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn AffectedTargetInput::equal(Self, Self) -> Bool
+pub fn AffectedTargetInput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn AffectedTargetInput::not_equal(Self, Self) -> Bool
+pub fn AffectedTargetInput::output(Self, &Logger) -> Unit
+pub fn AffectedTargetInput::to_json(Self) -> @json.Json
+pub fn AffectedTargetInput::to_repr(Self) -> @debug.Repr
+pub fn AffectedTargetInput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct AffectedTransitiveTaskInput {
   task_id : String
   included_by : Array[String]
   match_reasons : Array[String]
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn AffectedTransitiveTaskInput::equal(Self, Self) -> Bool
+pub fn AffectedTransitiveTaskInput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn AffectedTransitiveTaskInput::not_equal(Self, Self) -> Bool
+pub fn AffectedTransitiveTaskInput::output(Self, &Logger) -> Unit
+pub fn AffectedTransitiveTaskInput::to_json(Self) -> @json.Json
+pub fn AffectedTransitiveTaskInput::to_repr(Self) -> @debug.Repr
+pub fn AffectedTransitiveTaskInput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct ConfigCheckCoreOutput {
   summary : ConfigCheckSummaryOutput
   ownership : Array[ConfigOwnershipEntryOutput]
   tasks : Array[ConfigTaskSummaryOutput]
   errors : Array[ConfigCheckIssueOutput]
   warnings : Array[ConfigCheckIssueOutput]
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn ConfigCheckCoreOutput::equal(Self, Self) -> Bool
+pub fn ConfigCheckCoreOutput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ConfigCheckCoreOutput::not_equal(Self, Self) -> Bool
+pub fn ConfigCheckCoreOutput::output(Self, &Logger) -> Unit
+pub fn ConfigCheckCoreOutput::to_json(Self) -> @json.Json
+pub fn ConfigCheckCoreOutput::to_repr(Self) -> @debug.Repr
+pub fn ConfigCheckCoreOutput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct ConfigCheckIssueOutput {
   code : String
   spec : String
   detail : String
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn ConfigCheckIssueOutput::equal(Self, Self) -> Bool
+pub fn ConfigCheckIssueOutput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ConfigCheckIssueOutput::not_equal(Self, Self) -> Bool
+pub fn ConfigCheckIssueOutput::output(Self, &Logger) -> Unit
+pub fn ConfigCheckIssueOutput::to_json(Self) -> @json.Json
+pub fn ConfigCheckIssueOutput::to_repr(Self) -> @debug.Repr
+pub fn ConfigCheckIssueOutput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct ConfigCheckListedTestInput {
   suite : String
   task_id : String
   filter : String?
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn ConfigCheckListedTestInput::equal(Self, Self) -> Bool
+pub fn ConfigCheckListedTestInput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ConfigCheckListedTestInput::not_equal(Self, Self) -> Bool
+pub fn ConfigCheckListedTestInput::output(Self, &Logger) -> Unit
+pub fn ConfigCheckListedTestInput::to_json(Self) -> @json.Json
+pub fn ConfigCheckListedTestInput::to_repr(Self) -> @debug.Repr
+pub fn ConfigCheckListedTestInput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct ConfigCheckSummaryOutput {
-  task_count : Int
-  spec_count : Int
-  duplicate_ownership_count : Int
-  split_ownership_count : Int
-  unmanaged_spec_count : Int
-  error_count : Int
-  warning_count : Int
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+  task_count : Int32
+  spec_count : Int32
+  duplicate_ownership_count : Int32
+  split_ownership_count : Int32
+  unmanaged_spec_count : Int32
+  error_count : Int32
+  warning_count : Int32
+}
+pub fn ConfigCheckSummaryOutput::equal(Self, Self) -> Bool
+pub fn ConfigCheckSummaryOutput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ConfigCheckSummaryOutput::not_equal(Self, Self) -> Bool
+pub fn ConfigCheckSummaryOutput::output(Self, &Logger) -> Unit
+pub fn ConfigCheckSummaryOutput::to_json(Self) -> @json.Json
+pub fn ConfigCheckSummaryOutput::to_repr(Self) -> @debug.Repr
+pub fn ConfigCheckSummaryOutput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct ConfigCheckTaskDefinitionInput {
   task_id : String
   node : String?
   needs : Array[String]
   srcs : Array[String]
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn ConfigCheckTaskDefinitionInput::equal(Self, Self) -> Bool
+pub fn ConfigCheckTaskDefinitionInput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ConfigCheckTaskDefinitionInput::not_equal(Self, Self) -> Bool
+pub fn ConfigCheckTaskDefinitionInput::output(Self, &Logger) -> Unit
+pub fn ConfigCheckTaskDefinitionInput::to_json(Self) -> @json.Json
+pub fn ConfigCheckTaskDefinitionInput::to_repr(Self) -> @debug.Repr
+pub fn ConfigCheckTaskDefinitionInput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct ConfigOwnershipClaimOutput {
   task_id : String
   filter : String?
-  test_count : Int
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+  test_count : Int32
+}
+pub fn ConfigOwnershipClaimOutput::equal(Self, Self) -> Bool
+pub fn ConfigOwnershipClaimOutput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ConfigOwnershipClaimOutput::not_equal(Self, Self) -> Bool
+pub fn ConfigOwnershipClaimOutput::output(Self, &Logger) -> Unit
+pub fn ConfigOwnershipClaimOutput::to_json(Self) -> @json.Json
+pub fn ConfigOwnershipClaimOutput::to_repr(Self) -> @debug.Repr
+pub fn ConfigOwnershipClaimOutput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct ConfigOwnershipEntryOutput {
   spec : String
   kind : String
   owners : Array[ConfigOwnershipClaimOutput]
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn ConfigOwnershipEntryOutput::equal(Self, Self) -> Bool
+pub fn ConfigOwnershipEntryOutput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ConfigOwnershipEntryOutput::not_equal(Self, Self) -> Bool
+pub fn ConfigOwnershipEntryOutput::output(Self, &Logger) -> Unit
+pub fn ConfigOwnershipEntryOutput::to_json(Self) -> @json.Json
+pub fn ConfigOwnershipEntryOutput::to_repr(Self) -> @debug.Repr
+pub fn ConfigOwnershipEntryOutput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct ConfigTaskSummaryOutput {
   task_id : String
   node : String?
-  spec_count : Int
-  test_count : Int
-  filter_count : Int
-  needs_count : Int
-  src_count : Int
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+  spec_count : Int32
+  test_count : Int32
+  filter_count : Int32
+  needs_count : Int32
+  src_count : Int32
+}
+pub fn ConfigTaskSummaryOutput::equal(Self, Self) -> Bool
+pub fn ConfigTaskSummaryOutput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ConfigTaskSummaryOutput::not_equal(Self, Self) -> Bool
+pub fn ConfigTaskSummaryOutput::output(Self, &Logger) -> Unit
+pub fn ConfigTaskSummaryOutput::to_json(Self) -> @json.Json
+pub fn ConfigTaskSummaryOutput::to_repr(Self) -> @debug.Repr
+pub fn ConfigTaskSummaryOutput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct DependencyGraphInput {
   root_dir : String
   nodes : Array[GraphNodeInput]
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn DependencyGraphInput::equal(Self, Self) -> Bool
+pub fn DependencyGraphInput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn DependencyGraphInput::not_equal(Self, Self) -> Bool
+pub fn DependencyGraphInput::output(Self, &Logger) -> Unit
+pub fn DependencyGraphInput::to_json(Self) -> @json.Json
+pub fn DependencyGraphInput::to_repr(Self) -> @debug.Repr
+pub fn DependencyGraphInput::to_string(Self) -> String
 
+#derive(@json.FromJson, @json.ToJson)
 pub(all) struct DetectInput {
   results : Array[TestRunEntry]
   threshold : Double
-  min_runs : Int
-} derive(ToJson, @json.FromJson)
+  min_runs : Int32
+}
+pub fn DetectInput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn DetectInput::to_json(Self) -> @json.Json
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct DetectOutput {
   flaky_tests : Array[FlakyResult]
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn DetectOutput::equal(Self, Self) -> Bool
+pub fn DetectOutput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn DetectOutput::not_equal(Self, Self) -> Bool
+pub fn DetectOutput::output(Self, &Logger) -> Unit
+pub fn DetectOutput::to_json(Self) -> @json.Json
+pub fn DetectOutput::to_repr(Self) -> @debug.Repr
+pub fn DetectOutput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct EvalCommitSignalInput {
   commit_sha : String
   run_kind : String
-  run_count : Int
-  distinct_tests : Int
-  failure_signals : Int
-  duration_ms : Int?
+  run_count : Int32
+  distinct_tests : Int32
+  failure_signals : Int32
+  duration_ms : Int32?
   fallback_used : Bool
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn EvalCommitSignalInput::equal(Self, Self) -> Bool
+pub fn EvalCommitSignalInput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn EvalCommitSignalInput::not_equal(Self, Self) -> Bool
+pub fn EvalCommitSignalInput::output(Self, &Logger) -> Unit
+pub fn EvalCommitSignalInput::to_json(Self) -> @json.Json
+pub fn EvalCommitSignalInput::to_repr(Self) -> @debug.Repr
+pub fn EvalCommitSignalInput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct FlakyResult {
   suite : String
   test_name : String
   flaky_rate : Double
-  total_runs : Int
-  fail_count : Int
-  flaky_retry_count : Int
+  total_runs : Int32
+  fail_count : Int32
+  flaky_retry_count : Int32
   is_quarantined : Bool
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn FlakyResult::equal(Self, Self) -> Bool
+pub fn FlakyResult::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn FlakyResult::not_equal(Self, Self) -> Bool
+pub fn FlakyResult::output(Self, &Logger) -> Unit
+pub fn FlakyResult::to_json(Self) -> @json.Json
+pub fn FlakyResult::to_repr(Self) -> @debug.Repr
+pub fn FlakyResult::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct GraphNodeInput {
   id : String
   path : String
   dependencies : Array[String]
   source_patterns : Array[String]
   test_patterns : Array[String]
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn GraphNodeInput::equal(Self, Self) -> Bool
+pub fn GraphNodeInput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GraphNodeInput::not_equal(Self, Self) -> Bool
+pub fn GraphNodeInput::output(Self, &Logger) -> Unit
+pub fn GraphNodeInput::to_json(Self) -> @json.Json
+pub fn GraphNodeInput::to_repr(Self) -> @debug.Repr
+pub fn GraphNodeInput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct HoldoutCommitInput {
   commit_sha : String
-  holdout_tests : Int
-  holdout_failures : Int
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+  holdout_tests : Int32
+  holdout_failures : Int32
+}
+pub fn HoldoutCommitInput::equal(Self, Self) -> Bool
+pub fn HoldoutCommitInput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn HoldoutCommitInput::not_equal(Self, Self) -> Bool
+pub fn HoldoutCommitInput::output(Self, &Logger) -> Unit
+pub fn HoldoutCommitInput::to_json(Self) -> @json.Json
+pub fn HoldoutCommitInput::to_repr(Self) -> @debug.Repr
+pub fn HoldoutCommitInput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct HoldoutKpiOutput {
-  commits : Int
-  holdout_tests : Int
-  holdout_failures : Int
+  commits : Int32
+  holdout_tests : Int32
+  holdout_failures : Int32
   false_negative_rate : Double?
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn HoldoutKpiOutput::equal(Self, Self) -> Bool
+pub fn HoldoutKpiOutput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn HoldoutKpiOutput::not_equal(Self, Self) -> Bool
+pub fn HoldoutKpiOutput::output(Self, &Logger) -> Unit
+pub fn HoldoutKpiOutput::to_json(Self) -> @json.Json
+pub fn HoldoutKpiOutput::to_repr(Self) -> @debug.Repr
+pub fn HoldoutKpiOutput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct QuarantineEntryInput {
   id : String
   task_id : String
@@ -189,114 +369,250 @@ pub(all) struct QuarantineEntryInput {
   introduced_at : String
   expires_at : String
   tracking_issue : String?
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn QuarantineEntryInput::equal(Self, Self) -> Bool
+pub fn QuarantineEntryInput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn QuarantineEntryInput::not_equal(Self, Self) -> Bool
+pub fn QuarantineEntryInput::output(Self, &Logger) -> Unit
+pub fn QuarantineEntryInput::to_json(Self) -> @json.Json
+pub fn QuarantineEntryInput::to_repr(Self) -> @debug.Repr
+pub fn QuarantineEntryInput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct QuarantineIssueOutput {
   severity : String
   code : String
   message : String
   task_id : String?
   spec : String?
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn QuarantineIssueOutput::equal(Self, Self) -> Bool
+pub fn QuarantineIssueOutput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn QuarantineIssueOutput::not_equal(Self, Self) -> Bool
+pub fn QuarantineIssueOutput::output(Self, &Logger) -> Unit
+pub fn QuarantineIssueOutput::to_json(Self) -> @json.Json
+pub fn QuarantineIssueOutput::to_repr(Self) -> @debug.Repr
+pub fn QuarantineIssueOutput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct QuarantineModeCountsOutput {
-  skip : Int
-  allow_flaky : Int
-  allow_failure : Int
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+  skip : Int32
+  allow_flaky : Int32
+  allow_failure : Int32
+}
+pub fn QuarantineModeCountsOutput::equal(Self, Self) -> Bool
+pub fn QuarantineModeCountsOutput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn QuarantineModeCountsOutput::not_equal(Self, Self) -> Bool
+pub fn QuarantineModeCountsOutput::output(Self, &Logger) -> Unit
+pub fn QuarantineModeCountsOutput::to_json(Self) -> @json.Json
+pub fn QuarantineModeCountsOutput::to_repr(Self) -> @debug.Repr
+pub fn QuarantineModeCountsOutput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct QuarantineRuntimeResultInput {
   status : String
   quarantine_mode : String?
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn QuarantineRuntimeResultInput::equal(Self, Self) -> Bool
+pub fn QuarantineRuntimeResultInput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn QuarantineRuntimeResultInput::not_equal(Self, Self) -> Bool
+pub fn QuarantineRuntimeResultInput::output(Self, &Logger) -> Unit
+pub fn QuarantineRuntimeResultInput::to_json(Self) -> @json.Json
+pub fn QuarantineRuntimeResultInput::to_repr(Self) -> @debug.Repr
+pub fn QuarantineRuntimeResultInput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct QuarantineScopeCountsOutput {
-  environment : Int
-  flaky : Int
-  expected_failure : Int
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+  environment : Int32
+  flaky : Int32
+  expected_failure : Int32
+}
+pub fn QuarantineScopeCountsOutput::equal(Self, Self) -> Bool
+pub fn QuarantineScopeCountsOutput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn QuarantineScopeCountsOutput::not_equal(Self, Self) -> Bool
+pub fn QuarantineScopeCountsOutput::output(Self, &Logger) -> Unit
+pub fn QuarantineScopeCountsOutput::to_json(Self) -> @json.Json
+pub fn QuarantineScopeCountsOutput::to_repr(Self) -> @debug.Repr
+pub fn QuarantineScopeCountsOutput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct QuarantineSummaryCoreOutput {
-  entry_count : Int
+  entry_count : Int32
   mode_counts : QuarantineModeCountsOutput
   scope_counts : QuarantineScopeCountsOutput
   entries : Array[ResolvedQuarantineEntryOutput]
   errors : Array[QuarantineIssueOutput]
   warnings : Array[QuarantineIssueOutput]
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn QuarantineSummaryCoreOutput::equal(Self, Self) -> Bool
+pub fn QuarantineSummaryCoreOutput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn QuarantineSummaryCoreOutput::not_equal(Self, Self) -> Bool
+pub fn QuarantineSummaryCoreOutput::output(Self, &Logger) -> Unit
+pub fn QuarantineSummaryCoreOutput::to_json(Self) -> @json.Json
+pub fn QuarantineSummaryCoreOutput::to_repr(Self) -> @debug.Repr
+pub fn QuarantineSummaryCoreOutput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct QuarantineTaskOwnershipInput {
   id : String
   specs : Array[String]
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn QuarantineTaskOwnershipInput::equal(Self, Self) -> Bool
+pub fn QuarantineTaskOwnershipInput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn QuarantineTaskOwnershipInput::not_equal(Self, Self) -> Bool
+pub fn QuarantineTaskOwnershipInput::output(Self, &Logger) -> Unit
+pub fn QuarantineTaskOwnershipInput::to_json(Self) -> @json.Json
+pub fn QuarantineTaskOwnershipInput::to_repr(Self) -> @debug.Repr
+pub fn QuarantineTaskOwnershipInput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct ReportAggregateOutput {
-  shard_count : Int
-  unstable_count : Int
+  shard_count : Int32
+  unstable_count : Int32
   totals : ReportTotalsInput
   unstable : Array[ReportAggregateUnstableBuckets]
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn ReportAggregateOutput::equal(Self, Self) -> Bool
+pub fn ReportAggregateOutput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ReportAggregateOutput::not_equal(Self, Self) -> Bool
+pub fn ReportAggregateOutput::output(Self, &Logger) -> Unit
+pub fn ReportAggregateOutput::to_json(Self) -> @json.Json
+pub fn ReportAggregateOutput::to_repr(Self) -> @debug.Repr
+pub fn ReportAggregateOutput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct ReportAggregateShardInput {
   shard_id : String
   totals : ReportTotalsInput
   unstable : Array[ReportAggregateUnstableStatusInput]
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn ReportAggregateShardInput::equal(Self, Self) -> Bool
+pub fn ReportAggregateShardInput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ReportAggregateShardInput::not_equal(Self, Self) -> Bool
+pub fn ReportAggregateShardInput::output(Self, &Logger) -> Unit
+pub fn ReportAggregateShardInput::to_json(Self) -> @json.Json
+pub fn ReportAggregateShardInput::to_repr(Self) -> @debug.Repr
+pub fn ReportAggregateShardInput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct ReportAggregateUnstableBuckets {
   test_id : String
   shard_ids : Array[String]
   statuses : Array[String]
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn ReportAggregateUnstableBuckets::equal(Self, Self) -> Bool
+pub fn ReportAggregateUnstableBuckets::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ReportAggregateUnstableBuckets::not_equal(Self, Self) -> Bool
+pub fn ReportAggregateUnstableBuckets::output(Self, &Logger) -> Unit
+pub fn ReportAggregateUnstableBuckets::to_json(Self) -> @json.Json
+pub fn ReportAggregateUnstableBuckets::to_repr(Self) -> @debug.Repr
+pub fn ReportAggregateUnstableBuckets::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct ReportAggregateUnstableStatusInput {
   test_id : String
   status : String
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn ReportAggregateUnstableStatusInput::equal(Self, Self) -> Bool
+pub fn ReportAggregateUnstableStatusInput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ReportAggregateUnstableStatusInput::not_equal(Self, Self) -> Bool
+pub fn ReportAggregateUnstableStatusInput::output(Self, &Logger) -> Unit
+pub fn ReportAggregateUnstableStatusInput::to_json(Self) -> @json.Json
+pub fn ReportAggregateUnstableStatusInput::to_repr(Self) -> @debug.Repr
+pub fn ReportAggregateUnstableStatusInput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct ReportDiffBuckets {
   new_failures : Array[String]
   new_flaky : Array[String]
   resolved_failures : Array[String]
   resolved_flaky : Array[String]
   persistent_flaky : Array[String]
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn ReportDiffBuckets::equal(Self, Self) -> Bool
+pub fn ReportDiffBuckets::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ReportDiffBuckets::not_equal(Self, Self) -> Bool
+pub fn ReportDiffBuckets::output(Self, &Logger) -> Unit
+pub fn ReportDiffBuckets::to_json(Self) -> @json.Json
+pub fn ReportDiffBuckets::to_repr(Self) -> @debug.Repr
+pub fn ReportDiffBuckets::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct ReportDiffStatusInput {
   test_id : String
   base_status : String
   head_status : String
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn ReportDiffStatusInput::equal(Self, Self) -> Bool
+pub fn ReportDiffStatusInput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ReportDiffStatusInput::not_equal(Self, Self) -> Bool
+pub fn ReportDiffStatusInput::output(Self, &Logger) -> Unit
+pub fn ReportDiffStatusInput::to_json(Self) -> @json.Json
+pub fn ReportDiffStatusInput::to_repr(Self) -> @debug.Repr
+pub fn ReportDiffStatusInput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct ReportFileTotalsOutput {
   suite : String
   totals : ReportTotalsInput
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn ReportFileTotalsOutput::equal(Self, Self) -> Bool
+pub fn ReportFileTotalsOutput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ReportFileTotalsOutput::not_equal(Self, Self) -> Bool
+pub fn ReportFileTotalsOutput::output(Self, &Logger) -> Unit
+pub fn ReportFileTotalsOutput::to_json(Self) -> @json.Json
+pub fn ReportFileTotalsOutput::to_repr(Self) -> @debug.Repr
+pub fn ReportFileTotalsOutput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct ReportSummaryOutput {
   totals : ReportTotalsInput
   file_totals : Array[ReportFileTotalsOutput]
   unstable_test_ids : Array[String]
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn ReportSummaryOutput::equal(Self, Self) -> Bool
+pub fn ReportSummaryOutput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ReportSummaryOutput::not_equal(Self, Self) -> Bool
+pub fn ReportSummaryOutput::output(Self, &Logger) -> Unit
+pub fn ReportSummaryOutput::to_json(Self) -> @json.Json
+pub fn ReportSummaryOutput::to_repr(Self) -> @debug.Repr
+pub fn ReportSummaryOutput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct ReportSummaryTestInput {
   test_id : String
   suite : String
   status : String
-  duration_ms : Int
-  retry_count : Int
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+  duration_ms : Int32
+  retry_count : Int32
+}
+pub fn ReportSummaryTestInput::equal(Self, Self) -> Bool
+pub fn ReportSummaryTestInput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ReportSummaryTestInput::not_equal(Self, Self) -> Bool
+pub fn ReportSummaryTestInput::output(Self, &Logger) -> Unit
+pub fn ReportSummaryTestInput::to_json(Self) -> @json.Json
+pub fn ReportSummaryTestInput::to_repr(Self) -> @debug.Repr
+pub fn ReportSummaryTestInput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct ReportTotalsInput {
-  total : Int
-  passed : Int
-  failed : Int
-  flaky : Int
-  skipped : Int
-  retries : Int
-  duration_ms : Int
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+  total : Int32
+  passed : Int32
+  failed : Int32
+  flaky : Int32
+  skipped : Int32
+  retries : Int32
+  duration_ms : Int32
+}
+pub fn ReportTotalsInput::equal(Self, Self) -> Bool
+pub fn ReportTotalsInput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ReportTotalsInput::not_equal(Self, Self) -> Bool
+pub fn ReportTotalsInput::output(Self, &Logger) -> Unit
+pub fn ReportTotalsInput::to_json(Self) -> @json.Json
+pub fn ReportTotalsInput::to_repr(Self) -> @debug.Repr
+pub fn ReportTotalsInput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct ResolvedQuarantineEntryOutput {
   id : String
   task_id : String
@@ -311,9 +627,17 @@ pub(all) struct ResolvedQuarantineEntryOutput {
   expires_at : String
   tracking_issue : String?
   expiry_status : String
-  days_until_expiry : Int?
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+  days_until_expiry : Int32?
+}
+pub fn ResolvedQuarantineEntryOutput::equal(Self, Self) -> Bool
+pub fn ResolvedQuarantineEntryOutput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ResolvedQuarantineEntryOutput::not_equal(Self, Self) -> Bool
+pub fn ResolvedQuarantineEntryOutput::output(Self, &Logger) -> Unit
+pub fn ResolvedQuarantineEntryOutput::to_json(Self) -> @json.Json
+pub fn ResolvedQuarantineEntryOutput::to_repr(Self) -> @debug.Repr
+pub fn ResolvedQuarantineEntryOutput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct ResolvedStableTestIdentityOutput {
   suite : String
   test_name : String
@@ -321,13 +645,29 @@ pub(all) struct ResolvedStableTestIdentityOutput {
   filter : String?
   variant : Array[StableVariantEntryInput]?
   test_id : String
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn ResolvedStableTestIdentityOutput::equal(Self, Self) -> Bool
+pub fn ResolvedStableTestIdentityOutput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ResolvedStableTestIdentityOutput::not_equal(Self, Self) -> Bool
+pub fn ResolvedStableTestIdentityOutput::output(Self, &Logger) -> Unit
+pub fn ResolvedStableTestIdentityOutput::to_json(Self) -> @json.Json
+pub fn ResolvedStableTestIdentityOutput::to_repr(Self) -> @debug.Repr
+pub fn ResolvedStableTestIdentityOutput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct ReverseDepEntry {
   id : String
   dependents : Array[String]
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn ReverseDepEntry::equal(Self, Self) -> Bool
+pub fn ReverseDepEntry::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ReverseDepEntry::not_equal(Self, Self) -> Bool
+pub fn ReverseDepEntry::output(Self, &Logger) -> Unit
+pub fn ReverseDepEntry::to_json(Self) -> @json.Json
+pub fn ReverseDepEntry::to_repr(Self) -> @debug.Repr
+pub fn ReverseDepEntry::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct SamplingHistoryRowInput {
   suite : String
   test_name : String
@@ -336,49 +676,89 @@ pub(all) struct SamplingHistoryRowInput {
   variant : Array[StableVariantEntryInput]?
   test_id : String?
   status : String
-  retry_count : Int
-  duration_ms : Int
+  retry_count : Int32
+  duration_ms : Int32
   created_at : String
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn SamplingHistoryRowInput::equal(Self, Self) -> Bool
+pub fn SamplingHistoryRowInput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SamplingHistoryRowInput::not_equal(Self, Self) -> Bool
+pub fn SamplingHistoryRowInput::output(Self, &Logger) -> Unit
+pub fn SamplingHistoryRowInput::to_json(Self) -> @json.Json
+pub fn SamplingHistoryRowInput::to_repr(Self) -> @debug.Repr
+pub fn SamplingHistoryRowInput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct SamplingKpiConfusionMatrixOutput {
-  true_positive : Int
-  false_positive : Int
-  false_negative : Int
-  true_negative : Int
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+  true_positive : Int32
+  false_positive : Int32
+  false_negative : Int32
+  true_negative : Int32
+}
+pub fn SamplingKpiConfusionMatrixOutput::equal(Self, Self) -> Bool
+pub fn SamplingKpiConfusionMatrixOutput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SamplingKpiConfusionMatrixOutput::not_equal(Self, Self) -> Bool
+pub fn SamplingKpiConfusionMatrixOutput::output(Self, &Logger) -> Unit
+pub fn SamplingKpiConfusionMatrixOutput::to_json(Self) -> @json.Json
+pub fn SamplingKpiConfusionMatrixOutput::to_repr(Self) -> @debug.Repr
+pub fn SamplingKpiConfusionMatrixOutput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct SamplingKpiMissesOutput {
-  local_pass_but_ci_fail : Int
-  local_fail_but_ci_pass : Int
+  local_pass_but_ci_fail : Int32
+  local_fail_but_ci_pass : Int32
   false_negative_rate : Double?
   false_positive_rate : Double?
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn SamplingKpiMissesOutput::equal(Self, Self) -> Bool
+pub fn SamplingKpiMissesOutput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SamplingKpiMissesOutput::not_equal(Self, Self) -> Bool
+pub fn SamplingKpiMissesOutput::output(Self, &Logger) -> Unit
+pub fn SamplingKpiMissesOutput::to_json(Self) -> @json.Json
+pub fn SamplingKpiMissesOutput::to_repr(Self) -> @debug.Repr
+pub fn SamplingKpiMissesOutput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct SamplingKpiOutput {
-  matched_commits : Int
-  local_only_commits : Int
-  ci_only_commits : Int
+  matched_commits : Int32
+  local_only_commits : Int32
+  ci_only_commits : Int32
   avg_local_sample_size : Double?
   median_local_sample_size : Double?
   p95_local_sample_size : Double?
   avg_ci_test_count : Double?
   avg_sample_ratio : Double?
   avg_saved_minutes : Double?
-  fallback_runs : Int
+  fallback_runs : Int32
   fallback_rate : Double?
   pass_signal : SamplingKpiSignalOutput
   fail_signal : SamplingKpiSignalOutput
   misses : SamplingKpiMissesOutput
   confusion_matrix : SamplingKpiConfusionMatrixOutput
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn SamplingKpiOutput::equal(Self, Self) -> Bool
+pub fn SamplingKpiOutput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SamplingKpiOutput::not_equal(Self, Self) -> Bool
+pub fn SamplingKpiOutput::output(Self, &Logger) -> Unit
+pub fn SamplingKpiOutput::to_json(Self) -> @json.Json
+pub fn SamplingKpiOutput::to_repr(Self) -> @debug.Repr
+pub fn SamplingKpiOutput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct SamplingKpiSignalOutput {
-  local_commits : Int
-  ci_when_local : Int
+  local_commits : Int32
+  ci_when_local : Int32
   rate : Double?
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn SamplingKpiSignalOutput::equal(Self, Self) -> Bool
+pub fn SamplingKpiSignalOutput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SamplingKpiSignalOutput::not_equal(Self, Self) -> Bool
+pub fn SamplingKpiSignalOutput::output(Self, &Logger) -> Unit
+pub fn SamplingKpiSignalOutput::to_json(Self) -> @json.Json
+pub fn SamplingKpiSignalOutput::to_repr(Self) -> @debug.Repr
+pub fn SamplingKpiSignalOutput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct SamplingListedTestInput {
   suite : String
   test_name : String
@@ -386,8 +766,16 @@ pub(all) struct SamplingListedTestInput {
   filter : String?
   variant : Array[StableVariantEntryInput]?
   test_id : String?
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn SamplingListedTestInput::equal(Self, Self) -> Bool
+pub fn SamplingListedTestInput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SamplingListedTestInput::not_equal(Self, Self) -> Bool
+pub fn SamplingListedTestInput::output(Self, &Logger) -> Unit
+pub fn SamplingListedTestInput::to_json(Self) -> @json.Json
+pub fn SamplingListedTestInput::to_repr(Self) -> @debug.Repr
+pub fn SamplingListedTestInput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct StableTestIdentityInput {
   suite : String
   test_name : String
@@ -395,35 +783,61 @@ pub(all) struct StableTestIdentityInput {
   filter : String?
   variant : Array[StableVariantEntryInput]?
   test_id : String?
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn StableTestIdentityInput::equal(Self, Self) -> Bool
+pub fn StableTestIdentityInput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn StableTestIdentityInput::not_equal(Self, Self) -> Bool
+pub fn StableTestIdentityInput::output(Self, &Logger) -> Unit
+pub fn StableTestIdentityInput::to_json(Self) -> @json.Json
+pub fn StableTestIdentityInput::to_repr(Self) -> @debug.Repr
+pub fn StableTestIdentityInput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct StableVariantEntryInput {
   key : String
   value : String
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn StableVariantEntryInput::equal(Self, Self) -> Bool
+pub fn StableVariantEntryInput::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn StableVariantEntryInput::not_equal(Self, Self) -> Bool
+pub fn StableVariantEntryInput::output(Self, &Logger) -> Unit
+pub fn StableVariantEntryInput::to_json(Self) -> @json.Json
+pub fn StableVariantEntryInput::to_repr(Self) -> @debug.Repr
+pub fn StableVariantEntryInput::to_string(Self) -> String
 
+#derive(Eq, Show, @debug.Debug, @json.FromJson, @json.ToJson)
 pub(all) struct TestMeta {
   suite : String
   test_name : String
   flaky_rate : Double
-  total_runs : Int
-  fail_count : Int
+  total_runs : Int32
+  fail_count : Int32
   last_run_at : String
-  avg_duration_ms : Int
+  avg_duration_ms : Int32
   previously_failed : Bool
   is_new : Bool
   task_id : String?
   filter : String?
   test_id : String?
   co_failure_boost : Double?
-} derive(Eq, Show, ToJson, @debug.Debug, @json.FromJson)
+}
+pub fn TestMeta::equal(Self, Self) -> Bool
+pub fn TestMeta::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn TestMeta::not_equal(Self, Self) -> Bool
+pub fn TestMeta::output(Self, &Logger) -> Unit
+pub fn TestMeta::to_json(Self) -> @json.Json
+pub fn TestMeta::to_repr(Self) -> @debug.Repr
+pub fn TestMeta::to_string(Self) -> String
 
+#derive(@json.FromJson, @json.ToJson)
 pub(all) struct TestRunEntry {
   suite : String
   test_name : String
   status : String
-  retry_count : Int
-} derive(ToJson, @json.FromJson)
+  retry_count : Int32
+}
+pub fn TestRunEntry::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn TestRunEntry::to_json(Self) -> @json.Json
 
 // Type aliases
 

@@ -1,6 +1,6 @@
 ///|
 test "build_sampling_kpi computes confusion matrix and sample metrics" {
-  let report = build_sampling_kpi([
+  let report = @eval.build_sampling_kpi([
     @types.EvalCommitSignalInput::{
       commit_sha: "commit-pass",
       run_kind: "local",
@@ -122,14 +122,26 @@ test "build_sampling_kpi computes confusion matrix and sample metrics" {
 
 ///|
 test "build_holdout_kpi sums holdout tests over commits that have them" {
-  let kpi = build_holdout_kpi([
-    @types.HoldoutCommitInput::{ commit_sha: "a", holdout_tests: 4, holdout_failures: 1 },
-    @types.HoldoutCommitInput::{ commit_sha: "b", holdout_tests: 0, holdout_failures: 0 },
-    @types.HoldoutCommitInput::{ commit_sha: "c", holdout_tests: 4, holdout_failures: 0 },
+  let kpi = @eval.build_holdout_kpi([
+    @types.HoldoutCommitInput::{
+      commit_sha: "a",
+      holdout_tests: 4,
+      holdout_failures: 1,
+    },
+    @types.HoldoutCommitInput::{
+      commit_sha: "b",
+      holdout_tests: 0,
+      holdout_failures: 0,
+    },
+    @types.HoldoutCommitInput::{
+      commit_sha: "c",
+      holdout_tests: 4,
+      holdout_failures: 0,
+    },
   ])
   assert_eq(kpi.commits, 2)
   assert_eq(kpi.holdout_tests, 8)
   assert_eq(kpi.holdout_failures, 1)
   assert_eq(kpi.false_negative_rate, Some(12.5))
-  assert_eq(build_holdout_kpi([]).false_negative_rate, None)
+  assert_eq(@eval.build_holdout_kpi([]).false_negative_rate, None)
 }

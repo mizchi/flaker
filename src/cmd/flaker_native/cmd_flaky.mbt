@@ -1,4 +1,5 @@
-///| Show flaky test rankings from DuckDB.
+///|
+/// Show flaky test rankings from DuckDB.
 async fn cmd_flaky(args : Array[String]) -> Unit {
   let config = read_config()
   let top = parse_int_arg(args, "--top", 20)

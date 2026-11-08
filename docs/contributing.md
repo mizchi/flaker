@@ -13,12 +13,21 @@ This document covers local development, sibling-repo dogfooding, and the MoonBit
 
 ## Build
 
+Use MoonBit **0.10.20** and Node.js **24+**, with the pnpm version pinned in
+`package.json`.
+
 ```bash
+moon update
 pnpm install
 pnpm build
 ```
 
 The build produces `dist/cli/main.js` (bundled by Rolldown) and `dist/moonbit/flaker.js` (the MoonBit JS target, consumed by the CLI).
+
+On Linux x86-64 and macOS ARM64, `nix develop` provides the pinned MoonBit
+toolchain. Its registry cache is writable under the user's cache directory;
+run `moon update` before the first build. `nix build` builds the native CLI
+using the registry snapshot and archive checksums locked by `flake.lock`.
 
 ## Sibling checkout dogfood
 

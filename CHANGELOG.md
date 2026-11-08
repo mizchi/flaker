@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Changed
+
+- Build with MoonBit 0.10.20 and the current bitflow, zlib, async, DuckDB bindings and `moonbit-community/toml` packages. Explicit trait extensions preserve the existing public methods; scoped warning annotations retain the existing derived `Show` contract.
+- Replace the removed Nix `moonPlatform` API with the versioned toolchain and moon-nix dependency resolver. Registry archives use the current download endpoint and their published checksums. Nix builds and development shells support the SDK's Linux x86-64 and macOS ARM64 platforms.
+
 ## 0.15.0
 
 ### Added

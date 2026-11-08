@@ -1,6 +1,6 @@
 ///|
 test "generate_fixture returns correct structure" {
-  let config = FixtureConfig::{
+  let config = @fixture.FixtureConfig::{
     test_count: 20,
     commit_count: 5,
     flaky_rate: 0.15,
@@ -10,7 +10,7 @@ test "generate_fixture returns correct structure" {
     sample_percentage: 50.0,
     seed: 42,
   }
-  let fixture = generate_fixture(config)
+  let fixture = @fixture.generate_fixture(config)
 
   // 20 tests / 5 per file = 4 files
   assert_eq(fixture.files.length(), 4)
@@ -34,7 +34,7 @@ test "generate_fixture returns correct structure" {
 
 ///|
 test "generate_fixture is deterministic" {
-  let config = FixtureConfig::{
+  let config = @fixture.FixtureConfig::{
     test_count: 10,
     commit_count: 3,
     flaky_rate: 0.2,
@@ -44,8 +44,8 @@ test "generate_fixture is deterministic" {
     sample_percentage: 50.0,
     seed: 123,
   }
-  let a = generate_fixture(config)
-  let b = generate_fixture(config)
+  let a = @fixture.generate_fixture(config)
+  let b = @fixture.generate_fixture(config)
 
   assert_eq(a.tests.length(), b.tests.length())
   assert_eq(a.commits.length(), b.commits.length())
@@ -64,7 +64,7 @@ test "generate_fixture is deterministic" {
 
 ///|
 test "generate_fixture suite naming matches expected pattern" {
-  let config = FixtureConfig::{
+  let config = @fixture.FixtureConfig::{
     test_count: 3,
     commit_count: 1,
     flaky_rate: 0.0,
@@ -74,7 +74,7 @@ test "generate_fixture suite naming matches expected pattern" {
     sample_percentage: 100.0,
     seed: 1,
   }
-  let fixture = generate_fixture(config)
+  let fixture = @fixture.generate_fixture(config)
   assert_eq(fixture.tests[0].suite, "tests/module_0/test_0.spec.ts")
   assert_eq(fixture.tests[1].suite, "tests/module_0/test_1.spec.ts")
   assert_eq(fixture.tests[2].suite, "tests/module_0/test_2.spec.ts")
@@ -83,7 +83,7 @@ test "generate_fixture suite naming matches expected pattern" {
 
 ///|
 test "generate_fixture sha padding" {
-  let config = FixtureConfig::{
+  let config = @fixture.FixtureConfig::{
     test_count: 1,
     commit_count: 2,
     flaky_rate: 0.0,
@@ -93,7 +93,7 @@ test "generate_fixture sha padding" {
     sample_percentage: 100.0,
     seed: 1,
   }
-  let fixture = generate_fixture(config)
+  let fixture = @fixture.generate_fixture(config)
   assert_eq(fixture.commits[0].sha, "fixture-sha-0000")
   assert_eq(fixture.commits[1].sha, "fixture-sha-0001")
 }

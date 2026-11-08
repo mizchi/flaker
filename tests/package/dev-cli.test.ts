@@ -39,7 +39,7 @@ describe("dev-cli helpers", () => {
       ["/workspace/flaker/scripts/build-package.mjs", 9],
       ["/workspace/flaker/package.json", 8],
       ["/workspace/flaker/tsconfig.json", 8],
-      ["/workspace/flaker/moon.mod.json", 8],
+      ["/workspace/flaker/moon.mod", 8],
     ]);
     const directories = new Set([
       "/workspace/flaker/src",
@@ -148,7 +148,7 @@ describe("dev-cli helpers", () => {
       ["/workspace/flaker/scripts/build-package.mjs", 9],
       ["/workspace/flaker/package.json", 8],
       ["/workspace/flaker/tsconfig.json", 8],
-      ["/workspace/flaker/moon.mod.json", 8],
+      ["/workspace/flaker/moon.mod", 8],
     ]);
     const directories = new Set([
       "/workspace/flaker/src",

@@ -306,7 +306,7 @@ pub fn flow_task_fingerprint(
   node : FlowNode,
   signatures : Map[String, String],
 ) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string(flow_fingerprint(task.id, task.cmd, node, signatures))
   buf.write_string("\nrequired=")
   buf.write_string(if task.required { "true" } else { "false" })
@@ -942,7 +942,7 @@ pub fn execute_from_fs_with_cli_env(
 
 ///|
 fn render_execution_report(result : FlowExecutionResult) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("state=")
   buf.write_string(result.state)
   buf.write_string("\n")

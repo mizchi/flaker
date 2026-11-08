@@ -4,7 +4,7 @@ package "mizchi/flaker/cmd/flaker"
 // Values
 pub fn aggregate_report_json(String) -> String
 
-pub fn bucketize_rate_json(Double) -> Int
+pub fn bucketize_rate_json(Double) -> Int32
 
 pub fn build_affected_report_json(String, String, String, String) -> String
 
@@ -18,7 +18,7 @@ pub fn build_sampling_meta_json(String, String) -> String
 
 pub fn classify_report_diff_json(String) -> String
 
-pub fn compute_quarantine_exit_code_json(String, Int) -> String
+pub fn compute_quarantine_exit_code_json(String, Int32) -> String
 
 pub fn create_stable_test_id_json(String) -> String
 
@@ -50,27 +50,27 @@ pub fn run_cli(Array[String], String) -> CliResult
 
 pub fn run_config_check_json(String, String, String) -> String
 
-pub fn sample_hybrid_json(String, String, Int, Int) -> String
+pub fn sample_hybrid_json(String, String, Int32, Int32) -> String
 
-pub fn sample_random_json(String, Int, Int) -> String
+pub fn sample_random_json(String, Int32, Int32) -> String
 
-pub fn sample_weighted_json(String, Int, Int) -> String
+pub fn sample_weighted_json(String, Int32, Int32) -> String
 
-pub fn select_by_coverage_json(String, String, Int) -> String
+pub fn select_by_coverage_json(String, String, Int32) -> String
 
-pub fn summarize_quarantine_json(String, String, String, String, Int) -> String
+pub fn summarize_quarantine_json(String, String, String, String, Int32) -> String
 
 pub fn summarize_report_json(String) -> String
 
 pub fn topological_sort_json(String) -> String
 
-pub fn train_gbdt_json(String, Int, Double) -> String
+pub fn train_gbdt_json(String, Int32, Double) -> String
 
 // Errors
 
 // Types and methods
 pub(all) struct CliResult {
-  exit_code : Int
+  exit_code : Int32
   output : String
 }
 

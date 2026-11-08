@@ -254,13 +254,13 @@ pub fn Path::join(lhs : Path, rhs : Path) -> Path {
       match lhs {
         [] => rhs.to_string()
         [.., '\\'] as all => {
-          let builder = StringBuilder::new()
+          let builder = StringBuilder()
           builder.write_stringview(all)
           builder.write_stringview(rhs)
           builder.to_string()
         }
         without_tailing_slashes => {
-          let builder = StringBuilder::new()
+          let builder = StringBuilder()
           builder.write_stringview(without_tailing_slashes)
           builder.write_char('\\')
           builder.write_stringview(rhs)

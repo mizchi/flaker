@@ -67,9 +67,9 @@ fn find_best_split(
 /// Train a GBDT model
 pub fn train(
   data : Array[TrainingRow],
-  num_trees? : Int = 10,
-  learning_rate? : Double = 0.1,
-  feature_names? : Array[String] = [],
+  num_trees~ : Int32 = 10,
+  learning_rate~ : Double = 0.1,
+  feature_names~ : Array[String] = [],
 ) -> GBDTModel {
   let n = data.length()
   if n == 0 {
@@ -148,7 +148,7 @@ pub fn train(
     }
   }
 
-  GBDTModel::{ trees, learning_rate, feature_names: names, base_score }
+  GBDTModel::{ trees, learning_rate, feature_names: names, base_score, }
 }
 
 ///|

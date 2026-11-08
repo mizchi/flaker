@@ -33,7 +33,7 @@ fn log_response(req : Response, logger : &Logger) -> Unit {
 
 ///|
 async test "read_request basic" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(fn(root) {
     let (r, w) = @io.pipe()
     root.spawn_bg(fn() {
@@ -62,7 +62,7 @@ async test "read_request basic" {
 
 ///|
 async test "read_request fixed body" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(fn(root) {
     let (r, w) = @io.pipe()
     root.spawn_bg(fn() {
@@ -94,7 +94,7 @@ async test "read_request fixed body" {
 
 ///|
 async test "read_request chunked" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(fn(root) {
     let (r, w) = @io.pipe()
     root.spawn_bg(fn() {
@@ -130,7 +130,7 @@ async test "read_request chunked" {
 
 ///|
 async test "read_request stream" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(fn(root) {
     let (r, w) = @io.pipe()
     root.spawn_bg(fn() {
@@ -180,7 +180,7 @@ async test "read_request stream" {
 
 ///|
 async test "multiple request" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(fn(root) {
     let (r, w) = @io.pipe()
     root.spawn_bg(fn() {
@@ -244,7 +244,7 @@ async test "multiple request" {
 
 ///|
 async test "read_response basic" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(fn(root) {
     let (r, w) = @io.pipe()
     root.spawn_bg(fn() {

@@ -37,7 +37,7 @@ let base64_chars : ReadOnlyArray[Char] = [
 ///|
 /// Base64 encoding
 fn base64_encode(data : Bytes) -> String {
-  let result = StringBuilder::new()
+  let result = StringBuilder()
   for i = 0; i < data.length(); i = i + 3 {
     let b1 = data[i].to_int()
     let b2 = if i + 1 < data.length() { data[i + 1].to_int() } else { 0 }

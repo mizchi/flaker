@@ -11,7 +11,14 @@ pub fn detect_flaky(@contracts.DetectInput) -> @contracts.DetectOutput
 // Errors
 
 // Types and methods
-type TestKey derive(Eq, Hash, Show)
+#derive(Eq, Hash, Show)
+type TestKey
+pub fn TestKey::equal(Self, Self) -> Bool
+pub fn TestKey::hash(Self) -> Int32
+pub fn TestKey::hash_combine(Self, Hasher) -> Unit
+pub fn TestKey::not_equal(Self, Self) -> Bool
+pub fn TestKey::output(Self, &Logger) -> Unit
+pub fn TestKey::to_string(Self) -> String
 
 // Type aliases
 

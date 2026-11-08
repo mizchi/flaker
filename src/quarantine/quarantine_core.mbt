@@ -1,32 +1,32 @@
 ///|
 priv struct DateOnly {
-  year : Int
-  month : Int
-  day : Int
+  year : Int32
+  month : Int32
+  day : Int32
 }
 
 ///|
 priv struct ModeCountsAcc {
-  mut skip : Int
-  mut allow_flaky : Int
-  mut allow_failure : Int
+  mut skip : Int32
+  mut allow_flaky : Int32
+  mut allow_failure : Int32
 }
 
 ///|
 priv struct ScopeCountsAcc {
-  mut environment : Int
-  mut flaky : Int
-  mut expected_failure : Int
+  mut environment : Int32
+  mut flaky : Int32
+  mut expected_failure : Int32
 }
 
 ///|
 fn build_mode_counts() -> ModeCountsAcc {
-  ModeCountsAcc::{ skip: 0, allow_flaky: 0, allow_failure: 0 }
+  ModeCountsAcc::{ skip: 0, allow_flaky: 0, allow_failure: 0, }
 }
 
 ///|
 fn build_scope_counts() -> ScopeCountsAcc {
-  ScopeCountsAcc::{ environment: 0, flaky: 0, expected_failure: 0 }
+  ScopeCountsAcc::{ environment: 0, flaky: 0, expected_failure: 0, }
 }
 
 ///|
@@ -34,25 +34,27 @@ fn create_issue(
   severity : String,
   code : String,
   message : String,
-  task_id? : String? = None,
-  spec? : String? = None,
+  task_id~ : String? = None,
+  spec~ : String? = None,
 ) -> @types.QuarantineIssueOutput {
-  @types.QuarantineIssueOutput::{ severity, code, message, task_id, spec }
+  @types.QuarantineIssueOutput::{ severity, code, message, task_id, spec, }
 }
 
 ///|
 fn is_valid_title_pattern(pattern : String) -> Bool {
-  guard (try? @string.Regex(pattern)) is Ok(_) else { return false }
+  guard (Some(@string.Regex(pattern)) catch { _ => None }) is Some(_) else {
+    return false
+  }
   true
 }
 
 ///|
-fn is_leap_year(year : Int) -> Bool {
+fn is_leap_year(year : Int32) -> Bool {
   year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
 }
 
 ///|
-fn days_in_month(year : Int, month : Int) -> Int {
+fn days_in_month(year : Int32, month : Int32) -> Int32 {
   match month {
     1 | 3 | 5 | 7 | 8 | 10 | 12 => 31
     4 | 6 | 9 | 11 => 30
@@ -63,19 +65,27 @@ fn days_in_month(year : Int, month : Int) -> Int {
 
 ///|
 fn parse_date_only(value : String) -> DateOnly? {
-  guard (try? @string.Regex(
-      "^([[:digit:]]{4})-([[:digit:]]{2})-([[:digit:]]{2})$",
-    ))
-    is Ok(regex) else {
+  guard (Some(
+      @string.Regex("^([[:digit:]]{4})-([[:digit:]]{2})-([[:digit:]]{2})$"),
+    ) catch {
+      _ => None
+    })
+    is Some(regex) else {
     return None
   }
   guard regex.execute(value) is Some(m) else { return None }
   guard m.group(1) is Some(year_s) else { return None }
   guard m.group(2) is Some(month_s) else { return None }
   guard m.group(3) is Some(day_s) else { return None }
-  guard (try? @string.parse_int(year_s)) is Ok(year) else { return None }
-  guard (try? @string.parse_int(month_s)) is Ok(month) else { return None }
-  guard (try? @string.parse_int(day_s)) is Ok(day) else { return None }
+  guard (Some(@string.parse_int(year_s)) catch { _ => None }) is Some(year) else {
+    return None
+  }
+  guard (Some(@string.parse_int(month_s)) catch { _ => None }) is Some(month) else {
+    return None
+  }
+  guard (Some(@string.parse_int(day_s)) catch { _ => None }) is Some(day) else {
+    return None
+  }
   if month < 1 || month > 12 {
     return None
   }
@@ -83,11 +93,11 @@ fn parse_date_only(value : String) -> DateOnly? {
   if day < 1 || day > max_day {
     return None
   }
-  Some(DateOnly::{ year, month, day })
+  Some(DateOnly::{ year, month, day, })
 }
 
 ///|
-fn days_from_civil(date : DateOnly) -> Int {
+fn days_from_civil(date : DateOnly) -> Int32 {
   let adjusted_year = if date.month <= 2 { date.year - 1 } else { date.year }
   let era = if adjusted_year >= 0 {
     adjusted_year / 400
@@ -112,8 +122,8 @@ fn days_from_civil(date : DateOnly) -> Int {
 fn classify_expiry(
   now : DateOnly,
   expires_at : DateOnly?,
-  expires_soon_days : Int,
-) -> (String, Int?) {
+  expires_soon_days : Int32,
+) -> (String, Int32?) {
   match expires_at {
     None => ("invalid", None)
     Some(expires) => {
@@ -145,7 +155,8 @@ fn matches_lookup(
   if entry.spec != spec {
     return false
   }
-  guard (try? @string.Regex(entry.title_pattern)) is Ok(regex) else {
+  guard (Some(@string.Regex(entry.title_pattern)) catch { _ => None })
+    is Some(regex) else {
     return false
   }
   regex.execute(title) is Some(_)
@@ -157,7 +168,7 @@ pub fn find_matching_quarantine(
   task_id : String,
   spec : String,
   title : String,
-) -> Int {
+) -> Int32 {
   for i in 0..<entries.length() {
     if matches_lookup(entries[i], task_id, spec, title) {
       return i
@@ -180,8 +191,8 @@ pub fn is_blocking_failure(
 ///|
 pub fn compute_quarantine_exit_code(
   results : Array[@types.QuarantineRuntimeResultInput],
-  fallback_exit_code : Int,
-) -> Int {
+  fallback_exit_code : Int32,
+) -> Int32 {
   for result in results {
     if is_blocking_failure(result) {
       return 1
@@ -200,21 +211,21 @@ pub fn summarize_quarantine(
   tasks : Array[@types.QuarantineTaskOwnershipInput],
   existing_specs : Array[String],
   now_date : String,
-  expires_soon_days : Int,
+  expires_soon_days : Int32,
 ) -> @types.QuarantineSummaryCoreOutput {
   let now = match parse_date_only(now_date) {
     Some(date) => date
     None => panic()
   }
-  let task_by_id : Map[String, @types.QuarantineTaskOwnershipInput] = {}
+  let task_by_id : Map[String, @types.QuarantineTaskOwnershipInput] = Map([])
   for task in tasks {
     task_by_id.set(task.id, task)
   }
-  let existing_specs_set : Map[String, Bool] = {}
+  let existing_specs_set : Map[String, Bool] = Map([])
   for spec in existing_specs {
     existing_specs_set.set(spec, true)
   }
-  let seen_ids : Map[String, Bool] = {}
+  let seen_ids : Map[String, Bool] = Map([])
   let resolved_entries : Array[@types.ResolvedQuarantineEntryOutput] = []
   let errors : Array[@types.QuarantineIssueOutput] = []
   let warnings : Array[@types.QuarantineIssueOutput] = []

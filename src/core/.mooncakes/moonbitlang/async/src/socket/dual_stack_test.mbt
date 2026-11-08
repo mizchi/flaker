@@ -22,7 +22,7 @@ let all_protocol_preferences : FixedArray[@socket.IpProtocolPreference] = [
 
 ///|
 async test "Only_V4 server" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(fn(root) {
     let server = @socket.TcpServer::new(@socket.Addr::parse("0.0.0.0:0"))
     let port = server.addr().port()
@@ -70,7 +70,7 @@ async test "Only_V4 server" {
 
 ///|
 async test "Only_V6 server" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(fn(root) {
     let server = @socket.TcpServer::new(
       @socket.Addr::parse("[::]:0"),
@@ -121,7 +121,7 @@ async test "Only_V6 server" {
 
 ///|
 async test "dual stack server" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(fn(root) {
     let server = @socket.TcpServer::new(@socket.Addr::parse("[::]:0"))
     let port = server.addr().port()
@@ -166,7 +166,7 @@ async test "dual stack server" {
 
 ///|
 async test "Only_V4 UDP server" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(fn(root) {
     let server = @socket.UdpServer::new(@socket.Addr::parse("0.0.0.0:0"))
     let port = server.addr().port()
@@ -213,7 +213,7 @@ async test "Only_V4 UDP server" {
 
 ///|
 async test "Only_V6 UDP server" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(fn(root) {
     let server = @socket.UdpServer::new(
       @socket.Addr::parse("[::]:0"),
@@ -263,7 +263,7 @@ async test "Only_V6 UDP server" {
 
 ///|
 async test "dual stack UDP server" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(fn(root) {
     let server = @socket.UdpServer::new(@socket.Addr::parse("[::]:0"))
     let port = server.addr().port()

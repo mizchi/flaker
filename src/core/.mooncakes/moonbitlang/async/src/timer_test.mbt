@@ -14,7 +14,7 @@
 
 ///|
 async test "basic_timer" {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let result = try? @async.with_task_group(fn(root) {
     root.spawn_bg(fn() {
       @async.sleep(100)

@@ -1,6 +1,6 @@
 ///|
 test "classify_report_diff matches report diff bucket semantics" {
-  let result = classify_report_diff([
+  let result = @report_diff.classify_report_diff([
     @types.ReportDiffStatusInput::{
       test_id: "new-failure",
       base_status: "passed",

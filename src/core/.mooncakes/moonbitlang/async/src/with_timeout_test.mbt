@@ -14,7 +14,7 @@
 
 ///|
 async test "with_timeout normal exit" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   log.write_object(
     try? @async.with_task_group(fn(root) {
       root.spawn_bg(fn() {
@@ -41,7 +41,7 @@ async test "with_timeout normal exit" {
 
 ///|
 async test "with_timeout failure" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(fn(root) {
     root.spawn_bg(fn() {
       @async.sleep(200)
@@ -70,7 +70,7 @@ async test "with_timeout failure" {
 
 ///|
 async test "with_timeout timeout" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   log.write_object(
     try? @async.with_task_group(fn(root) {
       root.spawn_bg(fn() {
@@ -105,7 +105,7 @@ async test "with_timeout timeout" {
 
 ///|
 async test "with_timeout nested1" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   log.write_object(
     try? @async.with_task_group(fn(root) {
       root.spawn_bg(fn() {
@@ -148,7 +148,7 @@ async test "with_timeout nested1" {
 
 ///|
 async test "with_timeout nested2" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   log.write_object(
     try? @async.with_task_group(fn(root) {
       root.spawn_bg(fn() {
@@ -190,7 +190,7 @@ async test "with_timeout nested2" {
 
 ///|
 async test "with_timeout error_on_cancel" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   log.write_object(
     try? @async.with_task_group(fn(root) {
       root.spawn_bg(fn() {
@@ -220,7 +220,7 @@ async test "with_timeout error_on_cancel" {
 
 ///|
 async test "with_timeout error-on-timeout" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   log.write_object(
     try? @async.with_task_group(fn(root) {
       root.spawn_bg(fn() {
@@ -251,7 +251,7 @@ async test "with_timeout error-on-timeout" {
 
 ///|
 async test "with_timeout_opt normal exit" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   log.write_object(
     try? @async.with_task_group(fn(root) {
       root.spawn_bg(fn() {
@@ -281,7 +281,7 @@ async test "with_timeout_opt normal exit" {
 
 ///|
 async test "with_timeout_opt failure" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(fn(root) {
     root.spawn_bg(fn() {
       @async.sleep(200)
@@ -310,7 +310,7 @@ async test "with_timeout_opt failure" {
 
 ///|
 async test "with_timeout_opt timeout" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   log.write_object(
     try? @async.with_task_group(fn(root) {
       root.spawn_bg(fn() {

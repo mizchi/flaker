@@ -6,25 +6,39 @@ import {
 }
 
 // Values
-pub fn bucketize_rate(Double) -> Int
+pub fn bucketize_rate(Double) -> Int32
 
-pub fn select_by_coverage(Array[TestCoverage], Array[String], count~ : Int) -> CoverageGuidedResult
+pub fn select_by_coverage(Array[TestCoverage], Array[String], count~ : Int32) -> CoverageGuidedResult
 
 // Errors
 
 // Types and methods
+#derive(Eq, Show, @json.FromJson, @json.ToJson)
 pub(all) struct CoverageGuidedResult {
   selected : Array[String]
-  covered_edges : Int
-  total_changed_edges : Int
+  covered_edges : Int32
+  total_changed_edges : Int32
   coverage_ratio : Double
-} derive(Eq, Show, ToJson, @json.FromJson)
+}
+pub fn CoverageGuidedResult::equal(Self, Self) -> Bool
+pub fn CoverageGuidedResult::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn CoverageGuidedResult::not_equal(Self, Self) -> Bool
+pub fn CoverageGuidedResult::output(Self, &Logger) -> Unit
+pub fn CoverageGuidedResult::to_json(Self) -> @json.Json
+pub fn CoverageGuidedResult::to_string(Self) -> String
 
+#derive(Eq, Show, @json.FromJson, @json.ToJson)
 pub(all) struct TestCoverage {
   suite : String
   test_name : String
   edges : Array[String]
-} derive(Eq, Show, ToJson, @json.FromJson)
+}
+pub fn TestCoverage::equal(Self, Self) -> Bool
+pub fn TestCoverage::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn TestCoverage::not_equal(Self, Self) -> Bool
+pub fn TestCoverage::output(Self, &Logger) -> Unit
+pub fn TestCoverage::to_json(Self) -> @json.Json
+pub fn TestCoverage::to_string(Self) -> String
 
 // Type aliases
 

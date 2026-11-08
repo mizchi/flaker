@@ -16,14 +16,20 @@ pub fn write_workflow_runs_parquet(Array[WorkflowRunRow]) -> Bytes raise @parque
 // Errors
 
 // Types and methods
+#derive(Show, @json.FromJson, @json.ToJson)
 pub(all) struct CommitChangeRow {
   commit_sha : String
   file_path : String
   change_type : String?
-  additions : Int
-  deletions : Int
-} derive(Show, ToJson, @json.FromJson)
+  additions : Int32
+  deletions : Int32
+}
+pub fn CommitChangeRow::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn CommitChangeRow::output(Self, &Logger) -> Unit
+pub fn CommitChangeRow::to_json(Self) -> @json.Json
+pub fn CommitChangeRow::to_string(Self) -> String
 
+#derive(Show, @json.FromJson, @json.ToJson)
 pub(all) struct TestResultRow {
   workflow_run_id : Int64
   test_id : String?
@@ -31,12 +37,17 @@ pub(all) struct TestResultRow {
   suite : String
   test_name : String
   status : String
-  duration_ms : Int
-  retry_count : Int
+  duration_ms : Int32
+  retry_count : Int32
   commit_sha : String
   created_at_ms : Int64
-} derive(Show, ToJson, @json.FromJson)
+}
+pub fn TestResultRow::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn TestResultRow::output(Self, &Logger) -> Unit
+pub fn TestResultRow::to_json(Self) -> @json.Json
+pub fn TestResultRow::to_string(Self) -> String
 
+#derive(Show, @json.FromJson, @json.ToJson)
 pub(all) struct WorkflowRunRow {
   id : Int64
   repo : String
@@ -45,8 +56,12 @@ pub(all) struct WorkflowRunRow {
   event : String?
   status : String?
   created_at_ms : Int64
-  duration_ms : Int
-} derive(Show, ToJson, @json.FromJson)
+  duration_ms : Int32
+}
+pub fn WorkflowRunRow::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn WorkflowRunRow::output(Self, &Logger) -> Unit
+pub fn WorkflowRunRow::to_json(Self) -> @json.Json
+pub fn WorkflowRunRow::to_string(Self) -> String
 
 // Type aliases
 

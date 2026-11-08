@@ -1,6 +1,6 @@
 ///|
 test "aggregate_report combines shard totals and unstable buckets" {
-  let result = aggregate_report([
+  let result = @report_aggregate.aggregate_report([
     @types.ReportAggregateShardInput::{
       shard_id: "shard-2",
       totals: @types.ReportTotalsInput::{

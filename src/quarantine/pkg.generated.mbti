@@ -6,13 +6,13 @@ import {
 }
 
 // Values
-pub fn compute_quarantine_exit_code(Array[@contracts.QuarantineRuntimeResultInput], Int) -> Int
+pub fn compute_quarantine_exit_code(Array[@contracts.QuarantineRuntimeResultInput], Int32) -> Int32
 
-pub fn find_matching_quarantine(Array[@contracts.QuarantineEntryInput], String, String, String) -> Int
+pub fn find_matching_quarantine(Array[@contracts.QuarantineEntryInput], String, String, String) -> Int32
 
 pub fn is_blocking_failure(@contracts.QuarantineRuntimeResultInput) -> Bool
 
-pub fn summarize_quarantine(Array[@contracts.QuarantineEntryInput], Array[@contracts.QuarantineTaskOwnershipInput], Array[String], String, Int) -> @contracts.QuarantineSummaryCoreOutput
+pub fn summarize_quarantine(Array[@contracts.QuarantineEntryInput], Array[@contracts.QuarantineTaskOwnershipInput], Array[String], String, Int32) -> @contracts.QuarantineSummaryCoreOutput
 
 // Errors
 

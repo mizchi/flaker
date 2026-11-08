@@ -293,7 +293,7 @@ fn StarlarkParser::parse_string(self : StarlarkParser) -> StarlarkValue? {
     return None
   }
   self.advance() |> ignore
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut escaped = false
   while self.peek() is Some(ch) {
     self.advance() |> ignore

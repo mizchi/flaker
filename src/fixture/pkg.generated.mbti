@@ -11,52 +11,101 @@ pub fn generate_fixture(FixtureConfig) -> FixtureData
 // Errors
 
 // Types and methods
+#derive(Eq, Show, @json.FromJson, @json.ToJson)
 pub(all) struct FixtureChangedFile {
   file_path : String
   change_type : String
-} derive(Eq, Show, ToJson, @json.FromJson)
+}
+pub fn FixtureChangedFile::equal(Self, Self) -> Bool
+pub fn FixtureChangedFile::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn FixtureChangedFile::not_equal(Self, Self) -> Bool
+pub fn FixtureChangedFile::output(Self, &Logger) -> Unit
+pub fn FixtureChangedFile::to_json(Self) -> @json.Json
+pub fn FixtureChangedFile::to_string(Self) -> String
 
+#derive(Eq, Show, @json.FromJson, @json.ToJson)
 pub(all) struct FixtureCommit {
   sha : String
   changed_files : Array[FixtureChangedFile]
   test_results : Array[FixtureCommitResult]
-} derive(Eq, Show, ToJson, @json.FromJson)
+}
+pub fn FixtureCommit::equal(Self, Self) -> Bool
+pub fn FixtureCommit::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn FixtureCommit::not_equal(Self, Self) -> Bool
+pub fn FixtureCommit::output(Self, &Logger) -> Unit
+pub fn FixtureCommit::to_json(Self) -> @json.Json
+pub fn FixtureCommit::to_string(Self) -> String
 
+#derive(Eq, Show, @json.FromJson, @json.ToJson)
 pub(all) struct FixtureCommitResult {
   suite : String
   test_name : String
   status : String
-} derive(Eq, Show, ToJson, @json.FromJson)
+}
+pub fn FixtureCommitResult::equal(Self, Self) -> Bool
+pub fn FixtureCommitResult::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn FixtureCommitResult::not_equal(Self, Self) -> Bool
+pub fn FixtureCommitResult::output(Self, &Logger) -> Unit
+pub fn FixtureCommitResult::to_json(Self) -> @json.Json
+pub fn FixtureCommitResult::to_string(Self) -> String
 
+#derive(Eq, Show, @json.FromJson, @json.ToJson)
 pub(all) struct FixtureConfig {
-  test_count : Int
-  commit_count : Int
+  test_count : Int32
+  commit_count : Int32
   flaky_rate : Double
   co_failure_strength : Double
-  files_per_commit : Int
-  tests_per_file : Int
+  files_per_commit : Int32
+  tests_per_file : Int32
   sample_percentage : Double
-  seed : Int
-} derive(Eq, Show, ToJson, @json.FromJson)
+  seed : Int32
+}
+pub fn FixtureConfig::equal(Self, Self) -> Bool
+pub fn FixtureConfig::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn FixtureConfig::not_equal(Self, Self) -> Bool
+pub fn FixtureConfig::output(Self, &Logger) -> Unit
+pub fn FixtureConfig::to_json(Self) -> @json.Json
+pub fn FixtureConfig::to_string(Self) -> String
 
+#derive(Eq, Show, @json.FromJson, @json.ToJson)
 pub(all) struct FixtureData {
   tests : Array[FixtureTest]
   files : Array[String]
   file_deps : Array[FixtureFileDep]
   commits : Array[FixtureCommit]
   config : FixtureConfig
-} derive(Eq, Show, ToJson, @json.FromJson)
+}
+pub fn FixtureData::equal(Self, Self) -> Bool
+pub fn FixtureData::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn FixtureData::not_equal(Self, Self) -> Bool
+pub fn FixtureData::output(Self, &Logger) -> Unit
+pub fn FixtureData::to_json(Self) -> @json.Json
+pub fn FixtureData::to_string(Self) -> String
 
+#derive(Eq, Show, @json.FromJson, @json.ToJson)
 pub(all) struct FixtureFileDep {
   file : String
   suites : Array[String]
-} derive(Eq, Show, ToJson, @json.FromJson)
+}
+pub fn FixtureFileDep::equal(Self, Self) -> Bool
+pub fn FixtureFileDep::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn FixtureFileDep::not_equal(Self, Self) -> Bool
+pub fn FixtureFileDep::output(Self, &Logger) -> Unit
+pub fn FixtureFileDep::to_json(Self) -> @json.Json
+pub fn FixtureFileDep::to_string(Self) -> String
 
+#derive(Eq, Show, @json.FromJson, @json.ToJson)
 pub(all) struct FixtureTest {
   suite : String
   test_name : String
   is_flaky : Bool
-} derive(Eq, Show, ToJson, @json.FromJson)
+}
+pub fn FixtureTest::equal(Self, Self) -> Bool
+pub fn FixtureTest::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn FixtureTest::not_equal(Self, Self) -> Bool
+pub fn FixtureTest::output(Self, &Logger) -> Unit
+pub fn FixtureTest::to_json(Self) -> @json.Json
+pub fn FixtureTest::to_string(Self) -> String
 
 // Type aliases
 

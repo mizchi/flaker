@@ -61,14 +61,14 @@ pub fn example_stable_identity() -> @flaker.ResolvedStableTestIdentityOutput {
     task_id: Some("task-a"),
     filter: Some("@smoke"),
     variant: Some([
-      @flaker.StableVariantEntryInput::{ key: "os", value: "linux" },
+      @flaker.StableVariantEntryInput::{ key: "os", value: "linux", },
     ]),
     test_id: None,
   })
 }
 
 ///|
-pub fn example_quarantine_exit_code() -> Int {
+pub fn example_quarantine_exit_code() -> Int32 {
   @flaker.compute_quarantine_exit_code(
     [
       @flaker.QuarantineRuntimeResultInput::{

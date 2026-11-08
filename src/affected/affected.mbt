@@ -25,7 +25,7 @@ pub fn resolve_affected(
   }
 
   // Expand to include transitive dependents through task needs
-  let initial : Map[String, Bool] = {}
+  let initial : Map[String, Bool] = Map([])
   for t in targets {
     initial[t] = true
   }

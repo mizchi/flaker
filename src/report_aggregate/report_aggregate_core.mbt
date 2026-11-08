@@ -1,12 +1,12 @@
 ///|
 priv struct TotalsAcc {
-  mut total : Int
-  mut passed : Int
-  mut failed : Int
-  mut flaky : Int
-  mut skipped : Int
-  mut retries : Int
-  mut duration_ms : Int
+  mut total : Int32
+  mut passed : Int32
+  mut failed : Int32
+  mut flaky : Int32
+  mut skipped : Int32
+  mut retries : Int32
+  mut duration_ms : Int32
 }
 
 ///|
@@ -42,7 +42,7 @@ pub fn aggregate_report(
     retries: 0,
     duration_ms: 0,
   }
-  let unstable_by_id : Map[String, UnstableAcc] = {}
+  let unstable_by_id : Map[String, UnstableAcc] = Map([])
   let unstable_order : Array[String] = []
 
   for shard in shards {
@@ -58,7 +58,7 @@ pub fn aggregate_report(
     for unstable in shard.unstable {
       let acc = unstable_by_id.get_or_init(unstable.test_id, fn() {
         unstable_order.push(unstable.test_id)
-        UnstableAcc::{ shard_ids: [], statuses: [] }
+        UnstableAcc::{ shard_ids: [], statuses: [], }
       })
       add_unique(acc.shard_ids, shard.shard_id)
       add_unique(acc.statuses, unstable.status)
@@ -68,7 +68,7 @@ pub fn aggregate_report(
   let unstable : Array[@types.ReportAggregateUnstableBuckets] = []
   for test_id in unstable_order {
     let acc = unstable_by_id.get_or_init(test_id, fn() {
-      UnstableAcc::{ shard_ids: [], statuses: [] }
+      UnstableAcc::{ shard_ids: [], statuses: [], }
     })
     unstable.push(@types.ReportAggregateUnstableBuckets::{
       test_id,

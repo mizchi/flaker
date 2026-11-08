@@ -1,6 +1,6 @@
 ///|
 test "dedupe_affected_targets sorts by spec task and filter" {
-  let result = dedupe_affected_targets([
+  let result = @affected_explain.dedupe_affected_targets([
     @types.AffectedTargetInput::{
       spec: "tests/app.spec.ts",
       task_id: "app",
@@ -44,7 +44,7 @@ test "dedupe_affected_targets sorts by spec task and filter" {
 
 ///|
 test "build_affected_report combines direct and transitive selections" {
-  let result = build_affected_report(
+  let result = @affected_explain.build_affected_report(
     [
       @types.AffectedTargetInput::{
         spec: "tests/core.spec.ts",
@@ -119,7 +119,7 @@ test "build_affected_report combines direct and transitive selections" {
 
 ///|
 test "build_affected_report_from_input is consumer-friendly facade" {
-  let result = build_affected_report_from_input(@types.AffectedReportInput::{
+  let result = @affected_explain.build_affected_report_from_input(@types.AffectedReportInput::{
     targets: [
       @types.AffectedTargetInput::{
         spec: "tests/core.spec.ts",

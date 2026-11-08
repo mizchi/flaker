@@ -22,7 +22,7 @@ pub fn build_sampling_meta(Array[@contracts.SamplingHistoryRowInput], Array[@con
 
 pub fn classify_report_diff(Array[@contracts.ReportDiffStatusInput]) -> @contracts.ReportDiffBuckets
 
-pub fn compute_quarantine_exit_code(Array[@contracts.QuarantineRuntimeResultInput], Int) -> Int
+pub fn compute_quarantine_exit_code(Array[@contracts.QuarantineRuntimeResultInput], Int32) -> Int32
 
 pub fn create_stable_test_id(@contracts.StableTestIdentityInput) -> String
 
@@ -34,7 +34,7 @@ pub fn expand_transitive(@contracts.DependencyGraphInput, Array[String]) -> Arra
 
 pub fn find_affected_nodes(@contracts.DependencyGraphInput, Array[String]) -> Array[String]
 
-pub fn find_matching_quarantine(Array[@contracts.QuarantineEntryInput], String, String, String) -> Int
+pub fn find_matching_quarantine(Array[@contracts.QuarantineEntryInput], String, String, String) -> Int32
 
 pub fn get_affected_test_patterns(@contracts.DependencyGraphInput, Array[String]) -> Array[String]
 
@@ -46,13 +46,13 @@ pub fn resolve_test_identity(@contracts.StableTestIdentityInput) -> @contracts.R
 
 pub fn run_config_check(Array[@contracts.ConfigCheckListedTestInput], Array[String], Array[@contracts.ConfigCheckTaskDefinitionInput]) -> @contracts.ConfigCheckCoreOutput
 
-pub fn sample_hybrid(Array[@contracts.TestMeta], affected_suites~ : Array[String], count~ : Int, seed~ : UInt64) -> Array[@contracts.TestMeta]
+pub fn sample_hybrid(Array[@contracts.TestMeta], affected_suites~ : Array[String], count~ : Int32, seed~ : UInt64) -> Array[@contracts.TestMeta]
 
-pub fn sample_random(Array[@contracts.TestMeta], count~ : Int, seed~ : UInt64) -> Array[@contracts.TestMeta]
+pub fn sample_random(Array[@contracts.TestMeta], count~ : Int32, seed~ : UInt64) -> Array[@contracts.TestMeta]
 
-pub fn sample_weighted(Array[@contracts.TestMeta], count~ : Int, seed~ : UInt64) -> Array[@contracts.TestMeta]
+pub fn sample_weighted(Array[@contracts.TestMeta], count~ : Int32, seed~ : UInt64) -> Array[@contracts.TestMeta]
 
-pub fn summarize_quarantine(Array[@contracts.QuarantineEntryInput], Array[@contracts.QuarantineTaskOwnershipInput], Array[String], String, Int) -> @contracts.QuarantineSummaryCoreOutput
+pub fn summarize_quarantine(Array[@contracts.QuarantineEntryInput], Array[@contracts.QuarantineTaskOwnershipInput], Array[String], String, Int32) -> @contracts.QuarantineSummaryCoreOutput
 
 pub fn summarize_report(Array[@contracts.ReportSummaryTestInput]) -> @contracts.ReportSummaryOutput
 

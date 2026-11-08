@@ -20,8 +20,12 @@ fn print_help() -> Unit {
   println("flaker — intelligent test selection toolkit")
   println("")
   println("Commands:")
-  println("  run [--strategy <s>]         Sample and run tests (default command)")
-  println("      [--percentage <n>]       auto-detects changes, runs selected tests")
+  println(
+    "  run [--strategy <s>]         Sample and run tests (default command)",
+  )
+  println(
+    "      [--percentage <n>]       auto-detects changes, runs selected tests",
+  )
   println("")
   println("  collect [--last <days>]      Fetch CI data from GitHub")
   println("  calibrate                    Analyze project and recommend config")
@@ -56,11 +60,8 @@ async fn cmd_collect(_args : Array[String]) -> Unit {
   )
 
   // Prefetch existing run IDs to avoid N queries
-  let existing_ids = query_cells(
-    db,
-    "SELECT id::VARCHAR FROM workflow_runs",
-  )
-  let existing_set : Map[String, Bool] = {}
+  let existing_ids = query_cells(db, "SELECT id::VARCHAR FROM workflow_runs")
+  let existing_set : Map[String, Bool] = Map([])
   for row in existing_ids {
     existing_set.set(row[0], true)
   }
@@ -77,14 +78,10 @@ async fn cmd_collect(_args : Array[String]) -> Unit {
     exec_sql(db, build_insert_run_sql(run_id, repo, run))
     runs_imported = runs_imported + 1
 
-    let count = try {
-      process_run_artifact(client, db, config, run)
-    } catch {
-      _ => 0
-    }
+    let count = process_run_artifact(client, db, config, run) catch { _ => 0 }
     tests_imported = tests_imported + count
     if count > 0 {
-      let sha = run.head_sha[:7].to_string()
+      let sha = run.head_sha[:7].to_owned()
       println("  \{sha}: \{count} tests")
     }
   }
@@ -104,16 +101,13 @@ async fn cmd_calibrate(_args : Array[String]) -> Unit {
   let db = connect_db(config.storage_path)
 
   let test_count = query_int(
-    db,
-    "SELECT COUNT(DISTINCT suite || '::' || test_name)::INTEGER FROM test_results",
+    db, "SELECT COUNT(DISTINCT suite || '::' || test_name)::INTEGER FROM test_results",
   )
   let commit_count = query_int(
-    db,
-    "SELECT COUNT(DISTINCT commit_sha)::INTEGER FROM test_results WHERE commit_sha IS NOT NULL",
+    db, "SELECT COUNT(DISTINCT commit_sha)::INTEGER FROM test_results WHERE commit_sha IS NOT NULL",
   )
   let flaky_count = query_int(
-    db,
-    "SELECT COUNT(DISTINCT key)::INTEGER FROM (SELECT suite || '::' || test_name AS key, SUM(CASE WHEN status IN ('failed', 'flaky') THEN 1 ELSE 0 END) AS fails FROM test_results GROUP BY key HAVING fails > 0) sub",
+    db, "SELECT COUNT(DISTINCT key)::INTEGER FROM (SELECT suite || '::' || test_name AS key, SUM(CASE WHEN status IN ('failed', 'flaky') THEN 1 ELSE 0 END) AS fails FROM test_results GROUP BY key HAVING fails > 0) sub",
   )
   let flaky_rate = if test_count > 0 {
     flaky_count.to_double() / test_count.to_double()
@@ -160,8 +154,10 @@ fn build_insert_run_sql(
   repo : String,
   run : @github_actions.WorkflowRun,
 ) -> String {
-  let b = StringBuilder::new()
-  b.write_string("INSERT INTO workflow_runs (id, repo, branch, commit_sha, event, source, status, created_at) VALUES (")
+  let b = StringBuilder()
+  b.write_string(
+    "INSERT INTO workflow_runs (id, repo, branch, commit_sha, event, source, status, created_at) VALUES (",
+  )
   b.write_string(run_id.to_string())
   b.write_string(", '")
   b.write_string(sql_escape(repo))

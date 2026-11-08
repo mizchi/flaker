@@ -1,6 +1,6 @@
 ///|
 test "root package exposes sampling and identity helpers" {
-  let sampled = sample_random(
+  let sampled = @flaker.sample_random(
     [
       @contracts.TestMeta::{
         suite: "tests/a.spec.ts",
@@ -39,7 +39,7 @@ test "root package exposes sampling and identity helpers" {
 
   assert_eq(sampled.length(), 1)
 
-  let stable_id = create_stable_test_id(@contracts.StableTestIdentityInput::{
+  let stable_id = @flaker.create_stable_test_id(@contracts.StableTestIdentityInput::{
     suite: "tests/b.spec.ts",
     test_name: "b",
     task_id: Some("task-b"),
@@ -55,7 +55,7 @@ test "root package exposes sampling and identity helpers" {
 
 ///|
 test "root package exposes reporting, policy, and metrics helpers" {
-  let summary = summarize_report([
+  let summary = @flaker.summarize_report([
     @contracts.ReportSummaryTestInput::{
       test_id: "t1",
       suite: "tests/a.spec.ts",
@@ -73,7 +73,7 @@ test "root package exposes reporting, policy, and metrics helpers" {
   ])
   assert_eq(summary.totals.failed, 1)
 
-  let exit_code = compute_quarantine_exit_code(
+  let exit_code = @flaker.compute_quarantine_exit_code(
     [
       @contracts.QuarantineRuntimeResultInput::{
         status: "failed",
@@ -84,7 +84,7 @@ test "root package exposes reporting, policy, and metrics helpers" {
   )
   assert_eq(exit_code, 0)
 
-  let config = run_config_check(
+  let config = @flaker.run_config_check(
     [
       @contracts.ConfigCheckListedTestInput::{
         suite: "tests/a.spec.ts",
@@ -104,7 +104,7 @@ test "root package exposes reporting, policy, and metrics helpers" {
   )
   assert_eq(config.summary.task_count, 1)
 
-  let kpi = build_sampling_kpi([
+  let kpi = @flaker.build_sampling_kpi([
     @contracts.EvalCommitSignalInput::{
       commit_sha: "abc",
       run_kind: "local",
@@ -127,16 +127,16 @@ test "root package exposes reporting, policy, and metrics helpers" {
   assert_eq(kpi.matched_commits, 1)
   assert_eq(kpi.avg_saved_minutes, Some(4.0))
 
-  let report = build_affected_report_from_input(AffectedReportInput::{
+  let report = @flaker.build_affected_report_from_input(@flaker.AffectedReportInput::{
     targets: [
-      AffectedTargetInput::{
+      @flaker.AffectedTargetInput::{
         spec: "tests/a.spec.ts",
         task_id: "task-a",
         filter: None,
       },
     ],
     direct_selections: [
-      AffectedDirectSelectionInput::{
+      @flaker.AffectedDirectSelectionInput::{
         spec: "tests/a.spec.ts",
         task_id: "task-a",
         filter: None,

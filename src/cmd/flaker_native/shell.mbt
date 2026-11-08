@@ -1,14 +1,16 @@
-///| Execute a shell command and return its exit code.
-fn shell_exec(cmd : String) -> Int {
+///|
+/// Execute a shell command and return its exit code.
+fn shell_exec(cmd : String) -> Int32 {
   shell_system(cmd)
 }
 
-///| Execute a shell command and return its stdout lines.
+///|
+/// Execute a shell command and return its stdout lines.
 fn shell_lines(cmd : String) -> Array[String] {
   let output = shell_capture(cmd)
   let lines : Array[String] = []
   for line in output.split("\n") {
-    let s = line.to_string()
+    let s = line.to_owned()
     if s.length() > 0 {
       lines.push(s)
     }
@@ -16,18 +18,16 @@ fn shell_lines(cmd : String) -> Array[String] {
   lines
 }
 
-///| FFI: run command via system(), return exit code.
-extern "C" fn c_system(cmd : Bytes) -> Int = "flaker_system"
-
-///| FFI: run command via popen(), return stdout as string.
-extern "C" fn c_popen_read(
-  cmd : Bytes,
-  buf : Bytes,
-  buf_len : Int,
-) -> Int = "flaker_popen_read"
+///|
+/// FFI: run command via system(), return exit code.
+extern "C" fn c_system(cmd : Bytes) -> Int32 = "flaker_system"
 
 ///|
-fn shell_system(cmd : String) -> Int {
+/// FFI: run command via popen(), return stdout as string.
+extern "C" fn c_popen_read(cmd : Bytes, buf : Bytes, buf_len : Int32) -> Int32 = "flaker_popen_read"
+
+///|
+fn shell_system(cmd : String) -> Int32 {
   let cmd_bytes = string_to_cstr(cmd)
   c_system(cmd_bytes)
 }
@@ -45,7 +45,8 @@ fn shell_capture(cmd : String) -> String {
   bytes_to_string(result)
 }
 
-///| Convert MoonBit String to null-terminated C string bytes.
+///|
+/// Convert MoonBit String to null-terminated C string bytes.
 fn string_to_cstr(s : String) -> Bytes {
   let len = s.length()
   Bytes::makei(len + 1, fn(i) {

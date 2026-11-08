@@ -8,11 +8,11 @@ import {
 // Values
 pub fn build_sampling_meta(Array[@contracts.SamplingHistoryRowInput], Array[@contracts.SamplingListedTestInput]) -> Array[@contracts.TestMeta]
 
-pub fn sample_hybrid(Array[@contracts.TestMeta], affected_suites~ : Array[String], count~ : Int, seed~ : UInt64) -> Array[@contracts.TestMeta]
+pub fn sample_hybrid(Array[@contracts.TestMeta], affected_suites~ : Array[String], count~ : Int32, seed~ : UInt64) -> Array[@contracts.TestMeta]
 
-pub fn sample_random(Array[@contracts.TestMeta], count~ : Int, seed~ : UInt64) -> Array[@contracts.TestMeta]
+pub fn sample_random(Array[@contracts.TestMeta], count~ : Int32, seed~ : UInt64) -> Array[@contracts.TestMeta]
 
-pub fn sample_weighted(Array[@contracts.TestMeta], count~ : Int, seed~ : UInt64) -> Array[@contracts.TestMeta]
+pub fn sample_weighted(Array[@contracts.TestMeta], count~ : Int32, seed~ : UInt64) -> Array[@contracts.TestMeta]
 
 // Errors
 

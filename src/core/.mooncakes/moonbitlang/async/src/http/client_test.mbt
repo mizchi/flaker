@@ -33,7 +33,7 @@ async fn test_server(server : @http.Server, log : &Logger) -> Unit {
 
 ///|
 async test "request streaming" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(group => {
     let server = @http.Server::new(@socket.Addr::parse("127.0.0.1:0"))
     let port = server.addr().port()

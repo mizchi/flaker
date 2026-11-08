@@ -5,15 +5,15 @@ priv struct SamplingMetaAcc {
   task_id : String
   filter : String?
   test_id : String
-  mut total_runs : Int
-  mut fail_count : Int
-  mut failure_signals : Int
-  mut total_duration_ms : Int
+  mut total_runs : Int32
+  mut fail_count : Int32
+  mut failure_signals : Int32
+  mut total_duration_ms : Int32
   mut last_run_at : String
 }
 
 ///|
-fn round_percent(numerator : Int, denominator : Int) -> Double {
+fn round_percent(numerator : Int32, denominator : Int32) -> Double {
   if denominator <= 0 {
     return 0.0
   }
@@ -22,7 +22,7 @@ fn round_percent(numerator : Int, denominator : Int) -> Double {
 }
 
 ///|
-fn average_duration(total_duration_ms : Int, total_runs : Int) -> Int {
+fn average_duration(total_duration_ms : Int32, total_runs : Int32) -> Int32 {
   if total_runs <= 0 {
     return 0
   }
@@ -38,7 +38,7 @@ fn suite_test_key(suite : String, test_name : String) -> String {
 fn init_listed_tests_by_key(
   listed_tests : Array[@types.SamplingListedTestInput],
 ) -> Map[String, Array[@types.SamplingListedTestInput]] {
-  let by_key : Map[String, Array[@types.SamplingListedTestInput]] = {}
+  let by_key : Map[String, Array[@types.SamplingListedTestInput]] = Map([])
   for listed in listed_tests {
     let entries = by_key.get_or_init(
       suite_test_key(listed.suite, listed.test_name),
@@ -146,7 +146,7 @@ fn to_test_meta(acc : SamplingMetaAcc) -> @types.TestMeta {
 }
 
 ///|
-fn compare_meta(a : @types.TestMeta, b : @types.TestMeta) -> Int {
+fn compare_meta(a : @types.TestMeta, b : @types.TestMeta) -> Int32 {
   let a_test_id = match a.test_id {
     Some(test_id) => test_id
     None => ""
@@ -172,7 +172,7 @@ pub fn build_sampling_meta(
   listed_tests : Array[@types.SamplingListedTestInput],
 ) -> Array[@types.TestMeta] {
   let listed_by_key = init_listed_tests_by_key(listed_tests)
-  let acc_by_id : Map[String, SamplingMetaAcc] = {}
+  let acc_by_id : Map[String, SamplingMetaAcc] = Map([])
 
   for row in history_rows {
     let identity = resolve_history_identity(row, listed_by_key)

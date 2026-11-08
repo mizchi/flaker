@@ -8,7 +8,7 @@ import {
 // Values
 pub fn example_affected_report() -> @contracts.AffectedReportCoreOutput
 
-pub fn example_quarantine_exit_code() -> Int
+pub fn example_quarantine_exit_code() -> Int32
 
 pub fn example_stable_identity() -> @contracts.ResolvedStableTestIdentityOutput
 

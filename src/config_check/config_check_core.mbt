@@ -1,10 +1,10 @@
 ///|
 priv struct Counter {
-  mut value : Int
+  mut value : Int32
 }
 
 ///|
-fn compare_nullable(a : String?, b : String?) -> Int {
+fn compare_nullable(a : String?, b : String?) -> Int32 {
   match (a, b) {
     (None, None) => 0
     (None, Some(_)) => -1
@@ -30,7 +30,7 @@ fn classify_ownership(
     return "owned"
   }
 
-  let filters : Map[String, Bool] = {}
+  let filters : Map[String, Bool] = Map([])
   for claim in claims {
     match claim.filter {
       None => return "duplicate"
@@ -55,17 +55,17 @@ pub fn run_config_check(
   let ownership_index : Map[
     String,
     Map[String, @types.ConfigOwnershipClaimOutput],
-  ] = {}
+  ] = Map([])
   let ownership_order : Array[String] = []
-  let task_specs : Map[String, Map[String, Bool]] = {}
-  let task_filters : Map[String, Map[String, Bool]] = {}
-  let task_test_counts : Map[String, Int] = {}
-  let task_ids_seen : Map[String, Bool] = {}
+  let task_specs : Map[String, Map[String, Bool]] = Map([])
+  let task_filters : Map[String, Map[String, Bool]] = Map([])
+  let task_test_counts : Map[String, Int32] = Map([])
+  let task_ids_seen : Map[String, Bool] = Map([])
   let task_ids : Array[String] = []
   let task_definitions_by_id : Map[
     String,
     @types.ConfigCheckTaskDefinitionInput,
-  ] = {}
+  ] = Map([])
 
   for task in task_definitions {
     task_definitions_by_id.set(task.task_id, task)
@@ -119,8 +119,8 @@ pub fn run_config_check(
   ownership_order.sort()
   let ownership : Array[@types.ConfigOwnershipEntryOutput] = []
   let errors : Array[@types.ConfigCheckIssueOutput] = []
-  let managed_specs : Map[String, Bool] = {}
-  let split_count = Counter::{ value: 0 }
+  let managed_specs : Map[String, Bool] = Map([])
+  let split_count = Counter::{ value: 0, }
 
   for spec in ownership_order {
     managed_specs.set(spec, true)
@@ -153,10 +153,10 @@ pub fn run_config_check(
         detail: owner_detail,
       })
     }
-    ownership.push(@types.ConfigOwnershipEntryOutput::{ spec, kind, owners })
+    ownership.push(@types.ConfigOwnershipEntryOutput::{ spec, kind, owners, })
   }
 
-  let discovered_seen : Map[String, Bool] = {}
+  let discovered_seen : Map[String, Bool] = Map([])
   let discovered_order : Array[String] = []
   for spec in discovered_specs {
     if !discovered_seen.contains(spec) {

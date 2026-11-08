@@ -408,7 +408,7 @@ test "decimal_json_serialization" {
   }
 
   // Test to_json
-  let json = d.to_json()
+  let json = ToJson::to_json(d)
   inspect(
     json,
     content=(

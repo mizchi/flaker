@@ -14,7 +14,7 @@
 
 ///|
 async test "group defer basic" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(fn(root) {
     root.add_defer(() => log.write_string("first group defer\n"))
     root.spawn_bg(fn() {
@@ -54,7 +54,7 @@ async test "group defer basic" {
 
 ///|
 async test "group defer error" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   log.write_object(
     try? @async.with_task_group(fn(root) {
       root.add_defer(() => log.write_string("first group defer\n"))
@@ -96,7 +96,7 @@ async test "group defer error" {
 
 ///|
 async test "group defer cancelled" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(fn(root) {
     root.spawn_bg(fn() {
       for _ in 0..<4 {

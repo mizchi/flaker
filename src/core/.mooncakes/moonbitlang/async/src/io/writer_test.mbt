@@ -30,7 +30,7 @@ async test "write large data" {
 
 ///|
 async test "write reader" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(fn(root) {
     let (r1, w1) = @io.pipe()
     let (r2, w2) = @io.pipe()
@@ -88,7 +88,7 @@ impl @io.Writer for DummyWriter with write_once(self, buf, offset~, len~) {
 
 ///|
 async test "write cancel" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(fn(_) {
     let writer = { logger: log, base_timeout: 300 }
     @async.with_timeout_opt(450, fn() { writer.write(b"abcd") }) |> ignore

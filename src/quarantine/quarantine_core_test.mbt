@@ -1,6 +1,6 @@
 ///|
 test "summarize_quarantine validates ownership and expiry" {
-  let result = summarize_quarantine(
+  let result = @quarantine.summarize_quarantine(
     [
       @types.QuarantineEntryInput::{
         id: "paint-vrt-real-world-local-assets",
@@ -64,7 +64,7 @@ test "summarize_quarantine validates ownership and expiry" {
     "expired-quarantine",
   ])
   assert_eq(result.warnings.map(fn(issue) { issue.code }), ["expires-soon"])
-  let entry_map : Map[String, String] = {}
+  let entry_map : Map[String, String] = Map([])
   for entry in result.entries {
     entry_map.set(entry.id, entry.expiry_status)
   }
@@ -106,13 +106,13 @@ test "find_matching_quarantine matches by task spec and title pattern" {
   ]
 
   assert_eq(
-    find_matching_quarantine(
+    @quarantine.find_matching_quarantine(
       entries, "paint-vrt", "tests/paint-vrt.test.ts", "real-world snapshot: a",
     ),
     1,
   )
   assert_eq(
-    find_matching_quarantine(
+    @quarantine.find_matching_quarantine(
       entries, "paint-vrt", "tests/paint-vrt.test.ts", "other",
     ),
     -1,
@@ -122,19 +122,19 @@ test "find_matching_quarantine matches by task spec and title pattern" {
 ///|
 test "is_blocking_failure ignores allow_failure quarantines" {
   assert_true(
-    is_blocking_failure(@types.QuarantineRuntimeResultInput::{
+    @quarantine.is_blocking_failure(@types.QuarantineRuntimeResultInput::{
       status: "failed",
       quarantine_mode: None,
     }),
   )
   assert_false(
-    is_blocking_failure(@types.QuarantineRuntimeResultInput::{
+    @quarantine.is_blocking_failure(@types.QuarantineRuntimeResultInput::{
       status: "failed",
       quarantine_mode: Some("allow_failure"),
     }),
   )
   assert_false(
-    is_blocking_failure(@types.QuarantineRuntimeResultInput::{
+    @quarantine.is_blocking_failure(@types.QuarantineRuntimeResultInput::{
       status: "flaky",
       quarantine_mode: Some("allow_failure"),
     }),
@@ -143,9 +143,9 @@ test "is_blocking_failure ignores allow_failure quarantines" {
 
 ///|
 test "compute_quarantine_exit_code preserves fallback for empty results" {
-  assert_eq(compute_quarantine_exit_code([], 7), 7)
+  assert_eq(@quarantine.compute_quarantine_exit_code([], 7), 7)
   assert_eq(
-    compute_quarantine_exit_code(
+    @quarantine.compute_quarantine_exit_code(
       [
         @types.QuarantineRuntimeResultInput::{
           status: "failed",
@@ -157,7 +157,7 @@ test "compute_quarantine_exit_code preserves fallback for empty results" {
     0,
   )
   assert_eq(
-    compute_quarantine_exit_code(
+    @quarantine.compute_quarantine_exit_code(
       [
         @types.QuarantineRuntimeResultInput::{
           status: "failed",

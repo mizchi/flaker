@@ -233,7 +233,7 @@ pub fn flow_fingerprint(
   node : FlowNode,
   signatures : Map[String, String],
 ) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("task=")
   buf.write_string(task)
   buf.write_string("\nnode=")

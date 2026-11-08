@@ -1,6 +1,6 @@
 ///|
 fn join_lines(lines : Array[String]) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for i in 0..<lines.length() {
     if i > 0 {
       buf.write_string("\n")
@@ -46,7 +46,7 @@ fn parse_direct_command(
   target_name : String,
 ) -> CliResult {
   let _ = command_spec(target_name).parse(argv=args, env={}) catch {
-    err => return CliResult::{ exit_code: 1, output: err.to_string() }
+    err => return CliResult::{ exit_code: 1, output: err.to_string(), }
   }
-  CliResult::{ exit_code: 0, output: "" }
+  CliResult::{ exit_code: 0, output: "", }
 }

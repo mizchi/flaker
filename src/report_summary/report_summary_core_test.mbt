@@ -1,6 +1,6 @@
 ///|
 test "summarize_report reduces totals, file totals, and unstable ids" {
-  let result = summarize_report([
+  let result = @report_summary.summarize_report([
     @types.ReportSummaryTestInput::{
       test_id: "c",
       suite: "tests/b.spec.ts",

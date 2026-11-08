@@ -51,7 +51,7 @@ async test "basic" {
 
   }
 
-  let client_log = StringBuilder::new()
+  let client_log = StringBuilder()
   @async.with_task_group(fn(root) {
     let server = @http.Server::new(@socket.Addr::parse("127.0.0.1:0"))
     let addr = server.addr()

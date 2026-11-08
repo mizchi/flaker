@@ -2,7 +2,7 @@
 test "write fixture parquet files for DuckDB interop test" {
   // Write test_results.parquet
   let tr_rows = [
-    TestResultRow::{
+    @parquet_export.TestResultRow::{
       workflow_run_id: 1L,
       test_id: Some("tid-1"),
       task_id: Some("task-1"),
@@ -14,7 +14,7 @@ test "write fixture parquet files for DuckDB interop test" {
       commit_sha: "abc123",
       created_at_ms: 1712100000000L,
     },
-    TestResultRow::{
+    @parquet_export.TestResultRow::{
       workflow_run_id: 1L,
       test_id: None,
       task_id: None,
@@ -27,7 +27,7 @@ test "write fixture parquet files for DuckDB interop test" {
       created_at_ms: 1712100000000L,
     },
   ]
-  let tr_bytes = write_test_results_parquet(tr_rows)
+  let tr_bytes = @parquet_export.write_test_results_parquet(tr_rows)
   @parquet.write_file(
     "/tmp/flaker-test-results.parquet",
     @parquet.read_bytes(tr_bytes),
@@ -35,14 +35,14 @@ test "write fixture parquet files for DuckDB interop test" {
 
   // Write commit_changes.parquet
   let cc_rows = [
-    CommitChangeRow::{
+    @parquet_export.CommitChangeRow::{
       commit_sha: "abc123",
       file_path: "src/foo.ts",
       change_type: Some("modified"),
       additions: 10,
       deletions: 5,
     },
-    CommitChangeRow::{
+    @parquet_export.CommitChangeRow::{
       commit_sha: "abc123",
       file_path: "src/bar.ts",
       change_type: Some("added"),
@@ -50,7 +50,7 @@ test "write fixture parquet files for DuckDB interop test" {
       deletions: 0,
     },
   ]
-  let cc_bytes = write_commit_changes_parquet(cc_rows)
+  let cc_bytes = @parquet_export.write_commit_changes_parquet(cc_rows)
   @parquet.write_file(
     "/tmp/flaker-commit-changes.parquet",
     @parquet.read_bytes(cc_bytes),
@@ -58,7 +58,7 @@ test "write fixture parquet files for DuckDB interop test" {
 
   // Write workflow_runs.parquet
   let wr_rows = [
-    WorkflowRunRow::{
+    @parquet_export.WorkflowRunRow::{
       id: 42L,
       repo: "test/repo",
       branch: Some("main"),
@@ -69,7 +69,7 @@ test "write fixture parquet files for DuckDB interop test" {
       duration_ms: 60000,
     },
   ]
-  let wr_bytes = write_workflow_runs_parquet(wr_rows)
+  let wr_bytes = @parquet_export.write_workflow_runs_parquet(wr_rows)
   @parquet.write_file(
     "/tmp/flaker-workflow-runs.parquet",
     @parquet.read_bytes(wr_bytes),

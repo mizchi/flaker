@@ -10,29 +10,50 @@ pub fn predict(GBDTModel, Array[Double]) -> Double
 
 pub fn predict_batch(GBDTModel, Array[Array[Double]]) -> Array[Double]
 
-pub fn train(Array[TrainingRow], num_trees? : Int, learning_rate? : Double, feature_names? : Array[String]) -> GBDTModel
+pub fn train(Array[TrainingRow], num_trees? : Int32, learning_rate? : Double, feature_names? : Array[String]) -> GBDTModel
 
 // Errors
 
 // Types and methods
+#derive(Eq, Show, @json.FromJson, @json.ToJson)
 pub(all) struct DecisionStump {
-  feature_idx : Int
+  feature_idx : Int32
   threshold : Double
   left_value : Double
   right_value : Double
-} derive(Eq, Show, ToJson, @json.FromJson)
+}
+pub fn DecisionStump::equal(Self, Self) -> Bool
+pub fn DecisionStump::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn DecisionStump::not_equal(Self, Self) -> Bool
+pub fn DecisionStump::output(Self, &Logger) -> Unit
+pub fn DecisionStump::to_json(Self) -> @json.Json
+pub fn DecisionStump::to_string(Self) -> String
 
+#derive(Eq, Show, @json.FromJson, @json.ToJson)
 pub(all) struct GBDTModel {
   trees : Array[DecisionStump]
   learning_rate : Double
   feature_names : Array[String]
   base_score : Double
-} derive(Eq, Show, ToJson, @json.FromJson)
+}
+pub fn GBDTModel::equal(Self, Self) -> Bool
+pub fn GBDTModel::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GBDTModel::not_equal(Self, Self) -> Bool
+pub fn GBDTModel::output(Self, &Logger) -> Unit
+pub fn GBDTModel::to_json(Self) -> @json.Json
+pub fn GBDTModel::to_string(Self) -> String
 
+#derive(Eq, Show, @json.FromJson, @json.ToJson)
 pub(all) struct TrainingRow {
   features : Array[Double]
   label : Double
-} derive(Eq, Show, ToJson, @json.FromJson)
+}
+pub fn TrainingRow::equal(Self, Self) -> Bool
+pub fn TrainingRow::from_json(@json.Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn TrainingRow::not_equal(Self, Self) -> Bool
+pub fn TrainingRow::output(Self, &Logger) -> Unit
+pub fn TrainingRow::to_json(Self) -> @json.Json
+pub fn TrainingRow::to_string(Self) -> String
 
 // Type aliases
 

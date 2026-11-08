@@ -1,11 +1,13 @@
-///| A file entry extracted from a ZIP archive.
+///|
+/// A file entry extracted from a ZIP archive.
 pub struct ZipEntry {
   name : String
   data : Bytes
 }
 
-///| Copy a range of bytes.
-fn bytes_slice(b : Bytes, start : Int, end : Int) -> Bytes {
+///|
+/// Copy a range of bytes.
+fn bytes_slice(b : Bytes, start : Int32, end : Int32) -> Bytes {
   let actual_end = if end > b.length() { b.length() } else { end }
   let len = actual_end - start
   if len <= 0 {
@@ -14,7 +16,8 @@ fn bytes_slice(b : Bytes, start : Int, end : Int) -> Bytes {
   Bytes::makei(len, fn(i) { b[start + i] })
 }
 
-///| Extract files from a ZIP archive.
+///|
+/// Extract files from a ZIP archive.
 ///  Supports: stored + deflate, with data descriptor (bit 3).
 pub fn unzip(zip_bytes : Bytes) -> Array[ZipEntry] {
   let entries : Array[ZipEntry] = []
@@ -34,7 +37,9 @@ pub fn unzip(zip_bytes : Bytes) -> Array[ZipEntry] {
     let extra_len = read_u16(zip_bytes, offset + 28)
     let data_start = offset + 30 + name_len + extra_len
 
-    let name = bytes_to_string(bytes_slice(zip_bytes, offset + 30, offset + 30 + name_len))
+    let name = bytes_to_string(
+      bytes_slice(zip_bytes, offset + 30, offset + 30 + name_len),
+    )
 
     // Bit 3: data descriptor follows the compressed data
     // In this case, compressed_size in local header is 0
@@ -50,12 +55,14 @@ pub fn unzip(zip_bytes : Bytes) -> Array[ZipEntry] {
       let data = if compression == 0 {
         raw
       } else if compression == 8 {
-        try { @zlib.deflate_decompress(raw) } catch { _ => raw }
+        @zlib.deflate_decompress(raw) catch {
+          _ => raw
+        }
       } else {
         raw
       }
       if !name.has_suffix("/") {
-        entries.push({ name, data })
+        entries.push({ name, data, })
       }
     }
 
@@ -78,8 +85,13 @@ pub fn unzip(zip_bytes : Bytes) -> Array[ZipEntry] {
   entries
 }
 
-///| Find compressed data size by scanning for next local header or central directory.
-fn find_compressed_size(zip_bytes : Bytes, data_start : Int, len : Int) -> Int {
+///|
+/// Find compressed data size by scanning for next local header or central directory.
+fn find_compressed_size(
+  zip_bytes : Bytes,
+  data_start : Int32,
+  len : Int32,
+) -> Int32 {
   let mut pos = data_start
   while pos + 4 <= len {
     if zip_bytes[pos] == b'\x50' && zip_bytes[pos + 1] == b'\x4b' {
@@ -98,14 +110,14 @@ fn find_compressed_size(zip_bytes : Bytes, data_start : Int, len : Int) -> Int {
 }
 
 ///|
-fn read_u16(b : Bytes, offset : Int) -> Int {
+fn read_u16(b : Bytes, offset : Int32) -> Int32 {
   b[offset].to_int() | (b[offset + 1].to_int() << 8)
 }
 
 ///|
-fn read_u32(b : Bytes, offset : Int) -> Int {
+fn read_u32(b : Bytes, offset : Int32) -> Int32 {
   b[offset].to_int() |
-    (b[offset + 1].to_int() << 8) |
-    (b[offset + 2].to_int() << 16) |
-    (b[offset + 3].to_int() << 24)
+  (b[offset + 1].to_int() << 8) |
+  (b[offset + 2].to_int() << 16) |
+  (b[offset + 3].to_int() << 24)
 }

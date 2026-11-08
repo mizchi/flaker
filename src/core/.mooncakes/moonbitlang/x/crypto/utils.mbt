@@ -39,7 +39,7 @@ const HEX_DIGITS = "0123456789abcdef"
 ///|
 /// convert a sequence of `UInt` to hex representation
 pub fn uints_to_hex_string(input : Iter[UInt]) -> String {
-  let buffer = StringBuilder::new()
+  let buffer = StringBuilder()
   let rems : FixedArray[Int] = FixedArray::make(8, 0)
   for x in input {
     let mut value = x

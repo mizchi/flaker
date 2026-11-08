@@ -12,7 +12,7 @@ priv struct TransitiveTaskAcc {
 }
 
 ///|
-fn compare_nullable(a : String?, b : String?) -> Int {
+fn compare_nullable(a : String?, b : String?) -> Int32 {
   match (a, b) {
     (None, None) => 0
     (None, Some(_)) => -1
@@ -48,7 +48,7 @@ fn add_unique(values : Array[String], value : String) -> Unit {
 fn compare_targets(
   a : @types.AffectedTargetInput,
   b : @types.AffectedTargetInput,
-) -> Int {
+) -> Int32 {
   let by_spec = a.spec.lexical_compare(b.spec)
   if by_spec != 0 {
     return by_spec
@@ -64,7 +64,7 @@ fn compare_targets(
 fn compare_selections(
   a : @types.AffectedSelectionOutput,
   b : @types.AffectedSelectionOutput,
-) -> Int {
+) -> Int32 {
   let by_spec = a.spec.lexical_compare(b.spec)
   if by_spec != 0 {
     return by_spec
@@ -80,7 +80,7 @@ fn compare_selections(
 pub fn dedupe_affected_targets(
   targets : Array[@types.AffectedTargetInput],
 ) -> Array[@types.AffectedTargetInput] {
-  let deduped_by_key : Map[String, @types.AffectedTargetInput] = {}
+  let deduped_by_key : Map[String, @types.AffectedTargetInput] = Map([])
   let deduped : Array[@types.AffectedTargetInput] = []
 
   for target in targets {
@@ -134,7 +134,7 @@ pub fn build_affected_report(
   unmatched : Array[String],
 ) -> @types.AffectedReportCoreOutput {
   let sorted_targets = dedupe_affected_targets(targets)
-  let direct_by_key : Map[String, DirectSelectionAcc] = {}
+  let direct_by_key : Map[String, DirectSelectionAcc] = Map([])
 
   for selection in direct_selections {
     let target = @types.AffectedTargetInput::{
@@ -143,7 +143,7 @@ pub fn build_affected_report(
       filter: selection.filter,
     }
     let acc = direct_by_key.get_or_init(target_key(target), fn() {
-      DirectSelectionAcc::{ target, matched_paths: [], match_reasons: [] }
+      DirectSelectionAcc::{ target, matched_paths: [], match_reasons: [], }
     })
     for matched_path in selection.matched_paths {
       add_unique(acc.matched_paths, matched_path)
@@ -153,10 +153,10 @@ pub fn build_affected_report(
     }
   }
 
-  let transitive_by_task : Map[String, TransitiveTaskAcc] = {}
+  let transitive_by_task : Map[String, TransitiveTaskAcc] = Map([])
   for task in transitive_tasks {
     let acc = transitive_by_task.get_or_init(task.task_id, fn() {
-      TransitiveTaskAcc::{ included_by: [], match_reasons: [] }
+      TransitiveTaskAcc::{ included_by: [], match_reasons: [], }
     })
     for parent in task.included_by {
       add_unique(acc.included_by, parent)
@@ -166,7 +166,7 @@ pub fn build_affected_report(
     }
   }
 
-  let direct_keys : Map[String, Bool] = {}
+  let direct_keys : Map[String, Bool] = Map([])
   let selected : Array[@types.AffectedSelectionOutput] = []
   for target in sorted_targets {
     let key = target_key(target)

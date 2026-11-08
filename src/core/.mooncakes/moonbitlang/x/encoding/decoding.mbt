@@ -157,7 +157,7 @@ pub fn Decoder::decode(
 /// ```moonbit check
 /// test {
 ///   let decoder = decoder(UTF8)
-///   let buf = StringBuilder::new()
+///   let buf = StringBuilder()
 ///   decoder.decode_to(b"Hello", buf)
 ///   inspect(buf.to_string(), content="Hello")
 /// }

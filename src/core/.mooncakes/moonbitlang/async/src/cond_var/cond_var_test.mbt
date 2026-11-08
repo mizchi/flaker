@@ -29,7 +29,7 @@ async test "cond var cancellation" {
 
 ///|
 async test "cond var cancellation no_swallow" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(root => {
     let cond = @cond_var.Cond::new()
     let wait_task = root.spawn(allow_failure=true, () => {
@@ -56,7 +56,7 @@ async test "cond var cancellation no_swallow" {
 
 ///|
 async test "cond var fairness" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(root => {
     let cond = @cond_var.Cond::new()
     root.spawn_bg(() => for _ in 0..<3 {
@@ -92,7 +92,7 @@ async test "cond var fairness" {
 
 ///|
 async test "cond var broadcast" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(root => {
     let cond = @cond_var.Cond::new()
     for i in 0..<3 {
@@ -117,7 +117,7 @@ async test "cond var broadcast" {
 
 ///|
 async test "cond var broadcast cancellation" {
-  let log = StringBuilder::new()
+  let log = StringBuilder()
   @async.with_task_group(root => {
     let cond = @cond_var.Cond::new()
     for i in 0..<3 {

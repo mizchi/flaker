@@ -1,7 +1,7 @@
 ///|
 test "write_test_results_parquet produces valid bytes" {
   let rows = [
-    TestResultRow::{
+    @parquet_export.TestResultRow::{
       workflow_run_id: 1L,
       test_id: Some("test-id-1"),
       task_id: Some("task-1"),
@@ -13,7 +13,7 @@ test "write_test_results_parquet produces valid bytes" {
       commit_sha: "abc123",
       created_at_ms: 1712100000000L,
     },
-    TestResultRow::{
+    @parquet_export.TestResultRow::{
       workflow_run_id: 1L,
       test_id: None,
       task_id: None,
@@ -26,7 +26,7 @@ test "write_test_results_parquet produces valid bytes" {
       created_at_ms: 1712100000000L,
     },
   ]
-  let bytes = write_test_results_parquet(rows)
+  let bytes = @parquet_export.write_test_results_parquet(rows)
   // Parquet files start with magic bytes "PAR1"
   assert_true(bytes.length() > 4)
   assert_eq(bytes[0], b'P')
@@ -38,7 +38,7 @@ test "write_test_results_parquet produces valid bytes" {
 ///|
 test "write_commit_changes_parquet produces valid bytes" {
   let rows = [
-    CommitChangeRow::{
+    @parquet_export.CommitChangeRow::{
       commit_sha: "abc123",
       file_path: "src/foo.ts",
       change_type: Some("modified"),
@@ -46,7 +46,7 @@ test "write_commit_changes_parquet produces valid bytes" {
       deletions: 5,
     },
   ]
-  let bytes = write_commit_changes_parquet(rows)
+  let bytes = @parquet_export.write_commit_changes_parquet(rows)
   assert_true(bytes.length() > 4)
   assert_eq(bytes[0], b'P')
 }
@@ -54,7 +54,7 @@ test "write_commit_changes_parquet produces valid bytes" {
 ///|
 test "write_workflow_runs_parquet produces valid bytes" {
   let rows = [
-    WorkflowRunRow::{
+    @parquet_export.WorkflowRunRow::{
       id: 42L,
       repo: "test/repo",
       branch: Some("main"),
@@ -65,7 +65,7 @@ test "write_workflow_runs_parquet produces valid bytes" {
       duration_ms: 60000,
     },
   ]
-  let bytes = write_workflow_runs_parquet(rows)
+  let bytes = @parquet_export.write_workflow_runs_parquet(rows)
   assert_true(bytes.length() > 4)
   assert_eq(bytes[0], b'P')
 }
@@ -73,7 +73,7 @@ test "write_workflow_runs_parquet produces valid bytes" {
 ///|
 test "round-trip: write and read test_results" {
   let rows = [
-    TestResultRow::{
+    @parquet_export.TestResultRow::{
       workflow_run_id: 1L,
       test_id: Some("tid"),
       task_id: Some("task"),
@@ -86,7 +86,7 @@ test "round-trip: write and read test_results" {
       created_at_ms: 1712100000000L,
     },
   ]
-  let bytes = write_test_results_parquet(rows)
+  let bytes = @parquet_export.write_test_results_parquet(rows)
   let file = @parquet.read_bytes(bytes)
   assert_eq(file.row_count(), 1)
   let row = file.rows()[0]
