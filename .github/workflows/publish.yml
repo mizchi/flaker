@@ -25,46 +25,32 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31
+      - name: Setup MoonBit
+        uses: hustcer/setup-moonbit@v1
         with:
-          extra_nix_config: |
-            experimental-features = nix-command flakes
+          version: 0.10.14+7d59c7ec9
+          core-version: 0.10.14+7d59c7ec9
 
-      # The nix flake's moonbit-overlay pre-populates MOON_HOME with a
-      # buildCachedRegistry, so `moon update` is not needed (and fails
-      # because the baked registry's git remote is a Nix store path,
-      # not mooncakes.io). Just validate the toolchain is available.
-      - name: MoonBit toolchain check
-        run: nix develop --command moon version
+      - name: MoonBit dependencies
+        run: moon update
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build package
-        # scripts/build-package.mjs invokes `moon build --target js --release`,
-        # which requires moon on PATH — use the devShell.
-        run: nix develop --command pnpm run build
+        run: pnpm run build
 
       - name: Verify
-        # vitest runs inside the devShell so the parquet-fixtures global
-        # setup (tests/setup/parquet-fixtures.ts) can invoke `moon test`
-        # to populate /tmp/flaker-*.parquet. Without moon on PATH the
-        # setup silently skips and tests/parquet/duckdb-interop.test.ts
-        # fails.
         run: |
           pnpm run typecheck
-          nix develop --command pnpm vitest run
-          nix develop --command moon test --target js
+          pnpm vitest run
+          moon test --target js
 
       - name: CLI smoke
         run: node dist/cli/main.js --help >/dev/null
 
       - name: Pack dry-run
-        # pack:check triggers prepack → pnpm run build → moon build. Run inside
-        # the nix devShell so moon is on PATH.
-        run: nix develop --command pnpm run pack:check
+        run: pnpm run pack:check
 
       - name: Publish to npm (OIDC Trusted Publishing)
-        # npm publish also triggers prepack → moon build. Run inside nix.
-        run: nix develop --command npm publish --access public --provenance
+        run: npm publish --access public --provenance

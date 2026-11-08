@@ -2,7 +2,6 @@ autoInstallPeers: false
 strictDepBuilds: true
 
 allowBuilds:
-  duckdb: true
   # jev-test-filter's grammar packages; flaker only bundles its pure ./gate.
   '@ast-grep/lang-go': false
   '@ast-grep/lang-rust': false

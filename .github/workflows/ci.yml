@@ -85,7 +85,7 @@ jobs:
 
       - name: Full test with JSON report
         if: always()
-        run: pnpm exec vitest run --reporter=json > vitest-report.json || true
+        run: pnpm exec vitest run --reporter=json --outputFile=vitest-report.json || true
 
       - name: Upload vitest report
         if: always()

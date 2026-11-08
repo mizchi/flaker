@@ -15,6 +15,5 @@ export default defineConfig({
     // cascading timeouts. Cap workers to 4 to keep the suite deterministic.
     pool: "forks",
     maxWorkers: 4,
-    minWorkers: 1,
   },
 });

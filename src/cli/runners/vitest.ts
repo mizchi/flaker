@@ -1,4 +1,6 @@
-import { isAbsolute, relative } from "node:path";
+import { isAbsolute, join, relative } from "node:path";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import type { TestCaseResult } from "../adapters/types.js";
 import type {
   RunnerAdapter,
@@ -40,7 +42,14 @@ export function normalizeVitestSuitePath(
     return suite;
   }
 
-  const normalized = relative(cwd, suite);
+  let normalized: string;
+  try {
+    // Vitest reports physical paths, including when cwd is a symlink.
+    normalized = relative(realpathSync(cwd), realpathSync(suite));
+  } catch {
+    // Imported reports may refer to paths that do not exist on this machine.
+    normalized = relative(cwd, suite);
+  }
   if (
     normalized.length === 0
     || normalized.startsWith("..")
@@ -147,21 +156,31 @@ export class VitestRunner implements RunnerAdapter {
     const { cmd, args } = parseBaseCommand(this.baseCommand);
     const runArgs = [...normalizeVitestArgs(args, "run"), ...suiteFiles, "--reporter", "json"];
     if (opts?.workers) {
-      runArgs.push("--pool=threads", `--poolOptions.threads.maxThreads=${opts.workers}`);
+      runArgs.push("--pool=threads", `--maxWorkers=${opts.workers}`);
     }
-    const start = Date.now();
-    const { exitCode, stdout, stderr } = this.safeExecFn(cmd, runArgs, opts);
-    const durationMs = Date.now() - start;
-
-    let results: TestCaseResult[] = [];
+    const reportDirectory = mkdtempSync(join(tmpdir(), "flaker-vitest-report-"));
     try {
-      const all = parseVitestJson(stdout, { cwd: opts?.cwd });
-      const selectedKeys = new Set(tests.map((t) => `${t.suite}\0${t.testName}`));
-      results = all.filter((r) => selectedKeys.has(`${r.suite}\0${r.testName}`));
-    } catch {
-      // parse failure — return empty results
+      // Vitest 5 writes JSON to a file by default. Use a fresh path per run
+      // so a failed process cannot accidentally reuse a previous report.
+      const reportFile = join(reportDirectory, "results.json");
+      runArgs.push("--outputFile", reportFile);
+      const start = Date.now();
+      const { exitCode, stdout, stderr } = this.safeExecFn(cmd, runArgs, opts);
+      const durationMs = Date.now() - start;
+
+      let results: TestCaseResult[] = [];
+      try {
+        const report = existsSync(reportFile) ? readFileSync(reportFile, "utf8") : stdout;
+        const all = parseVitestJson(report, { cwd: opts?.cwd });
+        const selectedKeys = new Set(tests.map((t) => `${t.suite}\0${t.testName}`));
+        results = all.filter((r) => selectedKeys.has(`${r.suite}\0${r.testName}`));
+      } catch {
+        // parse failure — return empty results
+      }
+      return { exitCode, results, durationMs, stdout, stderr };
+    } finally {
+      rmSync(reportDirectory, { recursive: true, force: true });
     }
-    return { exitCode, results, durationMs, stdout, stderr };
   }
 
   async listTests(opts?: ExecuteOpts): Promise<TestId[]> {

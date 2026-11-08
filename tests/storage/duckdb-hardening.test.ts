@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { DuckDBStore } from "../../src/cli/storage/duckdb.js";
@@ -29,7 +29,8 @@ describe("DuckDBStore hardening", () => {
     const { t, a } = await settings(store);
     expect(isAbsolute(t)).toBe(true);
     expect(t.startsWith(tmpdir()) || t.startsWith("/private" + tmpdir())).toBe(true);
-    expect(a).toEqual([`${t}/`]); // DuckDB stores directories with a trailing slash
+    // DuckDB 2 resolves symlinks in its allowed directory settings.
+    expect(a).toEqual([`${realpathSync(t)}/`]);
   });
 
   it("a file store spills to the absolute <db>.tmp", async () => {
@@ -38,7 +39,7 @@ describe("DuckDBStore hardening", () => {
     await store.disableExternalAccess();
     const { t, a } = await settings(store);
     expect(t).toBe(join(dir, "data.tmp"));
-    expect(a).toEqual([`${t}/`]); // DuckDB stores directories with a trailing slash
+    expect(a).toEqual([`${join(realpathSync(dir), "data.tmp")}/`]);
   });
 
   it("a read-only store answers SELECTs and refuses writes", async () => {

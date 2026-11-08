@@ -77,6 +77,8 @@ describe("VitestRunner", () => {
       "/path/to/file.test.ts",
       "--reporter",
       "json",
+      "--outputFile",
+      expect.stringMatching(/results\.json$/),
     ]);
   });
 

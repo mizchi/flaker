@@ -39,7 +39,7 @@ command = "pnpm vitest"
 
 ```bash
 # CI: generate report
-pnpm vitest run --reporter=json > vitest-report.json
+pnpm vitest run --reporter=json --outputFile=vitest-report.json
 
 # Local: import manually
 flaker import vitest-report.json --adapter vitest --commit $(git rev-parse HEAD)
